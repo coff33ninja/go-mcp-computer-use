@@ -8,18 +8,20 @@ import (
 )
 
 type Config struct {
-	LogLevel   string `json:"log_level"`
-	MouseSpeed int    `json:"mouse_speed"`
-	ClickDelay int    `json:"click_delay_ms"`
-	VerifyBounds bool `json:"verify_bounds"`
+	LogLevel       string `json:"log_level"`
+	MouseSpeed     int    `json:"mouse_speed"`
+	ClickDelay     int    `json:"click_delay_ms"`
+	VerifyBounds   bool   `json:"verify_bounds"`
+	ActionTimeoutMs int   `json:"action_timeout_ms"`
 }
 
 func Default() *Config {
 	return &Config{
-		LogLevel:     "info",
-		MouseSpeed:   500,
-		ClickDelay:   100,
-		VerifyBounds: true,
+		LogLevel:        "info",
+		MouseSpeed:      500,
+		ClickDelay:      100,
+		VerifyBounds:    true,
+		ActionTimeoutMs: 30000,
 	}
 }
 

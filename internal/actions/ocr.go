@@ -65,18 +65,23 @@ func ocrExec(imgPath string) (*OCRResult, error) {
 	}
 	defer os.Remove(scriptPath)
 
-	cmd := exec.Command("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath, imgPath)
-	out, err := cmd.Output()
-	if err != nil {
-		if ee, ok := err.(*exec.ExitError); ok {
-			return nil, fmt.Errorf("ocr exec: %w (stderr: %s)", err, string(ee.Stderr))
-		}
-		return nil, fmt.Errorf("ocr exec: %w", err)
-	}
-
 	var result OCRResult
-	if err := json.Unmarshal(out, &result); err != nil {
-		return nil, fmt.Errorf("ocr parse: %w", err)
+	err := WithTimeout(func() error {
+		cmd := exec.Command("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath, imgPath)
+		out, err := cmd.Output()
+		if err != nil {
+			if ee, ok := err.(*exec.ExitError); ok {
+				return fmt.Errorf("ocr exec: %w (stderr: %s)", err, string(ee.Stderr))
+			}
+			return fmt.Errorf("ocr exec: %w", err)
+		}
+		if err := json.Unmarshal(out, &result); err != nil {
+			return fmt.Errorf("ocr parse: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return &result, nil
 }

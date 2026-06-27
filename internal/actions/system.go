@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"fmt"
 	"syscall"
 	"unsafe"
 )
@@ -126,43 +127,65 @@ func GetActiveWindowInfo() (*ActiveWindowInfo, error) {
 	}, nil
 }
 
+func openClipboardWithRetry() error {
+	for i := 0; i < 5; i++ {
+		ret, _, _ := openClipboard.Call(0)
+		if ret != 0 {
+			return nil
+		}
+		Wait(100)
+	}
+	return fmt.Errorf("clipboard is held by another application")
+}
+
 func GetClipboardText() (string, error) {
-	openClipboard.Call(0)
-	defer closeClipboard.Call()
+	var result string
+	err := WithTimeout(func() error {
+		if err := openClipboardWithRetry(); err != nil {
+			return err
+		}
+		defer closeClipboard.Call()
 
-	h, _, _ := getClipboardData.Call(CF_UNICODETEXT)
-	if h == 0 {
-		return "", nil
-	}
-	p, _, _ := globalLock.Call(h)
-	if p == 0 {
-		return "", nil
-	}
-	defer globalUnlock.Call(h)
+		h, _, _ := getClipboardData.Call(CF_UNICODETEXT)
+		if h == 0 {
+			return nil
+		}
+		p, _, _ := globalLock.Call(h)
+		if p == 0 {
+			return nil
+		}
+		defer globalUnlock.Call(h)
 
-	return syscall.UTF16ToString((*[4096]uint16)(unsafe.Pointer(p))[:]), nil
+		result = syscall.UTF16ToString((*[4096]uint16)(unsafe.Pointer(p))[:])
+		return nil
+	})
+	return result, err
 }
 
 func SetClipboardText(text string) error {
-	openClipboard.Call(0)
-	defer closeClipboard.Call()
-	emptyClipboard.Call()
+	return WithTimeout(func() error {
+		if err := openClipboardWithRetry(); err != nil {
+			return err
+		}
+		defer closeClipboard.Call()
+		emptyClipboard.Call()
 
-	utf16 := syscall.StringToUTF16(text)
-	size := uintptr(len(utf16) * 2)
-	h, _, _ := globalAlloc.Call(GMEM_MOVEABLE, size)
-	if h == 0 {
-		return syscall.GetLastError()
-	}
-	p, _, _ := globalLock.Call(h)
-	if p == 0 {
-		return syscall.GetLastError()
-	}
-	copy((*[1 << 20]uint16)(unsafe.Pointer(p))[:], utf16)
-	globalUnlock.Call(h)
+		utf16 := syscall.StringToUTF16(text)
+		size := uintptr(len(utf16) * 2)
+		h, _, _ := globalAlloc.Call(GMEM_MOVEABLE, size)
+		if h == 0 {
+			return syscall.GetLastError()
+		}
+		p, _, _ := globalLock.Call(h)
+		if p == 0 {
+			return syscall.GetLastError()
+		}
+		copy((*[1 << 20]uint16)(unsafe.Pointer(p))[:], utf16)
+		globalUnlock.Call(h)
 
-	setClipboardData.Call(CF_UNICODETEXT, h)
-	return nil
+		setClipboardData.Call(CF_UNICODETEXT, h)
+		return nil
+	})
 }
 
 func OpenURL(url string) error {
