@@ -1,6 +1,12 @@
 # Changelog
 
-## [0.2.0] — *planned*
+## [0.2.0] - 2026-06-27
+
+### Changed
+
+- **v0.2.x branch baseline** — cut from v0.1.11 as starting point for v0.2 development. All subsequent changes on this branch increment as `+0.0.1` (v0.2.1, v0.2.2, etc.).
+
+## [0.2.1] — *planned*
 
 ### Major
 
@@ -10,7 +16,6 @@
 - **Self-growing Template Library** — each discovered UI element stores a 32×32px template crop. Over time, `find_image` locates elements visually instead of relying on stale coordinates.
 - **ONNX ML Backend** (optional v2+) — two-tier Windows UI element detection: YOLO11s (18 MB, 7 classes) + MobileNetV3-small classifier (6 MB, 15 classes). Hierarchical validation chain from O(1) coords → OCR → template → YOLO → classifier.
 - **Prompt Engineering Guide** — documented Learn-Once-Reuse-Forever pattern for AI agents: store sequences + layout facts after every successful interaction, recall and replay next session with zero rediscovery.
-- **Versioning Scheme** — documented: `+0.0.1` patch (bug fixes), `+0.1.0` minor (new capabilities), `+1.0.0` major (stable release).
 
 ## [0.1.11] - 2026-06-27
 
