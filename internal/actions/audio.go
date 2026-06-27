@@ -58,7 +58,7 @@ func ListAudioDevices() ([]AudioDevice, error) {
 		return nil, fmt.Errorf("list audio devices: %w", err)
 	}
 
-	var devices []AudioDevice
+	devices := make([]AudioDevice, 0)
 	s := strings.TrimSpace(string(out))
 	if s == "" || s == "null" {
 		return devices, nil

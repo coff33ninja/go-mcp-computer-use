@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.6] - 2026-06-27
+
+### Fixed
+
+- B2: `list_audio_devices` returns `[]` instead of `null` — empty PowerShell output produced nil slice which serialized as JSON `null`
+
 ## [0.1.5] - 2026-06-27
 
 ### Fixed
