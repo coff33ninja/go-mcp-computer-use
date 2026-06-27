@@ -57,10 +57,7 @@ func TypeAndSubmit(text string) error {
 	if text == "" {
 		return fmt.Errorf("type_and_submit: empty text")
 	}
-	if err := TypeText(text); err != nil {
-		return fmt.Errorf("type_and_submit type: %w", err)
-	}
-	return KeyPress([]string{"Enter"})
+	return TypeText(text + "\r")
 }
 
 func LaunchAndWait(path, windowTitle string, timeoutMs int32) (uintptr, error) {
@@ -148,9 +145,7 @@ func SelectAllAndType(text string) error {
 	if text == "" {
 		return fmt.Errorf("select_all_and_type: empty text")
 	}
-	if err := KeyPress([]string{"Ctrl", "a"}); err != nil {
-		return fmt.Errorf("select_all_and_type key: %w", err)
-	}
+	sendUnicode(0x01) // Ctrl+A as Unicode control character
 	Wait(100)
 	return TypeText(text)
 }

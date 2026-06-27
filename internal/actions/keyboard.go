@@ -1,6 +1,9 @@
 package actions
 
-import "unsafe"
+import (
+	"strings"
+	"unsafe"
+)
 
 const (
 	keyEventDown = 0x0000
@@ -24,16 +27,26 @@ type inputKbd struct {
 	_         [8]byte
 }
 
-var vkMap = map[string]uint16{
-	"CTRL":     0x11,
-	"CONTROL":  0x11,
-	"ALT":      0x12,
-	"SHIFT":    0x10,
-	"TAB":      0x09,
-	"ENTER":    0x0D,
+// Unicode control-character mappings for keys that can be sent via KEYEVENTF_UNICODE
+var unicodeKeyMap = map[string]rune{
+	"ENTER":     0x0D,
+	"BACKSPACE": 0x08,
+	"TAB":       0x09,
 	"ESC":      0x1B,
 	"ESCAPE":   0x1B,
-	"BACKSPACE": 0x08,
+	"SPACE":    0x20,
+}
+
+// VK-coded modifier keys (no Unicode equivalent)
+var vkModMap = map[string]uint16{
+	"CTRL":    0x11,
+	"CONTROL": 0x11,
+	"ALT":     0x12,
+	"SHIFT":   0x10,
+}
+
+// VK-coded non-character keys (no Unicode equivalent)
+var vkSpecialMap = map[string]uint16{
 	"DELETE":   0x2E,
 	"DEL":      0x2E,
 	"INSERT":   0x2D,
@@ -45,7 +58,6 @@ var vkMap = map[string]uint16{
 	"DOWN":     0x28,
 	"LEFT":     0x25,
 	"RIGHT":    0x27,
-	"SPACE":    0x20,
 	"F1":       0x70,
 	"F2":       0x71,
 	"F3":       0x72,
@@ -58,45 +70,24 @@ var vkMap = map[string]uint16{
 	"F10":      0x79,
 	"F11":      0x7A,
 	"F12":      0x7B,
-	"A":        0x41,
-	"B":        0x42,
-	"C":        0x43,
-	"D":        0x44,
-	"E":        0x45,
-	"F":        0x46,
-	"G":        0x47,
-	"H":        0x48,
-	"I":        0x49,
-	"J":        0x4A,
-	"K":        0x4B,
-	"L":        0x4C,
-	"M":        0x4D,
-	"N":        0x4E,
-	"O":        0x4F,
-	"P":        0x50,
-	"Q":        0x51,
-	"R":        0x52,
-	"S":        0x53,
-	"T":        0x54,
-	"U":        0x55,
-	"V":        0x56,
-	"W":        0x57,
-	"X":        0x58,
-	"Y":        0x59,
-	"Z":        0x5A,
-	"0":        0x30,
-	"1":        0x31,
-	"2":        0x32,
-	"3":        0x33,
-	"4":        0x34,
-	"5":        0x35,
-	"6":        0x36,
-	"7":        0x37,
-	"8":        0x38,
-	"9":        0x39,
 }
 
-func sendKey(vk uint16, down bool) {
+// send a Unicode character via KEYEVENTF_UNICODE
+func sendUnicode(r rune) {
+	i := inputKbd{
+		inputType: inputKeyboard,
+		ki: keyboardInput{
+			wScan:   uint16(r),
+			dwFlags: keyEventUnicode,
+		},
+	}
+	sendInput.Call(1, uintptr(unsafe.Pointer(&i)), unsafe.Sizeof(i))
+	i.ki.dwFlags = keyEventUnicode | keyEventUp
+	sendInput.Call(1, uintptr(unsafe.Pointer(&i)), unsafe.Sizeof(i))
+}
+
+// send a VK-coded key (for non-printable keys without Unicode equivalents)
+func sendVK(vk uint16, down bool) {
 	var flags uint32 = keyEventDown
 	if !down {
 		flags = keyEventUp
@@ -111,26 +102,59 @@ func sendKey(vk uint16, down bool) {
 	sendInput.Call(1, uintptr(unsafe.Pointer(&i)), unsafe.Sizeof(i))
 }
 
+func keyNameToUnicode(name string) (rune, bool) {
+	// Check unicodeKeyMap first (ENTER, BACKSPACE, TAB, ESC, SPACE)
+	if r, ok := unicodeKeyMap[name]; ok {
+		return r, true
+	}
+	// Ctrl+letter combos → control characters 0x01-0x1A
+	if strings.HasPrefix(name, "CTRL+") || strings.HasPrefix(name, "CONTROL+") {
+		parts := strings.SplitN(name, "+", 2)
+		if len(parts) == 2 && len(parts[1]) == 1 {
+			ch := parts[1][0]
+			if ch >= 'A' && ch <= 'Z' {
+				return rune(ch - 'A' + 1), true
+			}
+		}
+	}
+	// Single letter or digit → its Unicode value
+	if len(name) == 1 {
+		ch := name[0]
+		if (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == ' ' {
+			return rune(ch), true
+		}
+	}
+	return 0, false
+}
+
 func KeyPress(keys []string) error {
 	if err := warnElevated(); err != nil {
 		return err
 	}
+	var unicodeKeys []rune
+	var vkDown []uint16
+	var vkUp []uint16
 	for _, k := range keys {
-		vk, ok := vkMap[k]
-		if !ok {
-			continue
+		if r, ok := keyNameToUnicode(k); ok {
+			unicodeKeys = append(unicodeKeys, r)
+		} else if vk, ok := vkModMap[k]; ok {
+			vkDown = append(vkDown, vk)
+			vkUp = append([]uint16{vk}, vkUp...)
+		} else if vk, ok := vkSpecialMap[k]; ok {
+			vkDown = append(vkDown, vk)
+			vkUp = append([]uint16{vk}, vkUp...)
 		}
-		sendKey(vk, true)
 	}
-
-	for i := len(keys) - 1; i >= 0; i-- {
-		vk, ok := vkMap[keys[i]]
-		if !ok {
-			continue
-		}
-		sendKey(vk, false)
+	// Send all keys: Unicode chars first, then VK down, then VK up in reverse
+	for _, r := range unicodeKeys {
+		sendUnicode(r)
 	}
-
+	for _, vk := range vkDown {
+		sendVK(vk, true)
+	}
+	for _, vk := range vkUp {
+		sendVK(vk, false)
+	}
 	return nil
 }
 
@@ -139,17 +163,7 @@ func TypeText(text string) error {
 		return err
 	}
 	for _, r := range text {
-		i := inputKbd{
-			inputType: inputKeyboard,
-			ki: keyboardInput{
-				wScan:   uint16(r),
-				dwFlags: keyEventUnicode,
-			},
-		}
-		sendInput.Call(1, uintptr(unsafe.Pointer(&i)), unsafe.Sizeof(i))
-
-		i.ki.dwFlags = keyEventUnicode | keyEventUp
-		sendInput.Call(1, uintptr(unsafe.Pointer(&i)), unsafe.Sizeof(i))
+		sendUnicode(r)
 	}
 	return nil
 }
