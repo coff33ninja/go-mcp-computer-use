@@ -3,7 +3,7 @@
 > **Built iteratively** across AI-assisted development sessions, with v0.1.x covering 70 bug-fixed Win32/COM tools and v0.2.0 adding the chained automation pipeline, SQLite memory store, and ONNX ML validation.
 > The AI agent was guided by a curated set of quality-enforcement skills from [coff33ninja/ai-skills](https://github.com/coff33ninja/ai-skills) — anti-hallucination, anti-slop, safe-code-modifications, anti-sycophancy, code-simplification, context-engineering, don't-kill-tokens, os-awareness, anti-tool-sprawl, follow-existing-patterns, no-dead-code-removal, universal-format-lint, self-validate, verify-and-cite, and others.
 >
-> **Status:** v0.1.x — 70 tools, all known bugs resolved, builds clean. v0.2.0 planned — chain engine, memory store, layout validation, ML fallback. Not yet battle-tested in production.
+> **Status:** v0.1.x — 70 tools, all known bugs resolved, builds clean. v0.2.0 planned — chain engine, memory store, layout validation, ML fallback. All core tools tested and confirmed working on Windows 10/11 dual-monitor 3200×900 (screenshot, mouse, keyboard, OCR, template matching, window management, system control, find_text_and_click, scroll). UIA tools pass unit tests — runtime handler dispatch crash under investigation. Not yet battle-tested in production.
 
 MCP server for Windows desktop computer use. Exposes mouse, keyboard, screenshot, OCR, template matching, window management, system control, and screen recording to AI agents via [Model Context Protocol](https://modelcontextprotocol.io).
 
