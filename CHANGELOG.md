@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.2.0] - 2026-06-27
+
+### Fixed
+
+- OCR PowerShell script: properly loads WinRT types via `WindowsRuntimeSystemExtensions.GetAwaiter` with `MakeGenericMethod`, fixing OCR on systems where WinRT async extension methods don't resolve in PowerShell 5.1
+- Go raw string literal: avoids backtick in `IAsyncOperation`1` by using `-like` wildcard matching
+
+### Changed
+
+- Bumped version to 0.2.0
+
 ## [0.1.0] - 2026-06-27
 
 ### Added

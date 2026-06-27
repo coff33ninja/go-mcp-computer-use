@@ -34,29 +34,24 @@ type OCRResult struct {
 
 var ocrScript = `param($imgPath, $lang)
 Add-Type -AssemblyName System.Runtime.WindowsRuntime
-$file = Get-Item -LiteralPath $imgPath -ErrorAction Stop
-$stream = [Windows.Storage.Streams.FileRandomAccessStream]::OpenAsync($file, [Windows.Storage.FileAccessMode]::Read).GetAwaiter().GetResult()
-$decoder = [Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream).GetAwaiter().GetResult()
-$sb = $decoder.GetSoftwareBitmapAsync().GetAwaiter().GetResult()
-if ($lang) {
-  $culture = [Windows.Globalization.Language]::new($lang)
-  $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage($culture)
-} else {
-  $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
-}
-if ($engine -eq $null) { Write-Output '{"text":"","lines":[],"words":[]}'; $stream.Dispose(); exit }
-$result = $engine.RecognizeAsync($sb).GetAwaiter().GetResult()
-if ($result -eq $null) { Write-Output '{"text":"","lines":[],"words":[]}'; $stream.Dispose(); exit }
+$null = [Windows.Storage.StorageFile, Windows.Storage, ContentType=WindowsRuntime]
+$null = [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType=WindowsRuntime]
+$null = [Windows.Graphics.Imaging.SoftwareBitmap, Windows.Foundation, ContentType=WindowsRuntime]
+$null = [Windows.Storage.Streams.RandomAccessStream, Windows.Storage.Streams, ContentType=WindowsRuntime]
+$awaiter = [WindowsRuntimeSystemExtensions].GetMember('GetAwaiter', 'Method', 'Public,Static') | Where-Object { $_.Name -eq 'GetAwaiter' -and $_.GetParameters()[0].ParameterType.Name -like 'IAsyncOperation*' } | Select-Object -First 1
+function Invoke-Async([object]$AsyncTask, [Type]$As) { return $awaiter.MakeGenericMethod($As).Invoke($null, @($AsyncTask)).GetResult() }
+$storageFile = Invoke-Async ([Windows.Storage.StorageFile]::GetFileFromPathAsync($imgPath)) ([Windows.Storage.StorageFile])
+$fileStream = Invoke-Async ($storageFile.OpenReadAsync()) ([Windows.Storage.Streams.IRandomAccessStreamWithContentType])
+$bitmapDecoder = Invoke-Async ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($fileStream)) ([Windows.Graphics.Imaging.BitmapDecoder])
+$softwareBitmap = Invoke-Async ($bitmapDecoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])
+if ($lang) { $culture = [Windows.Globalization.Language]::new($lang); $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage($culture) } else { $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages() }
+if ($engine -eq $null) { Write-Output '{"text":"","lines":[],"words":[]}'; exit }
+$ocrResult = Invoke-Async ($engine.RecognizeAsync($softwareBitmap)) ([Windows.Media.Ocr.OcrResult])
+if ($ocrResult -eq $null) { Write-Output '{"text":"","lines":[],"words":[]}'; exit }
 $lines = @(); $words = @()
-foreach ($line in $result.Lines) {
-  $lines += @{text=$line.Text; x=[double]$line.BoundingRect.X; y=[double]$line.BoundingRect.Y; w=[double]$line.BoundingRect.Width; h=[double]$line.BoundingRect.Height}
-  foreach ($word in $line.Words) {
-    $words += @{text=$word.Text; x=[double]$word.BoundingRect.X; y=[double]$word.BoundingRect.Y; w=[double]$word.BoundingRect.Width; h=[double]$word.BoundingRect.Height}
-  }
-}
-$o = @{text=[string]$result.Text; lines=@($lines); words=@($words)}
+foreach ($line in $ocrResult.Lines) { $lines += @{text=$line.Text; x=[double]$line.BoundingRect.X; y=[double]$line.BoundingRect.Y; w=[double]$line.BoundingRect.Width; h=[double]$line.BoundingRect.Height}; foreach ($word in $line.Words) { $words += @{text=$word.Text; x=[double]$word.BoundingRect.X; y=[double]$word.BoundingRect.Y; w=[double]$word.BoundingRect.Width; h=[double]$word.BoundingRect.Height} } }
+$o = @{text=[string]$ocrResult.Text; lines=@($lines); words=@($words)}
 $o | ConvertTo-Json -Compress
-$stream.Dispose()
 `
 
 func ocrExec(imgPath, language string) (*OCRResult, error) {

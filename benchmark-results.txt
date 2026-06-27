@@ -1,0 +1,23 @@
+﻿Screen: 1920x1080
+
+=== BENCHMARK RESULTS (average time per call) ===
+Screenshot (full)                        128 ms
+Screenshot (region 400x400)             16.2 ms
+OCR (full screen)                        542 ms
+OCR (region 400x400)                     446 ms
+Template match (full screen)            19.9 ms
+Template match (in region)               1.3 ms
+find_text_and_click                      551 ms
+get_pixel_color                        15431 ┬╡s
+get_idle_time                           1407 ┬╡s
+get_uptime                                 0 ┬╡s
+get_disk_usage                             0 ms
+list_processes                           4.5 ms
+list_windows                               0 ms
+list_displays                              0 ms
+get_screen_dpi                             0 ms
+get_volume                              6445 ┬╡s
+get_battery                                0 ┬╡s
+get_keyboard_layout                      256 ms
+get_network_info                        11.4 ms
+
