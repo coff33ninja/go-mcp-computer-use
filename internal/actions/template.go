@@ -31,7 +31,7 @@ func FindImageInRegion(screenB64, templateB64 string, threshold float64) (*Match
 }
 
 func FindImage(screenB64, templateB64 string, threshold float64) (*MatchResult, error) {
-	if threshold <= 0 {
+	if threshold <= 0 || threshold > 1 {
 		threshold = 0.7
 	}
 
@@ -49,6 +49,9 @@ func FindImage(screenB64, templateB64 string, threshold float64) (*MatchResult, 
 	tw := tBounds.Dx()
 	th := tBounds.Dy()
 
+	if tw <= 0 || th <= 0 {
+		return nil, fmt.Errorf("template has zero dimensions")
+	}
 	if tw > sBounds.Dx() || th > sBounds.Dy() {
 		return nil, fmt.Errorf("template (%dx%d) larger than screen (%dx%d)", tw, th, sBounds.Dx(), sBounds.Dy())
 	}
@@ -58,7 +61,7 @@ func FindImage(screenB64, templateB64 string, threshold float64) (*MatchResult, 
 
 	tMean, tStd := meanStd(tGray)
 	if tStd == 0 {
-		return nil, fmt.Errorf("template has no variance")
+		return nil, fmt.Errorf("template has no variance (constant color)")
 	}
 
 	bestX, bestY := 0, 0

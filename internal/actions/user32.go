@@ -1,8 +1,8 @@
 package actions
 
-import "syscall"
+import "golang.org/x/sys/windows"
 
-var user32 = syscall.NewLazyDLL("user32.dll")
+var user32 = windows.NewLazySystemDLL("user32.dll")
 
 var (
 	getSystemMetrics = user32.NewProc("GetSystemMetrics")

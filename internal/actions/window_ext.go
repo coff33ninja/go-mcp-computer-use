@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"fmt"
 	"syscall"
 	"time"
 	"unsafe"
@@ -120,6 +121,12 @@ func FindWindowByTitle(title string) uintptr {
 }
 
 func WaitForWindow(title string, timeoutMs int32) (uintptr, error) {
+	if title == "" {
+		return 0, fmt.Errorf("wait_for_window: empty title")
+	}
+	if timeoutMs <= 0 {
+		timeoutMs = 10000
+	}
 	deadline := time.Now().Add(time.Duration(timeoutMs) * time.Millisecond)
 	for time.Now().Before(deadline) {
 		hwnd := FindWindowByTitle(title)

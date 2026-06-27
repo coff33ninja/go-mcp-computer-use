@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"fmt"
 	"syscall"
 	"unsafe"
 )
@@ -69,6 +70,9 @@ func ListProcesses() ([]ProcessInfo, error) {
 }
 
 func LaunchApp(path string) error {
+	if path == "" {
+		return fmt.Errorf("launch_app: empty path")
+	}
 	p := syscall.StringToUTF16Ptr(path)
 	op := syscall.StringToUTF16Ptr("open")
 	ret, _, _ := shellExecuteW.Call(0, uintptr(unsafe.Pointer(op)),

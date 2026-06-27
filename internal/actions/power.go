@@ -5,10 +5,12 @@ import (
 	"syscall"
 	"time"
 	"unsafe"
+
+	"golang.org/x/sys/windows"
 )
 
 var (
-	powrprof         = syscall.NewLazyDLL("powrprof.dll")
+	powrprof         = windows.NewLazySystemDLL("powrprof.dll")
 	setSuspendState  = powrprof.NewProc("SetSuspendState")
 
 	exitWindowsEx    = user32.NewProc("ExitWindowsEx")
@@ -69,23 +71,38 @@ type DiskUsage struct {
 	UsagePct   float64 `json:"usage_percent"`
 }
 
-var getDiskFreeSpaceExW = kernel32.NewProc("GetDiskFreeSpaceExW")
+var (
+	getDiskFreeSpaceExW = kernel32.NewProc("GetDiskFreeSpaceExW")
+	getLogicalDrives    = kernel32.NewProc("GetLogicalDrives")
+	getDriveTypeW       = kernel32.NewProc("GetDriveTypeW")
+)
+
+const (
+	DRIVE_UNKNOWN    = 0
+	DRIVE_NO_ROOT_DIR = 1
+	DRIVE_REMOVABLE  = 2
+	DRIVE_FIXED      = 3
+	DRIVE_REMOTE     = 4
+	DRIVE_CDROM      = 5
+	DRIVE_RAMDISK    = 6
+)
 
 func GetDiskUsage() ([]DiskUsage, error) {
-	drives := []string{
-		"C:\\", "D:\\", "E:\\", "F:\\", "G:\\",
-		"H:\\", "I:\\", "J:\\", "K:\\", "L:\\",
-		"M:\\", "N:\\", "O:\\", "P:\\", "Q:\\",
-		"R:\\", "S:\\", "T:\\", "U:\\", "V:\\",
-		"W:\\", "X:\\", "Y:\\", "Z:\\",
-	}
-
+	mask, _, _ := getLogicalDrives.Call()
 	var result []DiskUsage
-	for _, drive := range drives {
-		path := syscall.StringToUTF16Ptr(drive)
+	for i := 0; i < 26; i++ {
+		if mask&(1<<uint(i)) == 0 {
+			continue
+		}
+		drive := string(rune('A'+i)) + ":\\"
+		root := syscall.StringToUTF16Ptr(drive)
+		dt, _, _ := getDriveTypeW.Call(uintptr(unsafe.Pointer(root)))
+		if dt != DRIVE_FIXED && dt != DRIVE_RAMDISK {
+			continue
+		}
 		var free, total, totalFree uint64
 		ret, _, _ := getDiskFreeSpaceExW.Call(
-			uintptr(unsafe.Pointer(path)),
+			uintptr(unsafe.Pointer(root)),
 			uintptr(unsafe.Pointer(&free)),
 			uintptr(unsafe.Pointer(&total)),
 			uintptr(unsafe.Pointer(&totalFree)),

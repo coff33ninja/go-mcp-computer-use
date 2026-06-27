@@ -7,10 +7,12 @@ import (
 	"image/png"
 	"syscall"
 	"unsafe"
+
+	"golang.org/x/sys/windows"
 )
 
 var (
-	gdi32 = syscall.NewLazyDLL("gdi32.dll")
+	gdi32 = windows.NewLazySystemDLL("gdi32.dll")
 
 	createCompatibleDC    = gdi32.NewProc("CreateCompatibleDC")
 	createCompatibleBitmap = gdi32.NewProc("CreateCompatibleBitmap")

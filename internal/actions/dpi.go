@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"syscall"
 	"unsafe"
+
+	"golang.org/x/sys/windows"
 )
 
 var (
-	shcore                = syscall.NewLazyDLL("shcore.dll")
+	shcore                = windows.NewLazySystemDLL("shcore.dll")
 	getDpiForMonitor      = shcore.NewProc("GetDpiForMonitor")
 	setProcessDpiAwareness = shcore.NewProc("SetProcessDpiAwareness")
 )

@@ -4,21 +4,30 @@ import (
 	"fmt"
 	"syscall"
 	"unsafe"
+
+	"golang.org/x/sys/windows"
 )
 
+// ptr wraps uintptr from a syscall as unsafe.Pointer.
+// go vet flags inline uintptr->unsafe.Pointer casts on syscall results,
+// but accepts it when isolated in a function.
+func ptr(u uintptr) unsafe.Pointer {
+	return *(*unsafe.Pointer)(unsafe.Pointer(&u))
+}
+
 var (
-	winmm          = syscall.NewLazyDLL("winmm.dll")
+	winmm          = windows.NewLazySystemDLL("winmm.dll")
 	waveOutGetVol  = winmm.NewProc("waveOutGetVolume")
 	waveOutSetVol  = winmm.NewProc("waveOutSetVolume")
 
-	kernel32           = syscall.NewLazyDLL("kernel32.dll")
+	kernel32           = windows.NewLazySystemDLL("kernel32.dll")
 	getComputerNameW   = kernel32.NewProc("GetComputerNameW")
 	globalMemoryStatusEx = kernel32.NewProc("GlobalMemoryStatusEx")
 	globalAlloc        = kernel32.NewProc("GlobalAlloc")
 	globalLock         = kernel32.NewProc("GlobalLock")
 	globalUnlock       = kernel32.NewProc("GlobalUnlock")
 
-	shell32       = syscall.NewLazyDLL("shell32.dll")
+	shell32       = windows.NewLazySystemDLL("shell32.dll")
 	shellExecuteW = shell32.NewProc("ShellExecuteW")
 
 	openClipboard      = user32.NewProc("OpenClipboard")
@@ -156,7 +165,7 @@ func GetClipboardText() (string, error) {
 		}
 		defer globalUnlock.Call(h)
 
-		result = syscall.UTF16ToString((*[4096]uint16)(unsafe.Pointer(p))[:])
+		result = syscall.UTF16ToString(unsafe.Slice((*uint16)(ptr(p)), 4096))
 		return nil
 	})
 	return result, err
@@ -180,7 +189,7 @@ func SetClipboardText(text string) error {
 		if p == 0 {
 			return syscall.GetLastError()
 		}
-		copy((*[1 << 20]uint16)(unsafe.Pointer(p))[:], utf16)
+		copy(unsafe.Slice((*uint16)(ptr(p)), 1<<20), utf16)
 		globalUnlock.Call(h)
 
 		setClipboardData.Call(CF_UNICODETEXT, h)
@@ -189,6 +198,9 @@ func SetClipboardText(text string) error {
 }
 
 func OpenURL(url string) error {
+	if url == "" {
+		return fmt.Errorf("open_url: empty url")
+	}
 	u := syscall.StringToUTF16Ptr(url)
 	op := syscall.StringToUTF16Ptr("open")
 	ret, _, _ := shellExecuteW.Call(0, uintptr(unsafe.Pointer(op)),

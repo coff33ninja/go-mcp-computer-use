@@ -16,6 +16,9 @@ type FindTextOpts struct {
 }
 
 func FindTextAndClick(opts FindTextOpts) error {
+	if opts.Text == "" {
+		return fmt.Errorf("find_text_and_click: empty text")
+	}
 	var result *OCRResult
 	var err error
 
@@ -51,6 +54,9 @@ func FindTextAndClick(opts FindTextOpts) error {
 }
 
 func TypeAndSubmit(text string) error {
+	if text == "" {
+		return fmt.Errorf("type_and_submit: empty text")
+	}
 	if err := TypeText(text); err != nil {
 		return fmt.Errorf("type_and_submit type: %w", err)
 	}
@@ -91,6 +97,12 @@ func Hover(x, y int32) error {
 }
 
 func WaitForText(text string, timeoutMs int32, language string) (*OCRResult, error) {
+	if text == "" {
+		return nil, fmt.Errorf("wait_for_text: empty text")
+	}
+	if timeoutMs <= 0 {
+		timeoutMs = 10000
+	}
 	deadline := time.Now().Add(time.Duration(timeoutMs) * time.Millisecond)
 	for time.Now().Before(deadline) {
 		result, err := OCRScreen(language)
@@ -114,6 +126,9 @@ func WaitForText(text string, timeoutMs int32, language string) (*OCRResult, err
 }
 
 func SelectAllAndType(text string) error {
+	if text == "" {
+		return fmt.Errorf("select_all_and_type: empty text")
+	}
 	if err := KeyPress([]string{"Ctrl", "a"}); err != nil {
 		return fmt.Errorf("select_all_and_type key: %w", err)
 	}

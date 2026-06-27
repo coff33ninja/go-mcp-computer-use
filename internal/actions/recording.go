@@ -19,7 +19,9 @@ type RecordingResult struct {
 
 func RecordScreen(durationMs, intervalMs int32) (*RecordingResult, error) {
 	if durationMs <= 0 { durationMs = 5000 }
+	if durationMs > 60000 { durationMs = 60000 }
 	if intervalMs <= 0 { intervalMs = 500 }
+	if intervalMs < 100 { intervalMs = 100 }
 
 	start := time.Now()
 	deadline := start.Add(time.Duration(durationMs) * time.Millisecond)

@@ -125,9 +125,15 @@ func OCRRegion(x, y, w, h int32, language string) (*OCRResult, error) {
 }
 
 func ocrFromBase64(b64, language string) (*OCRResult, error) {
+	if b64 == "" {
+		return &OCRResult{}, nil
+	}
 	data, err := base64.StdEncoding.DecodeString(b64)
 	if err != nil {
 		return nil, fmt.Errorf("ocr decode b64: %w", err)
+	}
+	if len(data) == 0 {
+		return &OCRResult{}, nil
 	}
 
 	tmpDir := os.Getenv("TEMP")

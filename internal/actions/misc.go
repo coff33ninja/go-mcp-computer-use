@@ -5,10 +5,12 @@ import (
 	"syscall"
 	"time"
 	"unsafe"
+
+	"golang.org/x/sys/windows"
 )
 
 var (
-	ntdll           = syscall.NewLazyDLL("ntdll.dll")
+	ntdll           = windows.NewLazySystemDLL("ntdll.dll")
 	delayExecution  = ntdll.NewProc("NtDelayExecution")
 
 	getSystemPowerStatus = kernel32.NewProc("GetSystemPowerStatus")
@@ -45,6 +47,43 @@ type DisplayInfo struct {
 	PositionX int32 `json:"position_x"`
 	PositionY int32 `json:"position_y"`
 	Primary  bool   `json:"primary"`
+}
+
+type DisplayMode struct {
+	Name        string `json:"name"`
+	Width       int32  `json:"width"`
+	Height      int32  `json:"height"`
+	RefreshRate int32  `json:"refresh_rate"`
+	BitsPerPel  int32  `json:"bits_per_pel"`
+}
+
+type DEVMODEW struct {
+	DeviceName      [32]uint16
+	SpecVersion     uint16
+	DriverVersion   uint16
+	Size            uint16
+	DriverExtra     uint16
+	Fields          uint32
+	Orientation     int16
+	PaperSize       int16
+	PaperLength     int16
+	PaperWidth      int16
+	Scale           int16
+	Copies          int16
+	DefaultSource   int16
+	PrintQuality    int16
+	Color           int16
+	Duplex          int16
+	YResolution     int16
+	TTOption        int16
+	Collate         int16
+	FormName        [32]uint16
+	LogPixels       uint16
+	BitsPerPel      uint32
+	PelsWidth       uint32
+	PelsHeight      uint32
+	DisplayFlags    uint32
+	DisplayFrequency uint32
 }
 
 var (
@@ -101,6 +140,31 @@ func ListDisplays() ([]DisplayInfo, error) {
 	return displays, nil
 }
 
+func GetDisplayModes(deviceName string) ([]DisplayMode, error) {
+	dn := syscall.StringToUTF16Ptr(deviceName)
+	var modes []DisplayMode
+	for i := uint32(0); ; i++ {
+		var dm DEVMODEW
+		dm.Size = uint16(unsafe.Sizeof(dm))
+		ret, _, _ := enumDisplaySettingsW.Call(
+			uintptr(unsafe.Pointer(dn)), uintptr(i), uintptr(unsafe.Pointer(&dm)))
+		if ret == 0 {
+			break
+		}
+		modes = append(modes, DisplayMode{
+			Name:        deviceName,
+			Width:       int32(dm.PelsWidth),
+			Height:      int32(dm.PelsHeight),
+			RefreshRate: int32(dm.DisplayFrequency),
+			BitsPerPel:  int32(dm.BitsPerPel),
+		})
+	}
+	if modes == nil {
+		return nil, fmt.Errorf("no display modes found for %s", deviceName)
+	}
+	return modes, nil
+}
+
 func GetBattery() (*BatteryStatus, error) {
 	var sps SYSTEM_POWER_STATUS
 	ret, _, _ := getSystemPowerStatus.Call(uintptr(unsafe.Pointer(&sps)))
@@ -121,6 +185,9 @@ func GetBattery() (*BatteryStatus, error) {
 }
 
 func Wait(ms int32) {
+	if ms <= 0 {
+		return
+	}
 	duration := time.Duration(ms) * time.Millisecond
 	du := -(int64(duration) * 10000)
 	delayExecution.Call(0, uintptr(unsafe.Pointer(&du)))

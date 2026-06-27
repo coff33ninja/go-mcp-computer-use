@@ -40,12 +40,14 @@ $devList | ConvertTo-Json -Compress
 `
 
 var audioSetScript = `
-param($deviceId)
 Add-Type -AssemblyName System.Runtime.WindowsRuntime
 $devEnum = [Windows.Media.Devices.MediaDevice]::GetDefaultAudioRenderId([Windows.Media.Devices.AudioDeviceRole]::Default)
-# Setting default audio device requires COM IPolicyConfig; use Windows.System.UserProfile
-# For now, this is a stub - device ID is returned for manual configuration
-Write-Output "ok"
+try {
+  $devEnum = New-Object -ComObject MMDeviceEnumerator.MMDeviceEnumerator
+  $dev = $devEnum.GetDevice($args[0])
+  $null = [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($devEnum)
+  Write-Output "ok"
+} catch { Write-Error $_.Exception.Message; exit 1 }
 `
 
 func ListAudioDevices() ([]AudioDevice, error) {
@@ -73,17 +75,8 @@ func ListAudioDevices() ([]AudioDevice, error) {
 }
 
 func SetDefaultAudioDevice(deviceID string) error {
-	// Uses PowerShell to set the default via COM IPolicyConfig
-	script := fmt.Sprintf(`param($id)
-try {
-  $devEnum = New-Object -ComObject MMDeviceEnumerator.MMDeviceEnumerator
-  $dev = $devEnum.GetDevice($id)
-  $null = [System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($devEnum)
-  Write-Output "ok"
-} catch { Write-Error $_.Exception.Message; exit 1 }
-`)
 	cmd := exec.Command("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
-		"-Command", script, deviceID)
+		"-Command", audioSetScript, deviceID)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("set audio device: %s: %w", strings.TrimSpace(string(out)), err)

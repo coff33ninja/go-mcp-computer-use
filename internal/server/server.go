@@ -205,9 +205,61 @@ type SetAudioDeviceArgs struct {
 	DeviceID string `json:"device_id"`
 }
 
+type DisplayModesArgs struct {
+	DeviceName string `json:"device_name"`
+}
+
 type RecordScreenArgs struct {
 	DurationMs int32 `json:"duration_ms,omitempty"`
 	IntervalMs int32 `json:"interval_ms,omitempty"`
+}
+
+type UIAFindArgs struct {
+	Name         string `json:"name,omitempty"`
+	AutomationID string `json:"automation_id,omitempty"`
+	ControlType  string `json:"control_type,omitempty"`
+}
+
+type UIAGetTextArgs struct {
+	Name         string `json:"name,omitempty"`
+	AutomationID string `json:"automation_id,omitempty"`
+}
+
+type UIAInvokeArgs struct {
+	Name         string `json:"name,omitempty"`
+	AutomationID string `json:"automation_id,omitempty"`
+}
+
+func uiaFindHandler(ctx context.Context, req *mcp.CallToolRequest, args UIAFindArgs) (*mcp.CallToolResult, any, error) {
+	opts := actions.UIAFindOpts{
+		Name:         args.Name,
+		AutomationID: args.AutomationID,
+		ControlType:  args.ControlType,
+	}
+	elements, err := actions.UIAFindElement(opts)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uia_find: %w", err)
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, map[string]any{"elements": elements}, nil
+}
+
+func uiaGetTextHandler(ctx context.Context, req *mcp.CallToolRequest, args UIAGetTextArgs) (*mcp.CallToolResult, any, error) {
+	text, err := actions.UIAGetText(args.Name, args.AutomationID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uia_get_text: %w", err)
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, map[string]string{"text": text}, nil
+}
+
+func uiaInvokeHandler(ctx context.Context, req *mcp.CallToolRequest, args UIAInvokeArgs) (*mcp.CallToolResult, any, error) {
+	success, err := actions.UIAInvoke(args.Name, args.AutomationID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uia_invoke: %w", err)
+	}
+	if !success {
+		return nil, nil, fmt.Errorf("uia_invoke: element not found or not invocable")
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
 }
 
 func screenshotHandler(ctx context.Context, req *mcp.CallToolRequest, args ScreenshotArgs) (*mcp.CallToolResult, any, error) {
@@ -467,6 +519,16 @@ func listDisplaysHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
 	}, map[string]any{"displays": displays}, nil
+}
+
+func displayModesHandler(ctx context.Context, req *mcp.CallToolRequest, args DisplayModesArgs) (*mcp.CallToolResult, any, error) {
+	modes, err := actions.GetDisplayModes(args.DeviceName)
+	if err != nil {
+		return nil, nil, fmt.Errorf("get_display_modes failed: %w", err)
+	}
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
+	}, map[string]any{"modes": modes}, nil
 }
 
 func getBatteryHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
@@ -840,7 +902,7 @@ func New() *mcp.Server {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
 	slog.SetDefault(logger)
 
-	slog.Info("starting go-mcp-computer-use", "tools", 65)
+	slog.Info("starting go-mcp-computer-use", "tools", 69)
 
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "go-mcp-computer-use",
@@ -971,6 +1033,11 @@ func New() *mcp.Server {
 		Name:        "list_displays",
 		Description: "List all monitors with resolution and position.",
 	}, listDisplaysHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "get_display_modes",
+		Description: "Get all available display modes (resolution, refresh rate, color depth) for a monitor by device name.",
+	}, displayModesHandler)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_battery",
@@ -1171,6 +1238,21 @@ func New() *mcp.Server {
 		Name:        "record_screen",
 		Description: "Record screen frames at fixed intervals. Returns base64 images. Duration in ms, interval in ms.",
 	}, recordScreenHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "uia_find",
+		Description: "Find UI elements by name, automation_id, or control_type using UI Automation. Returns bounding rectangles and properties.",
+	}, uiaFindHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "uia_get_text",
+		Description: "Get text from a UI element by name or automation_id using UI Automation.",
+	}, uiaGetTextHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "uia_invoke",
+		Description: "Click or invoke a UI element by name or automation_id using UI Automation.",
+	}, uiaInvokeHandler)
 
 	return server
 }
