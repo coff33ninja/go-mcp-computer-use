@@ -109,13 +109,10 @@ But `list_displays` only returns DISPLAY1.
 **Observation:** Calling `find_text_and_click` brings the target window to foreground. This is expected behavior for a computer-use tool, but worth documenting as a caveat.
 **Workaround:** None — by design.
 
-### B9. Keyboard input blocked by UIPI on elevated windows
-**Observation:** All `type`, `type_and_submit`, `key_press`, `select_all_and_type` return `ok` but input does not reach elevated (Administrator) PowerShell. OCR confirms no change. Active window tracking confirms PowerShell has focus.
+### ~~B9. Keyboard input blocked by UIPI on elevated windows~~ *(fixed v0.1.9)*
+**Observation:** All `type`, `type_and_submit`, `key_press`, `select_all_and_type` return `ok` but input does not reach elevated (Administrator) PowerShell.
 **Root cause:** Windows UIPI — `SendInput` with `KEYEVENTF_UNICODE` from non-elevated MCP server is silently blocked from reaching admin-elevated windows.
-**Fix options:**
-1. Document UIPI constraint
-2. Detect elevation mismatch and return warning
-3. Run MCP server elevated
+**Fix:** Added `isForegroundElevated()` check using `OpenProcess` + `GetTokenInformation(TokenElevation)`. Returns clear warning message instead of silent failure.
 
 ### B10. `click` may silently fail on elevated windows
 **Note:** `Click` uses `SetCursorPos` + `SendInput` mouse events. Same UIPI restriction applies — no error feedback when targeting admin windows.

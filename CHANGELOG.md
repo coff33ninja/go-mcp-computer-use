@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.9] - 2026-06-27
+
+### Added
+
+- B9: UIPI elevation detection for keyboard input (`TypeText`, `KeyPress`) — returns clear warning when foreground window is elevated (admin), instead of silently dropping input
+
 ## [0.1.8] - 2026-06-27
 
 ### Fixed

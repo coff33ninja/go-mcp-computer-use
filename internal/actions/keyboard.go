@@ -112,6 +112,9 @@ func sendKey(vk uint16, down bool) {
 }
 
 func KeyPress(keys []string) error {
+	if err := warnElevated(); err != nil {
+		return err
+	}
 	for _, k := range keys {
 		vk, ok := vkMap[k]
 		if !ok {
@@ -132,6 +135,9 @@ func KeyPress(keys []string) error {
 }
 
 func TypeText(text string) error {
+	if err := warnElevated(); err != nil {
+		return err
+	}
 	for _, r := range text {
 		i := inputKbd{
 			inputType: inputKeyboard,
