@@ -6,7 +6,7 @@
 
 | Tool | Status | Notes |
 |------|--------|-------|
-| `get_screen_size` | ✅ | 1600×900 (primary) |
+| `get_screen_size` | ✅ | 3200×900 (virtual — 2×1600) |
 | `get_system_info` | ✅ | Hostname, OS, RAM |
 | `get_cursor_position` | ✅ | Confirms second screen (x=2142) |
 | `get_battery` | ✅ | "no_battery" (desktop) |
@@ -17,7 +17,7 @@
 | `get_screen_dpi` | ✅ | 2 monitors, both 96dpi 100% |
 | `get_uptime` | ✅ | |
 | `get_volume` | ✅ | 49% |
-| `list_displays` | ✅ | Only DISPLAY1 returned (**bug** - see below) |
+| `list_displays` | ✅ | DISPLAY1 + DISPLAY2 (v0.1.8) |
 | `list_windows` | ✅ | 24 windows |
 | `list_processes` | ✅ | 195 processes |
 | `get_active_window` | ✅ | OpenCode |
@@ -114,8 +114,8 @@ But `list_displays` only returns DISPLAY1.
 **Root cause:** Windows UIPI — `SendInput` with `KEYEVENTF_UNICODE` from non-elevated MCP server is silently blocked from reaching admin-elevated windows.
 **Fix:** Added `isForegroundElevated()` check using `OpenProcess` + `GetTokenInformation(TokenElevation)`. Returns clear warning message instead of silent failure.
 
-### B10. `click` may silently fail on elevated windows
-**Note:** `Click` uses `SetCursorPos` + `SendInput` mouse events. Same UIPI restriction applies — no error feedback when targeting admin windows.
+### ~~B10. `click` may silently fail on elevated windows~~ *(documented)*
+**Note:** `Click` uses `SetCursorPos` + `SendInput` mouse events. Same UIPI restriction applies — no error feedback when targeting admin windows. Unlike keyboard (which always targets foreground window), mouse targets coordinates, making elevation check impractical. Run MCP server elevated to avoid this.
 
 ---
 
