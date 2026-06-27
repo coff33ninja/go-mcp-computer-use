@@ -76,15 +76,15 @@
 **Issue:** No audio devices enumerated. PowerShell `Get-AudioDevice -List` may not be installed on this system (requires `AudioDeviceCmdlets` module).
 **Fix:** Return empty slice `[]` instead of nil slice `null`.
 
-### B3. `list_displays` — second monitor not enumerated
+### ~~B3. `list_displays` — second monitor not enumerated~~ *(fixed v0.1.8)*
 **Evidence:**
 - Cursor position: x=2142 (primary is 1600 wide, so x≥1600 = second screen)
 - OpenCode window rect: `left=1592, right=3208, width=1616` — spans across to a second screen at x~1600
 
 But `list_displays` only returns DISPLAY1.
 
-**Expected:** DISPLAY1 (1600×900 @ 0,0) + DISPLAY2 (second monitor)
-**Fix:** Enumeration logic misses non-primary displays. Check `EnumDisplayDevices` or `QueryDisplayConfig` in the Win32 enumeration path.
+**Root cause:** `monitorEnumProc` callback gated processing on `mi.Flags&1 != 0` (`MONITORINFOF_PRIMARY` = 0x1). Non-primary monitors were silently skipped.
+**Fix:** Removed the primary-only gate — all enumerated monitors are now included, with `Primary: mi.Flags&1 != 0` set correctly per-monitor.
 
 ### ~~B4. `uia_get_text` / `uia_invoke` — server disconnect~~ *(fixed v0.1.7)*
 **Action:** 

@@ -109,18 +109,16 @@ func monitorEnumProc(hmonitor uintptr, hdc uintptr, rect uintptr, lparam uintptr
 	var mi MONITORINFOEX
 	mi.Size = uint32(unsafe.Sizeof(mi))
 	getMonitorInfoW.Call(hmonitor, uintptr(unsafe.Pointer(&mi)))
-	if mi.Flags&1 != 0 {
-		info := DisplayInfo{
-			Name:      syscall.UTF16ToString(mi.DeviceName[:]),
-			Width:     mi.Monitor.Right - mi.Monitor.Left,
-			Height:    mi.Monitor.Bottom - mi.Monitor.Top,
-			PositionX: mi.Monitor.Left,
-			PositionY: mi.Monitor.Top,
-			Primary:   mi.Flags&1 != 0,
-		}
-		if monitorCallback(info) {
-			return 1
-		}
+	info := DisplayInfo{
+		Name:      syscall.UTF16ToString(mi.DeviceName[:]),
+		Width:     mi.Monitor.Right - mi.Monitor.Left,
+		Height:    mi.Monitor.Bottom - mi.Monitor.Top,
+		PositionX: mi.Monitor.Left,
+		PositionY: mi.Monitor.Top,
+		Primary:   mi.Flags&1 != 0,
+	}
+	if monitorCallback(info) {
+		return 1
 	}
 	return 1
 }

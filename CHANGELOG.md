@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.8] - 2026-06-27
+
+### Fixed
+
+- B3: `list_displays` only returned primary monitor — `monitorEnumProc` gated on `MONITORINFOF_PRIMARY` flag, skipping all non-primary displays
+
 ## [0.1.7] - 2026-06-27
 
 ### Fixed
