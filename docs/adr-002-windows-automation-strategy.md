@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted (updated 2026-06-27: now also uses native COM/WinRT)
 
 ## Context
 
@@ -23,20 +23,24 @@ Key requirements:
 
 ## Decision
 
-Use **Go + syscall/windows** with direct Win32 API calls:
+Use **Go + syscall/windows** with direct Win32 API calls, plus **native COM** where beneficial:
 
 - Screenshot: `CreateDC` + `BitBlt` via GDI (`golang.org/x/sys/windows`)
 - Mouse/keyboard: `SendInput` Win32 API
 - Window management: `EnumWindows`, `SetForegroundWindow`, `GetWindowText`
 - Cursor: `GetCursorPos`
+- **UI Automation**: Native COM calls to `UIAutomationCore.dll` (IUIAutomation, IUIAutomationElement) via raw vtable dispatch — no CGO, no go-ole
+- **OCR**: Native WinRT COM via `combase.dll` (RoGetActivationFactory, WindowsCreateString, IAsyncOperation polling) — HSTRING management, activation factories, async result extraction, all via raw syscall
 
-Avoid CGO and COM to keep builds simple and cross-compilable.
+Avoid CGO to keep builds simple and cross-compilable.
 
 ## Consequences
 
 - Easier: pure Go, no CGO toolchain needed
 - Easier: cross-compilation works out of the box
-- Easier: no COM initialization/threading complexity
+- Easier: direct COM vtable dispatch via syscall — no CGO, no go-ole dependency
+- Faster: OCR 2-8x faster, UIA no longer shells out to PowerShell
 - Harder: more manual struct definitions and FFI boilerplate
-- Harder: no UI Automation tree walking (cannot "find button labeled X" — but OCR via PowerShell + Windows.Media.Ocr fills this gap)
-- Unofficial: OCR and brightness control shell out to PowerShell for WinRT/WMI APIs that lack Go bindings
+- Harder: COM threading model must be managed per-thread
+- Involved: WinRT async operations require polling IAsyncInfo::Status rather than callback pattern
+- Unofficial: brightness control still shells out to PowerShell for WMI APIs

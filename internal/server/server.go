@@ -906,7 +906,7 @@ func New() *mcp.Server {
 
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "go-mcp-computer-use",
-		Version: "0.2.0",
+		Version: "0.1.1",
 	}, nil)
 
 	mcp.AddTool(server, &mcp.Tool{

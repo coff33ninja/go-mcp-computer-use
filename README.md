@@ -3,7 +3,7 @@
 > **Built in ~5 hours** across 69 user prompts using AI-assisted development.
 > For context: a project of this scope (69 Win32 API tools + OCR/audio/UIA PowerShell automation + config + docs + benchmarks) would typically take an experienced Windows systems programmer **2-4 weeks** to write and debug. The AI agent was guided by a curated set of quality-enforcement skills from [coff33ninja/ai-skills](https://github.com/coff33ninja/ai-skills) — anti-hallucination, anti-slop, safe-code-modifications, anti-sycophancy, code-simplification, context-engineering, don't-kill-tokens, os-awareness, anti-tool-sprawl, follow-existing-patterns, no-dead-code-removal, universal-format-lint, self-validate, verify-and-cite, and others — which prevented common AI coding failure modes.
 >
-> **Status:** Code builds and runs (69 tools reported via `tools/list`). Benchmarks look promising (full-screen screenshot ~125ms, OCR ~540ms). Not yet battle-tested in production. Contributions welcome.
+> **Status:** Code builds and runs (69 tools reported via `tools/list`). Benchmarks look great (full-screen screenshot ~104ms, OCR ~292ms native — 2-8x faster after replacing PowerShell OCR with direct WinRT COM). Not yet battle-tested in production. Contributions welcome.
 
 MCP server for Windows desktop computer use. Exposes mouse, keyboard, screenshot, OCR, template matching, window management, system control, and screen recording to AI agents via [Model Context Protocol](https://modelcontextprotocol.io).
 
@@ -25,7 +25,8 @@ MCP server for Windows desktop computer use. Exposes mouse, keyboard, screenshot
 - **Processes** — list, launch, kill
 - **Power** — shutdown, restart, sleep, hibernate
 - **Per-monitor DPI** — per-monitor DPI awareness, scale reporting
-- **UI Automation** — find elements by name/automationID, get text, invoke buttons via UIA
+- **UI Automation** — find elements by name/automationID, get text, invoke buttons via native COM UIAutomation (no PowerShell)
+- **OCR via native WinRT COM** — StorageFile → BitmapDecoder → OcrEngine pipeline, 2-8x faster than PowerShell (falls back to PowerShell on error)
 - **69 MCP tools** — full list below
 
 ## ⚠️ SECURITY WARNING — DANGEROUS CAPABILITIES
@@ -48,7 +49,7 @@ This executable can **fully control the Windows machine it runs on**. It exposes
 
 - Windows 10 or 11
 - Go 1.26+ (to build from source)
-- No CGO, no external dependencies (Zig optional for CGO)
+- No CGO, no external dependencies, no Windows SDK required
 
 ## Quick Start
 
@@ -106,7 +107,7 @@ Or use the install script:
 `find_text_and_click` `wait_for_text` `click_menu_item` `launch_and_wait`
 
 ### OCR & Language
-`ocr` (supports `language` param: en-US, ja-JP, fr-FR...)
+`ocr` (supports `language` param: en-US, ja-JP, fr-FR...) — native WinRT COM (fast path), PowerShell fallback
 `find_text_and_click` `wait_for_text` `click_menu_item` (all pass through language)
 
 ### Audio
@@ -166,8 +167,12 @@ See [`docs/mcp-client-configs.md`](docs/mcp-client-configs.md) for per-agent con
 ```
 cmd/mcp-server/main.go        — entrypoint, DPI awareness, signals
 internal/server/server.go     — 68 MCP tool registrations
-internal/actions/             — Win32 API + PowerShell (no CGO, no COM)
-internal/actions/uia.go       — PowerShell UI Automation (find, get_text, invoke)
+internal/actions/             — Win32 API + native COM/WinRT (no CGO)
+internal/actions/uia_com.go   — COM UI Automation (IUIAutomation via UIAutomationCore.dll)
+internal/actions/uia.go       — UIA wrappers (find, get text, invoke)
+internal/actions/ocr_com.go   — WinRT COM OCR (StorageFile → BitmapDecoder → OcrEngine)
+internal/actions/winrt.go     — WinRT infrastructure (HSTRING, RoInitialize, async polling)
+internal/actions/ocr.go       — OCR orchestration (native COM WinRT + PowerShell fallback)
 internal/config/config.go     — JSON config file
 ```
 
@@ -191,22 +196,22 @@ CC="zig cc" CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -o mcp-server.exe .
 
 ## Performance
 
-Benchmark results (1920x1080 display, averaged):
+Benchmark results (1600x900 display, averaged):
 
-| Operation | Time |
-|---|---|
-| Screenshot (full) | 123 ms |
-| Screenshot (400x400 region) | 17 ms |
-| OCR (full screen) | 534 ms |
-| OCR (400x400 region) | 444 ms |
-| Template match (full screen) | 19 ms |
-| Template match (in region) | 2 ms |
-| find_text_and_click | 526 ms |
-| get_pixel_color | 17 ms |
-| get_keyboard_layout | 247 ms |
-| get_network_info | 11 ms |
-| list_processes | 5 ms |
-| get_volume | 7 ms |
+| Operation | Time | vs Previous |
+|---|---|---|
+| Screenshot (full) | 104 ms | |
+| Screenshot (400x400 region) | 17 ms | |
+| OCR (full screen) | **292 ms** | 2.2x faster (native COM WinRT) |
+| OCR (400x400 region) | **68 ms** | 8x faster (native COM WinRT) |
+| Template match (full screen) | 16 ms | |
+| Template match (in region) | 2 ms | |
+| find_text_and_click | **275 ms** | 2.9x faster |
+| get_pixel_color | 18 ms | |
+| get_keyboard_layout | 667 ms | |
+| get_network_info | 10 ms | |
+| list_processes | 14 ms | |
+| get_volume | 10 ms | |
 
 Run `go run .\cmd\benchmark\` locally to produce current numbers.
 

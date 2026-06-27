@@ -22,6 +22,8 @@ Desktop.ini
 
 # Editor
 .vscode/
+dev/
+benchmark.exe
 .idea/
 *.swp
 *.swo

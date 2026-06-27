@@ -1,15 +1,29 @@
 # Changelog
 
-## [0.2.0] - 2026-06-27
+## [0.1.1] - 2026-06-27
 
-### Fixed
+### Added
 
-- OCR PowerShell script: properly loads WinRT types via `WindowsRuntimeSystemExtensions.GetAwaiter` with `MakeGenericMethod`, fixing OCR on systems where WinRT async extension methods don't resolve in PowerShell 5.1
-- Go raw string literal: avoids backtick in `IAsyncOperation`1` by using `-like` wildcard matching
+- **Native WinRT COM OCR** — replaces PowerShell OCR with direct COM calls: `StorageFile.GetFileFromPathAsync` → `OpenAsync` → `BitmapDecoder.CreateAsync` → `GetSoftwareBitmapAsync` → `OcrEngine.RecognizeAsync`. Zero CGO, no Windows SDK needed.
+- **Native COM UI Automation** — replaced PowerShell UIA with direct COM calls to `UIAutomationCore.dll` (IUIAutomation, IUIAutomationElement, conditions, patterns). All operations via native COM.
+- **WinRT COM infrastructure** (`winrt.go`) — HSTRING management, `RoInitialize`, `RoGetActivationFactory`, `IAsyncInfo` polling, COM helpers
+- OCR falls back to PowerShell if native COM fails
 
 ### Changed
 
-- Bumped version to 0.2.0
+- All OCR and UIA operations now use native COM instead of PowerShell — **2-8x faster**
+  - OCR full screen: 653→292ms (2.2x)
+  - OCR region 400×400: 542→68ms (8x)
+  - find_text_and_click: 809→275ms (2.9x)
+- `comRelease` signature changed from `uintptr` to `unsafe.Pointer` for unified COM cleanup
+- ADR-002 updated: project now uses native COM/WinRT, not just Win32 API
+
+### Fixed
+
+- WindowsGetStringRawBuffer signature: actual DLL export returns buffer pointer in RAX (2 params), not as out parameter (3 params) — MSDN docs differ from Win10 10.0.26100 behavior
+- All vtable reads: corrected `*(*[N]uintptr)(obj)` pattern (reads object data) to `vtblMethod()` (reads actual vtable entries)
+- OCR PowerShell script: properly loads WinRT types via `WindowsRuntimeSystemExtensions.GetAwaiter` with `MakeGenericMethod`, fixing OCR on systems where WinRT async extension methods don't resolve in PowerShell 5.1
+- Go raw string literal: avoids backtick in `IAsyncOperation`1` by using `-like` wildcard matching
 
 ## [0.1.0] - 2026-06-27
 

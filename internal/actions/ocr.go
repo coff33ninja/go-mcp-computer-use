@@ -141,5 +141,10 @@ func ocrFromBase64(b64, language string) (*OCRResult, error) {
 	}
 	defer os.Remove(imgPath)
 
+	result, err := ocrNative(imgPath, language)
+	if err == nil {
+		return result, nil
+	}
+
 	return ocrExecWithRetry(imgPath, language)
 }
