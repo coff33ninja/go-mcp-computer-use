@@ -20,7 +20,7 @@ var (
 
 func ensureRo() error {
 	roOnce.Do(func() {
-		err := roInitialize(RO_INIT_SINGLETHREADED)
+		err := roInitialize(RO_INIT_MULTITHREADED)
 		if err != nil {
 			roErr = err
 			return

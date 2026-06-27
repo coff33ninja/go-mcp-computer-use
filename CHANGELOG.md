@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.2] - 2026-06-27
+
+### Fixed
+
+- UIA COM and OCR WinRT apartment model conflict: changed `RoInitialize` from `RO_INIT_SINGLETHREADED` to `RO_INIT_MULTITHREADED` so both UIA and OCR use MTA on the same thread, preventing `RPC_E_CHANGED_MODE` error
+
 ## [0.1.1] - 2026-06-27
 
 ### Added
