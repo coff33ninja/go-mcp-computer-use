@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.4] - 2026-06-27
+
+### Fixed
+
+- B1: `get_brightness` returns clear "brightness not supported on this display" instead of parse error when display doesn't support WMI brightness control (desktop monitors)
+
 ## [0.1.3] - 2026-06-27
 
 ### Fixed

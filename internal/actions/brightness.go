@@ -27,7 +27,11 @@ func GetBrightness() (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("get brightness: %w", err)
 	}
-	v, err := strconv.Atoi(strings.TrimSpace(string(out)))
+	s := strings.TrimSpace(string(out))
+	if s == "" {
+		return 0, fmt.Errorf("brightness not supported on this display")
+	}
+	v, err := strconv.Atoi(s)
 	if err != nil {
 		return 0, fmt.Errorf("parse brightness: %w", err)
 	}
