@@ -82,7 +82,26 @@ func ScreenshotElement(handle uintptr) (string, error) {
 	if state.Rect == nil {
 		return "", fmt.Errorf("screenshot_element: window has no position info")
 	}
-	return CaptureRegion(state.Rect.Left, state.Rect.Top, state.Rect.Width, state.Rect.Height)
+	sw, sh := ScreenSize()
+	x, y, w, h := state.Rect.Left, state.Rect.Top, state.Rect.Width, state.Rect.Height
+	if x < 0 {
+		w += x
+		x = 0
+	}
+	if y < 0 {
+		h += y
+		y = 0
+	}
+	if x+w > sw {
+		w = sw - x
+	}
+	if y+h > sh {
+		h = sh - y
+	}
+	if w <= 0 || h <= 0 {
+		return "", fmt.Errorf("screenshot_element: window not visible on screen (clamped to %dx%d)", w, h)
+	}
+	return CaptureRegion(x, y, w, h)
 }
 
 func Hover(x, y int32) error {

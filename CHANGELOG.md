@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3] - 2026-06-27
+
+### Fixed
+
+- B5: `screenshot_element` now clamps off-screen window coordinates to screen bounds instead of rejecting them (e.g., windows with `x=-8` from Aero Snap)
+- Multi-monitor: `ScreenSize()` now returns virtual desktop dimensions (`SM_CXVIRTUALSCREEN`/`SM_CYVIRTUALSCREEN`) instead of primary monitor only, fixing coordinate validation across multiple displays
+
 ## [0.1.2] - 2026-06-27
 
 ### Fixed

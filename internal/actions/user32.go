@@ -14,8 +14,8 @@ var (
 )
 
 func ScreenSize() (int32, int32) {
-	w, _, _ := getSystemMetrics.Call(0)
-	h, _, _ := getSystemMetrics.Call(1)
+	w, _, _ := getSystemMetrics.Call(78) // SM_CXVIRTUALSCREEN
+	h, _, _ := getSystemMetrics.Call(79) // SM_CYVIRTUALSCREEN
 	return int32(w), int32(h)
 }
 
