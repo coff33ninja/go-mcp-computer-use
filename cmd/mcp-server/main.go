@@ -15,6 +15,8 @@ import (
 func main() {
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: nil})))
 
+	actions.SetDPIAware()
+
 	if err := actions.CheckScreenshotPermission(); err != nil {
 		slog.Warn("screenshot may not work", "error", err)
 	}

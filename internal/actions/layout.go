@@ -51,13 +51,6 @@ func SetKeyboardLayout(lang string) error {
 	return nil
 }
 
-func GetScreenDPI() (int, error) {
-	hdc := GetDesktopDC()
-	if hdc == 0 {
-		return 0, syscall.GetLastError()
-	}
-	defer ReleaseDesktopDC(hdc)
-
-	dpiX, _, _ := gdi32.NewProc("GetDeviceCaps").Call(hdc, 88)
-	return int(dpiX), nil
+func GetScreenDPI() ([]MonitorDPI, error) {
+	return ListMonitorDPIs()
 }

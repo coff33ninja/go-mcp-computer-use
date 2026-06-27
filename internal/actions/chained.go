@@ -6,24 +6,33 @@ import (
 	"time"
 )
 
-func FindTextAndClick(text string, regionX, regionY, regionW, regionH *int32) error {
+type FindTextOpts struct {
+	Text     string
+	Language string
+	RegionX  *int32
+	RegionY  *int32
+	RegionW  *int32
+	RegionH  *int32
+}
+
+func FindTextAndClick(opts FindTextOpts) error {
 	var result *OCRResult
 	var err error
 
-	if regionW != nil && regionH != nil {
+	if opts.RegionW != nil && opts.RegionH != nil {
 		x := int32(0)
 		y := int32(0)
-		if regionX != nil { x = *regionX }
-		if regionY != nil { y = *regionY }
-		result, err = OCRRegion(x, y, *regionW, *regionH)
+		if opts.RegionX != nil { x = *opts.RegionX }
+		if opts.RegionY != nil { y = *opts.RegionY }
+		result, err = OCRRegion(x, y, *opts.RegionW, *opts.RegionH, opts.Language)
 	} else {
-		result, err = OCRScreen()
+		result, err = OCRScreen(opts.Language)
 	}
 	if err != nil {
 		return fmt.Errorf("find_text_and_click ocr: %w", err)
 	}
 
-	lowerText := strings.ToLower(text)
+	lowerText := strings.ToLower(opts.Text)
 	for _, word := range result.Words {
 		if strings.Contains(strings.ToLower(word.Text), lowerText) {
 			cx := int32(word.X + word.W/2)
@@ -38,8 +47,7 @@ func FindTextAndClick(text string, regionX, regionY, regionW, regionH *int32) er
 			return Click(ClickInput{X: cx, Y: cy, Button: "left", Clicks: 1})
 		}
 	}
-
-	return fmt.Errorf("find_text_and_click: text %q not found on screen", text)
+	return fmt.Errorf("find_text_and_click: text %q not found on screen", opts.Text)
 }
 
 func TypeAndSubmit(text string) error {
@@ -51,7 +59,7 @@ func TypeAndSubmit(text string) error {
 
 func LaunchAndWait(path, windowTitle string, timeoutMs int32) (uintptr, error) {
 	if err := LaunchApp(path); err != nil {
-		return 0, fmt.Errorf("launch_and_while: %w", err)
+		return 0, fmt.Errorf("launch_and_wait: %w", err)
 	}
 	hwnd, err := WaitForWindow(windowTitle, timeoutMs)
 	if err != nil {
@@ -82,10 +90,10 @@ func Hover(x, y int32) error {
 	return nil
 }
 
-func WaitForText(text string, timeoutMs int32) (*OCRResult, error) {
+func WaitForText(text string, timeoutMs int32, language string) (*OCRResult, error) {
 	deadline := time.Now().Add(time.Duration(timeoutMs) * time.Millisecond)
 	for time.Now().Before(deadline) {
-		result, err := OCRScreen()
+		result, err := OCRScreen(language)
 		if err != nil {
 			return nil, fmt.Errorf("wait_for_text ocr: %w", err)
 		}
@@ -113,7 +121,7 @@ func SelectAllAndType(text string) error {
 	return TypeText(text)
 }
 
-func ClickMenuItem(windowTitle, menuItemText string) error {
+func ClickMenuItem(windowTitle, menuItemText, language string) error {
 	hwnd := FindWindowByTitle(windowTitle)
 	if hwnd == 0 {
 		return fmt.Errorf("click_menu_item: window %q not found", windowTitle)
@@ -126,7 +134,7 @@ func ClickMenuItem(windowTitle, menuItemText string) error {
 		return fmt.Errorf("click_menu_item: window %q has no position", windowTitle)
 	}
 
-	result, err := OCRRegion(state.Rect.Left, state.Rect.Top, state.Rect.Width, state.Rect.Height)
+	result, err := OCRRegion(state.Rect.Left, state.Rect.Top, state.Rect.Width, state.Rect.Height, language)
 	if err != nil {
 		return fmt.Errorf("click_menu_item ocr: %w", err)
 	}

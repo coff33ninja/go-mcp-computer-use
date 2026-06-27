@@ -1,6 +1,7 @@
 param(
     [string]$InstallDir = "$env:LOCALAPPDATA\go-mcp-computer-use",
-    [switch]$Update
+    [switch]$Update,
+    [switch]$UseZig
 )
 
 $ErrorActionPreference = "Stop"
@@ -16,6 +17,31 @@ if (-not $go) {
     Write-Host "Go is required to build from source." -ForegroundColor Yellow
     Write-Host "Install from: https://go.dev/dl/" -ForegroundColor Yellow
     exit 1
+}
+
+# Check / install Zig
+$zig = Get-Command "zig" -ErrorAction SilentlyContinue
+if ($UseZig -and -not $zig) {
+    Write-Host "Zig not found. Installing Zig..." -ForegroundColor Yellow
+    $zigUrl = "https://ziglang.org/download/0.14.0/zig-windows-x86_64-0.14.0.zip"
+    $zigZip = "$env:TEMP\zig.zip"
+    $zigDir = "$env:LOCALAPPDATA\zig"
+    try {
+        Invoke-WebRequest -Uri $zigUrl -OutFile $zigZip -ErrorAction Stop
+        Expand-Archive -Path $zigZip -DestinationPath $zigDir -Force
+        $zigPath = "$zigDir\zig-windows-x86_64-0.14.0\zig.exe"
+        if (Test-Path -LiteralPath $zigPath) {
+            $env:Path += ";$(Split-Path $zigPath)"
+            [Environment]::SetEnvironmentVariable("Path", [Environment]::GetEnvironmentVariable("Path","User") + ";$(Split-Path $zigPath)", "User")
+            $zig = $zigPath
+            Write-Host "Zig installed to $zigPath" -ForegroundColor Green
+        }
+    } catch {
+        Write-Host "Zig install failed: $_" -ForegroundColor Red
+        Write-Host "Continuing without Zig..." -ForegroundColor Yellow
+        $UseZig = $false
+    }
+    Remove-Item $zigZip -ErrorAction SilentlyContinue
 }
 
 # Create install dir
@@ -49,6 +75,13 @@ if (-not $?) {
 Write-Host "Building mcp-server.exe..." -ForegroundColor Gray
 Push-Location $srcDir
 try {
+    if ($UseZig -and $zig) {
+        $env:CC = "zig cc"
+        $env:CGO_ENABLED = "1"
+        Write-Host "Using Zig cc as C compiler" -ForegroundColor Cyan
+    } else {
+        $env:CGO_ENABLED = "0"
+    }
     go build -o $exePath -ldflags="-s -w" .\cmd\mcp-server\
     if (-not $?) {
         Write-Host "Build failed." -ForegroundColor Red
@@ -69,10 +102,10 @@ if (-not (Test-Path -LiteralPath $configPath)) {
         New-Item -ItemType Directory -Path $configDir -Force | Out-Null
     }
     @{
-        log_level        = "info"
-        mouse_speed      = 500
-        click_delay_ms   = 100
-        verify_bounds    = $true
+        log_level         = "info"
+        mouse_speed       = 500
+        click_delay_ms    = 100
+        verify_bounds     = $true
         action_timeout_ms = 30000
     } | ConvertTo-Json | Set-Content -Path $configPath
 }
@@ -83,3 +116,8 @@ Write-Host "Config:    $configPath" -ForegroundColor Green
 Write-Host ""
 Write-Host "Add to opencode.json:" -ForegroundColor Cyan
 Write-Host "  `"command`": `"$exePath`"" -ForegroundColor Gray
+if ($UseZig) {
+    Write-Host ""
+    Write-Host "Cross-compile for ARM64 Windows:" -ForegroundColor Cyan
+    Write-Host "  CC=`"zig cc`" GOOS=windows GOARCH=arm64 go build -o $InstallDir\mcp-server-arm64.exe .\cmd\mcp-server\" -ForegroundColor Gray
+}

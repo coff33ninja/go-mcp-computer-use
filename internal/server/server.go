@@ -128,10 +128,11 @@ type NotificationArgs struct {
 }
 
 type OCRArgs struct {
-	X *int32 `json:"x,omitempty"`
-	Y *int32 `json:"y,omitempty"`
-	W *int32 `json:"w,omitempty"`
-	H *int32 `json:"h,omitempty"`
+	X        *int32 `json:"x,omitempty"`
+	Y        *int32 `json:"y,omitempty"`
+	W        *int32 `json:"w,omitempty"`
+	H        *int32 `json:"h,omitempty"`
+	Language string `json:"language,omitempty"`
 }
 
 type BrightnessArgs struct {
@@ -143,11 +144,12 @@ type PingArgs struct {
 }
 
 type FindTextAndClickArgs struct {
-	Text      string `json:"text"`
-	X *int32 `json:"x,omitempty"`
-	Y *int32 `json:"y,omitempty"`
-	W *int32 `json:"w,omitempty"`
-	H *int32 `json:"h,omitempty"`
+	Text     string `json:"text"`
+	Language string `json:"language,omitempty"`
+	X        *int32 `json:"x,omitempty"`
+	Y        *int32 `json:"y,omitempty"`
+	W        *int32 `json:"w,omitempty"`
+	H        *int32 `json:"h,omitempty"`
 }
 
 type TypeAndSubmitArgs struct {
@@ -172,6 +174,7 @@ type HoverArgs struct {
 type WaitForTextArgs struct {
 	Text      string `json:"text"`
 	TimeoutMs int32  `json:"timeout_ms,omitempty"`
+	Language  string `json:"language,omitempty"`
 }
 
 type SelectAllAndTypeArgs struct {
@@ -179,8 +182,9 @@ type SelectAllAndTypeArgs struct {
 }
 
 type ClickMenuItemArgs struct {
-	WindowTitle string `json:"window_title"`
+	WindowTitle  string `json:"window_title"`
 	MenuItemText string `json:"menu_item_text"`
+	Language     string `json:"language,omitempty"`
 }
 
 type SetKeyboardLayoutArgs struct {
@@ -189,6 +193,21 @@ type SetKeyboardLayoutArgs struct {
 
 type OpenExplorerArgs struct {
 	Path string `json:"path,omitempty"`
+}
+
+type FindImageArgs struct {
+	TemplateB64 string  `json:"template_b64"`
+	ScreenB64   string  `json:"screen_b64,omitempty"`
+	Threshold   float64 `json:"threshold,omitempty"`
+}
+
+type SetAudioDeviceArgs struct {
+	DeviceID string `json:"device_id"`
+}
+
+type RecordScreenArgs struct {
+	DurationMs int32 `json:"duration_ms,omitempty"`
+	IntervalMs int32 `json:"interval_ms,omitempty"`
 }
 
 func screenshotHandler(ctx context.Context, req *mcp.CallToolRequest, args ScreenshotArgs) (*mcp.CallToolResult, any, error) {
@@ -555,9 +574,9 @@ func ocrHandler(ctx context.Context, req *mcp.CallToolRequest, args OCRArgs) (*m
 		y := int32(0)
 		if args.X != nil { x = *args.X }
 		if args.Y != nil { y = *args.Y }
-		result, err = actions.OCRRegion(x, y, *args.W, *args.H)
+		result, err = actions.OCRRegion(x, y, *args.W, *args.H, args.Language)
 	} else {
-		result, err = actions.OCRScreen()
+		result, err = actions.OCRScreen(args.Language)
 	}
 
 	if err != nil {
@@ -618,7 +637,15 @@ func pingHandler(ctx context.Context, req *mcp.CallToolRequest, args PingArgs) (
 }
 
 func findTextAndClickHandler(ctx context.Context, req *mcp.CallToolRequest, args FindTextAndClickArgs) (*mcp.CallToolResult, any, error) {
-	if err := actions.FindTextAndClick(args.Text, args.X, args.Y, args.W, args.H); err != nil {
+	opts := actions.FindTextOpts{
+		Text:     args.Text,
+		Language: args.Language,
+		RegionX:  args.X,
+		RegionY:  args.Y,
+		RegionW:  args.W,
+		RegionH:  args.H,
+	}
+	if err := actions.FindTextAndClick(opts); err != nil {
 		return nil, nil, fmt.Errorf("find_text_and_click: %w", err)
 	}
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
@@ -659,7 +686,7 @@ func hoverHandler(ctx context.Context, req *mcp.CallToolRequest, args HoverArgs)
 func waitForTextHandler(ctx context.Context, req *mcp.CallToolRequest, args WaitForTextArgs) (*mcp.CallToolResult, any, error) {
 	timeout := args.TimeoutMs
 	if timeout == 0 { timeout = 10000 }
-	result, err := actions.WaitForText(args.Text, timeout)
+	result, err := actions.WaitForText(args.Text, timeout, args.Language)
 	if err != nil {
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "not_found"}}}, map[string]any{"found": false}, nil
 	}
@@ -674,7 +701,7 @@ func selectAllAndTypeHandler(ctx context.Context, req *mcp.CallToolRequest, args
 }
 
 func clickMenuItemHandler(ctx context.Context, req *mcp.CallToolRequest, args ClickMenuItemArgs) (*mcp.CallToolResult, any, error) {
-	if err := actions.ClickMenuItem(args.WindowTitle, args.MenuItemText); err != nil {
+	if err := actions.ClickMenuItem(args.WindowTitle, args.MenuItemText, args.Language); err != nil {
 		return nil, nil, fmt.Errorf("click_menu_item: %w", err)
 	}
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
@@ -755,12 +782,49 @@ func openFileLocationHandler(ctx context.Context, req *mcp.CallToolRequest, args
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
 }
 
+func findImageHandler(ctx context.Context, req *mcp.CallToolRequest, args FindImageArgs) (*mcp.CallToolResult, any, error) {
+	var result *actions.MatchResult
+	var err error
+	if args.ScreenB64 != "" {
+		result, err = actions.FindImageInRegion(args.ScreenB64, args.TemplateB64, args.Threshold)
+	} else {
+		result, err = actions.FindImageOnScreen(args.TemplateB64, args.Threshold)
+	}
+	if err != nil {
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "no_match"}}}, map[string]any{"found": false}, nil
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, result, nil
+}
+
+func listAudioDevicesHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
+	devices, err := actions.ListAudioDevices()
+	if err != nil {
+		return nil, nil, fmt.Errorf("list_audio_devices: %w", err)
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, map[string]any{"devices": devices}, nil
+}
+
+func setDefaultAudioDeviceHandler(ctx context.Context, req *mcp.CallToolRequest, args SetAudioDeviceArgs) (*mcp.CallToolResult, any, error) {
+	if err := actions.SetDefaultAudioDevice(args.DeviceID); err != nil {
+		return nil, nil, fmt.Errorf("set_default_audio_device: %w", err)
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
+}
+
+func recordScreenHandler(ctx context.Context, req *mcp.CallToolRequest, args RecordScreenArgs) (*mcp.CallToolResult, any, error) {
+	result, err := actions.RecordScreen(args.DurationMs, args.IntervalMs)
+	if err != nil {
+		return nil, nil, fmt.Errorf("record_screen: %w", err)
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, result, nil
+}
+
 func getScreenDPIHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
 	dpi, err := actions.GetScreenDPI()
 	if err != nil {
 		return nil, nil, fmt.Errorf("get_screen_dpi: %w", err)
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, map[string]int{"dpi": dpi}, nil
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, map[string]any{"monitors": dpi}, nil
 }
 
 func New() *mcp.Server {
@@ -776,7 +840,7 @@ func New() *mcp.Server {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
 	slog.SetDefault(logger)
 
-	slog.Info("starting go-mcp-computer-use", "tools", 61)
+	slog.Info("starting go-mcp-computer-use", "tools", 65)
 
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "go-mcp-computer-use",
@@ -1085,8 +1149,28 @@ func New() *mcp.Server {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_screen_dpi",
-		Description: "Get the screen DPI (dots per inch).",
+		Description: "Get per-monitor screen DPI and scale percentage.",
 	}, getScreenDPIHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "find_image",
+		Description: "Find a template image on screen using NCC template matching. Provide template as base64 PNG. Returns coordinates of best match.",
+	}, findImageHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "list_audio_devices",
+		Description: "List all audio playback and recording devices.",
+	}, listAudioDevicesHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "set_default_audio_device",
+		Description: "Set the default audio playback device by device ID.",
+	}, setDefaultAudioDeviceHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "record_screen",
+		Description: "Record screen frames at fixed intervals. Returns base64 images. Duration in ms, interval in ms.",
+	}, recordScreenHandler)
 
 	return server
 }

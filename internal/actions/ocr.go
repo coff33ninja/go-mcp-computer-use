@@ -32,13 +32,18 @@ type OCRResult struct {
 	Words []OCRWord `json:"words"`
 }
 
-var ocrScript = `Add-Type -AssemblyName System.Runtime.WindowsRuntime
-$imgPath = $args[0]
+var ocrScript = `param($imgPath, $lang)
+Add-Type -AssemblyName System.Runtime.WindowsRuntime
 $file = Get-Item -LiteralPath $imgPath -ErrorAction Stop
 $stream = [Windows.Storage.Streams.FileRandomAccessStream]::OpenAsync($file, [Windows.Storage.FileAccessMode]::Read).GetAwaiter().GetResult()
 $decoder = [Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream).GetAwaiter().GetResult()
 $sb = $decoder.GetSoftwareBitmapAsync().GetAwaiter().GetResult()
-$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
+if ($lang) {
+  $culture = [Windows.Globalization.Language]::new($lang)
+  $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage($culture)
+} else {
+  $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
+}
 if ($engine -eq $null) { Write-Output '{"text":"","lines":[],"words":[]}'; $stream.Dispose(); exit }
 $result = $engine.RecognizeAsync($sb).GetAwaiter().GetResult()
 if ($result -eq $null) { Write-Output '{"text":"","lines":[],"words":[]}'; $stream.Dispose(); exit }
@@ -54,7 +59,7 @@ $o | ConvertTo-Json -Compress
 $stream.Dispose()
 `
 
-func ocrExec(imgPath string) (*OCRResult, error) {
+func ocrExec(imgPath, language string) (*OCRResult, error) {
 	tmpDir := os.Getenv("TEMP")
 	if tmpDir == "" {
 		tmpDir = os.TempDir()
@@ -67,7 +72,11 @@ func ocrExec(imgPath string) (*OCRResult, error) {
 
 	var result OCRResult
 	err := WithTimeout(func() error {
-		cmd := exec.Command("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath, imgPath)
+		args := []string{"-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath, imgPath}
+		if language != "" {
+			args = append(args, language)
+		}
+		cmd := exec.Command("powershell", args...)
 		out, err := cmd.Output()
 		if err != nil {
 			if ee, ok := err.(*exec.ExitError); ok {
@@ -86,23 +95,36 @@ func ocrExec(imgPath string) (*OCRResult, error) {
 	return &result, nil
 }
 
-func OCRScreen() (*OCRResult, error) {
+func ocrExecWithRetry(imgPath, language string) (*OCRResult, error) {
+	var lastErr error
+	for i := 0; i < 3; i++ {
+		result, err := ocrExec(imgPath, language)
+		if err == nil {
+			return result, nil
+		}
+		lastErr = err
+		Wait(500)
+	}
+	return nil, fmt.Errorf("ocr failed after 3 retries: %w", lastErr)
+}
+
+func OCRScreen(language string) (*OCRResult, error) {
 	b64, err := CaptureScreen()
 	if err != nil {
 		return nil, fmt.Errorf("ocr screenshot: %w", err)
 	}
-	return ocrFromBase64(b64)
+	return ocrFromBase64(b64, language)
 }
 
-func OCRRegion(x, y, w, h int32) (*OCRResult, error) {
+func OCRRegion(x, y, w, h int32, language string) (*OCRResult, error) {
 	b64, err := CaptureRegion(x, y, w, h)
 	if err != nil {
 		return nil, fmt.Errorf("ocr region shot: %w", err)
 	}
-	return ocrFromBase64(b64)
+	return ocrFromBase64(b64, language)
 }
 
-func ocrFromBase64(b64 string) (*OCRResult, error) {
+func ocrFromBase64(b64, language string) (*OCRResult, error) {
 	data, err := base64.StdEncoding.DecodeString(b64)
 	if err != nil {
 		return nil, fmt.Errorf("ocr decode b64: %w", err)
@@ -118,5 +140,5 @@ func ocrFromBase64(b64 string) (*OCRResult, error) {
 	}
 	defer os.Remove(imgPath)
 
-	return ocrExec(imgPath)
+	return ocrExecWithRetry(imgPath, language)
 }
