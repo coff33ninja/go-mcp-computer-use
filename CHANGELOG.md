@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.2.0] — *planned*
+
+### Major
+
+- **Chained Automation Pipeline** — `chain` tool executes sequential steps server-side (poll, loop, if, capture, variable substitution). No round trips between steps.
+- **SQLite Memory Store** — `memory_set/get/search/list/forget` tools backed by `modernc.org/sqlite` (pure Go, zero CGO). Persists learned facts, sequences, and element templates across sessions.
+- **Layout Validation** — before replaying a stored sequence, validates window position, element coordinates, and OCR signatures haven't drifted. Auto-adjusts or marks stale on mismatch.
+- **Self-growing Template Library** — each discovered UI element stores a 32×32px template crop. Over time, `find_image` locates elements visually instead of relying on stale coordinates.
+- **ONNX ML Backend** (optional v2+) — two-tier Windows UI element detection: YOLO11s (18 MB, 7 classes) + MobileNetV3-small classifier (6 MB, 15 classes). Hierarchical validation chain from O(1) coords → OCR → template → YOLO → classifier.
+- **Prompt Engineering Guide** — documented Learn-Once-Reuse-Forever pattern for AI agents: store sequences + layout facts after every successful interaction, recall and replay next session with zero rediscovery.
+- **Versioning Scheme** — documented: `+0.0.1` patch (bug fixes), `+0.1.0` minor (new capabilities), `+1.0.0` major (stable release).
+
+## [0.1.11] - 2026-06-27
+
+### Added
+
+- **VERSION file + ldflags** — single source of truth at project root, injected via `-X main.Version`, replaces hardcoded string
+- **CI/CD pipeline** — `.github/workflows/ci.yml` (build + vet on push/PR), `.github/workflows/release.yml` (tag-triggered GitHub Release with binary + SHA256 + changelog)
+- **`.govetallow`** — documents COM/WinRT unsafe.Pointer conventions for vet policy
+- **`scripts/lint.ps1`** — local CI runner: vet + build + tests
+
+### Changed
+
+- **COM types** — all interface pointers stored as `unsafe.Pointer` instead of `uintptr`:
+  `uiaAuto.p`, `uiaCondition.p`, `uiaElement.p`, `uiaElementArray.p`,
+  `bstrToGo` parameter, `getCurrentPattern` return type
+- **`vtblMethod`** — rewritten with `unsafe.Pointer` parameter + `unsafe.Add`, satisfies vet's unsafeptr checker
+- **Syscall output params** — all local variables receiving COM pointers via SyscallN declared as `unsafe.Pointer` instead of `uintptr`
+- **GUID literals** — all 14 `windows.GUID` values in `winrt.go` use keyed fields
+- **CI workflows** — use `scripts/lint.ps1` instead of raw `go vet`
+
 ## [0.1.10] - 2026-06-27
 
 ### Fixed

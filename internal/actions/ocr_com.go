@@ -58,7 +58,7 @@ func createLanguage(language string) (unsafe.Pointer, error) {
 	defer freeHString(hTag)
 
 	var langObj unsafe.Pointer
-	r, _, _ := syscall.SyscallN(vtblMethod(uintptr(factory), 6), uintptr(factory), uintptr(hTag), uintptr(unsafe.Pointer(&langObj)))
+	r, _, _ := syscall.SyscallN(vtblMethod(factory, 6), uintptr(factory), uintptr(hTag), uintptr(unsafe.Pointer(&langObj)))
 	if r != 0 {
 		return nil, fmt.Errorf("CreateLanguage 0x%X", r)
 	}
@@ -85,7 +85,7 @@ func openStorageFile(path string) (unsafe.Pointer, error) {
 	defer freeHString(hPath)
 
 	var asyncOp unsafe.Pointer
-	r, _, _ := syscall.SyscallN(vtblMethod(uintptr(factory), 6), uintptr(factory), uintptr(hPath), uintptr(unsafe.Pointer(&asyncOp)))
+	r, _, _ := syscall.SyscallN(vtblMethod(factory, 6), uintptr(factory), uintptr(hPath), uintptr(unsafe.Pointer(&asyncOp)))
 	if r != 0 {
 		return nil, fmt.Errorf("GetFileFromPathAsync 0x%X", r)
 	}
@@ -106,7 +106,7 @@ func openStorageFile(path string) (unsafe.Pointer, error) {
 
 func openStream(storageFile unsafe.Pointer) (unsafe.Pointer, error) {
 	var asyncOp unsafe.Pointer
-	r, _, _ := syscall.SyscallN(vtblMethod(uintptr(storageFile), 8), uintptr(storageFile), uintptr(FileAccessModeRead), uintptr(unsafe.Pointer(&asyncOp)))
+	r, _, _ := syscall.SyscallN(vtblMethod(storageFile, 8), uintptr(storageFile), uintptr(FileAccessModeRead), uintptr(unsafe.Pointer(&asyncOp)))
 	if r != 0 {
 		return nil, fmt.Errorf("OpenAsync 0x%X", r)
 	}
@@ -133,7 +133,7 @@ func createDecoder(stream unsafe.Pointer) (unsafe.Pointer, error) {
 	defer comRelease(factory)
 
 	var asyncOp unsafe.Pointer
-	r, _, _ := syscall.SyscallN(vtblMethod(uintptr(factory), 14), uintptr(factory), uintptr(stream), uintptr(unsafe.Pointer(&asyncOp)))
+	r, _, _ := syscall.SyscallN(vtblMethod(factory, 14), uintptr(factory), uintptr(stream), uintptr(unsafe.Pointer(&asyncOp)))
 	if r != 0 {
 		return nil, fmt.Errorf("CreateAsync 0x%X", r)
 	}
@@ -154,7 +154,7 @@ func createDecoder(stream unsafe.Pointer) (unsafe.Pointer, error) {
 
 func getSoftwareBitmap(swBitmapPtr unsafe.Pointer) (unsafe.Pointer, error) {
 	var asyncOp unsafe.Pointer
-	r, _, _ := syscall.SyscallN(vtblMethod(uintptr(swBitmapPtr), 6), uintptr(swBitmapPtr), uintptr(unsafe.Pointer(&asyncOp)))
+	r, _, _ := syscall.SyscallN(vtblMethod(swBitmapPtr, 6), uintptr(swBitmapPtr), uintptr(unsafe.Pointer(&asyncOp)))
 	if r != 0 {
 		return nil, fmt.Errorf("GetSoftwareBitmapAsync 0x%X", r)
 	}
@@ -188,7 +188,7 @@ func createOcrEngine(language string) (unsafe.Pointer, error) {
 		defer comRelease(langObj)
 
 		var engine unsafe.Pointer
-		r, _, _ := syscall.SyscallN(vtblMethod(uintptr(factory), 9), uintptr(factory), uintptr(langObj), uintptr(unsafe.Pointer(&engine)))
+		r, _, _ := syscall.SyscallN(vtblMethod(factory, 9), uintptr(factory), uintptr(langObj), uintptr(unsafe.Pointer(&engine)))
 		if r != 0 {
 			return nil, fmt.Errorf("TryCreateFromLanguage 0x%X", r)
 		}
@@ -199,7 +199,7 @@ func createOcrEngine(language string) (unsafe.Pointer, error) {
 	}
 
 	var engine unsafe.Pointer
-	r, _, _ := syscall.SyscallN(vtblMethod(uintptr(factory), 10), uintptr(factory), uintptr(unsafe.Pointer(&engine)))
+	r, _, _ := syscall.SyscallN(vtblMethod(factory, 10), uintptr(factory), uintptr(unsafe.Pointer(&engine)))
 	if r != 0 {
 		return nil, fmt.Errorf("TryCreateFromUserProfileLanguages 0x%X", r)
 	}
@@ -211,7 +211,7 @@ func createOcrEngine(language string) (unsafe.Pointer, error) {
 
 func recognizeOcr(engine, swBitmap unsafe.Pointer) (unsafe.Pointer, error) {
 	var asyncOp unsafe.Pointer
-	r, _, _ := syscall.SyscallN(vtblMethod(uintptr(engine), 6), uintptr(engine), uintptr(swBitmap), uintptr(unsafe.Pointer(&asyncOp)))
+	r, _, _ := syscall.SyscallN(vtblMethod(engine, 6), uintptr(engine), uintptr(swBitmap), uintptr(unsafe.Pointer(&asyncOp)))
 	if r != 0 {
 		return nil, fmt.Errorf("RecognizeAsync 0x%X", r)
 	}
@@ -230,7 +230,7 @@ func getOcrLines(ocrResult unsafe.Pointer) (unsafe.Pointer, uint32, error) {
 		return nil, 0, fmt.Errorf("get_Lines: %w", err)
 	}
 	var count uint32
-	r, _, _ := syscall.SyscallN(vtblMethod(uintptr(lines), 7), uintptr(lines), uintptr(unsafe.Pointer(&count)))
+	r, _, _ := syscall.SyscallN(vtblMethod(lines, 7), uintptr(lines), uintptr(unsafe.Pointer(&count)))
 	if r != 0 {
 		comRelease(lines)
 		return nil, 0, fmt.Errorf("get_Size 0x%X", r)
@@ -240,7 +240,7 @@ func getOcrLines(ocrResult unsafe.Pointer) (unsafe.Pointer, uint32, error) {
 
 func getLineAt(lines unsafe.Pointer, index uint32) (unsafe.Pointer, error) {
 	var line unsafe.Pointer
-	r, _, _ := syscall.SyscallN(vtblMethod(uintptr(lines), 6), uintptr(lines), uintptr(index), uintptr(unsafe.Pointer(&line)))
+	r, _, _ := syscall.SyscallN(vtblMethod(lines, 6), uintptr(lines), uintptr(index), uintptr(unsafe.Pointer(&line)))
 	if r != 0 {
 		return nil, fmt.Errorf("GetAt[%d] 0x%X", index, r)
 	}
@@ -257,7 +257,7 @@ func getLineWords(line unsafe.Pointer) (unsafe.Pointer, uint32, error) {
 		return nil, 0, fmt.Errorf("get_Words: %w", err)
 	}
 	var count uint32
-	r, _, _ := syscall.SyscallN(vtblMethod(uintptr(words), 7), uintptr(words), uintptr(unsafe.Pointer(&count)))
+	r, _, _ := syscall.SyscallN(vtblMethod(words, 7), uintptr(words), uintptr(unsafe.Pointer(&count)))
 	if r != 0 {
 		comRelease(words)
 		return nil, 0, fmt.Errorf("get_Size 0x%X", r)
@@ -267,7 +267,7 @@ func getLineWords(line unsafe.Pointer) (unsafe.Pointer, uint32, error) {
 
 func getWordAt(words unsafe.Pointer, index uint32) (unsafe.Pointer, error) {
 	var word unsafe.Pointer
-	r, _, _ := syscall.SyscallN(vtblMethod(uintptr(words), 6), uintptr(words), uintptr(index), uintptr(unsafe.Pointer(&word)))
+	r, _, _ := syscall.SyscallN(vtblMethod(words, 6), uintptr(words), uintptr(index), uintptr(unsafe.Pointer(&word)))
 	if r != 0 {
 		return nil, fmt.Errorf("GetAt[%d] 0x%X", index, r)
 	}
@@ -280,7 +280,7 @@ func getWordText(word unsafe.Pointer) (string, error) {
 
 func getWordRect(word unsafe.Pointer) (WinRect, error) {
 	var r WinRect
-	ret, _, _ := syscall.SyscallN(vtblMethod(uintptr(word), 6), uintptr(word), uintptr(unsafe.Pointer(&r)))
+	ret, _, _ := syscall.SyscallN(vtblMethod(word, 6), uintptr(word), uintptr(unsafe.Pointer(&r)))
 	if ret != 0 {
 		return r, fmt.Errorf("get_BoundingRect 0x%X", ret)
 	}

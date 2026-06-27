@@ -6,25 +6,29 @@ Accepted (2026-06-27)
 
 ## Canonical Version Source
 
-The single source of truth is the `Version` field in `internal/server/server.go`:
+The canonical version is the `VERSION` file at repository root. The versioning policy is defined in [`plan.md`](../plan.md#versioning).
 
-```go
-mcp.NewServer(&mcp.Implementation{
-    Name:    "go-mcp-computer-use",
-    Version: "0.1.1",
-}, nil)
+The `VERSION` file is read at build time and injected via ldflags:
+
+```bash
+go build -ldflags="-X main.Version=$(cat VERSION)" -o mcp-server.exe ./cmd/mcp-server/
 ```
 
-This is what MCP clients see via `server.info`. All other references (CHANGELOG, git tags, release artifacts) must match this value.
+This is what MCP clients see via `server.info`. All other references (CHANGELOG, git tags, release artifacts) must match `VERSION`. See [`ci-cd-pipeline.md`](ci-cd-pipeline.md) for the automated workflow.
 
-## SemVer Convention (pre-1.0)
+## Versioning Scheme
 
-Since we are on major version 0, use the `0.x.y` scheme:
+```
+v<major>.<minor>.<patch>
+```
 
-| Bump | When | Example |
-|------|------|---------|
-| `y` (patch) | Bug fixes, performance improvements, docs, refactors, new non-breaking tools | `0.1.0` → `0.1.1` |
-| `x` (minor) | Breaking API changes, major feature additions that change the tool contract, significant architectural changes | `0.1.x` → `0.2.0` |
+| Bump | When | Examples |
+|------|------|----------|
+| `+0.0.1` (patch) | Bug fixes, tool tweaks, doc updates, minor refactors | Fixing UIPI detection, adjusting OCR timing, renaming a tool parameter |
+| `+0.1.0` (minor) | New tools, new capabilities, architecture changes, dependency adds | Adding native COM OCR, adding UIA layer, adding `chain` tool, introducing SQLite memory store |
+| `+1.0.0` (major) | Stable release with proven architecture, all planned slices complete, field-tested | Full automation pipeline working, memory store battle-tested, ONNX integration verified |
+
+**Current trajectory:** v0.1.x (bug-fix cycle on initial tools) → v0.2.0 (automation pipeline + memory + ML) → v0.3.x (iterative improvements) → v1.0.0 (stable release)
 
 Breaking changes at 0.x require a minor bump (not major), per SemVer spec §4.
 
@@ -56,7 +60,7 @@ A changelog entry is required for every release. Entries are written in present-
 
 ```
 [1] Code complete — all changes for the release are merged
-[2] Bump version in internal/server/server.go
+[2] Bump version in VERSION file
 [3] Update CHANGELOG.md with the new version heading
 [4] Run pre-release gates:
       - go build ./cmd/mcp-server/     (compiles)
@@ -64,8 +68,8 @@ A changelog entry is required for every release. Entries are written in present-
       - go run ./cmd/benchmark/        (update benchmark-results.txt)
 [5] Commit: "release: vX.Y.Z"
 [6] Tag:   git tag vX.Y.Z
-[7] Build: go build -o mcp-server.exe ./cmd/mcp-server/
-[8] Push:  git push && git push origin vX.Y.Z
+[7] Push:  git push && git push origin vX.Y.Z
+[8] CI/CD auto-builds and creates GitHub Release (see ci-cd-pipeline.md)
 ```
 
 ## Commit Strategy
@@ -76,26 +80,28 @@ Use squash-merges into `master`/`main` — each release is a single commit on th
 
 | Gate | Command | Fail action |
 |------|---------|-------------|
+| Lint | `go vet ./...` | Fix warnings — see `.govetallow` for COM conventions |
 | Build | `go build ./cmd/mcp-server/` | Fix compilation |
-| Vet | `go vet ./...` | Fix warnings |
 | Benchmarks | `go run ./cmd/benchmark/` | Update results if numbers changed materially |
-| Version consistency | grep for old version number in code and docs | Fix stale references |
+| Version consistency | `git grep "0\.1\.10" -- ':!VERSION' ':!.git'` | Fix stale references |
 
 ## Example: Patch Release
 
 ```bash
-# Edit internal/server/server.go: "0.1.0" → "0.1.1"
+# Edit VERSION: "0.1.0" → "0.1.1"
 # Edit CHANGELOG.md: add ## [0.1.1] section
-go build ./cmd/mcp-server/ && go vet ./... && go run ./cmd/benchmark/
+$ver = (Get-Content VERSION -Raw).Trim()
+go build -ldflags="-X main.Version=$ver" ./cmd/mcp-server/ && go vet ./...
+go run ./cmd/benchmark/
 git add -A && git commit -m "release: v0.1.1"
 git tag v0.1.1
-go build -o mcp-server.exe ./cmd/mcp-server/
-git push && git push origin v0.1.1
+git push && git push origin v0.1.1  # triggers release workflow
 ```
 
 ## Cross-References
 
 - `CHANGELOG.md` — release history
+- `VERSION` — canonical version source (replaces hardcoded string in server.go)
 - `docs/adr-001-mcp-sdk-selection.md` — SDK choice that defines the version field location
+- `docs/ci-cd-pipeline.md` — CI/CD workflows for automated build + release
 - `benchmark-results.txt` — performance data updated per release
-- `internal/server/server.go` — canonical version source

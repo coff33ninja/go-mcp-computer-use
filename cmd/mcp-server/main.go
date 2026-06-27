@@ -12,6 +12,8 @@ import (
 	"github.com/user/go-mcp-computer-use/internal/server"
 )
 
+var Version = "dev"
+
 func main() {
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: nil})))
 
@@ -24,7 +26,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	srv := server.New()
+	srv := server.New(Version)
 
 	go func() {
 		<-ctx.Done()

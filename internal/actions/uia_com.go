@@ -83,14 +83,13 @@ type UIA_RECT struct {
 }
 
 // ── COM utilities ──
-func vtblMethod(iface uintptr, idx int) uintptr {
-	vtbl := *(*uintptr)(unsafe.Pointer(iface))
-	return *(*uintptr)(unsafe.Pointer(vtbl + uintptr(idx)*8))
+func vtblMethod(iface unsafe.Pointer, idx int) uintptr {
+	return *(*uintptr)(unsafe.Add(*(*unsafe.Pointer)(iface), uintptr(idx)*8))
 }
 
 func comRelease(p unsafe.Pointer) {
 	if p != nil {
-		syscall.SyscallN(vtblMethod(uintptr(p), 2), uintptr(p))
+		syscall.SyscallN(vtblMethod(p, 2), uintptr(p))
 	}
 }
 
@@ -112,11 +111,11 @@ func bstrFree(p uintptr) {
 	}
 }
 
-func bstrToGo(p uintptr) string {
-	if p == 0 {
+func bstrToGo(p unsafe.Pointer) string {
+	if p == nil {
 		return ""
 	}
-	return windows.UTF16PtrToString((*uint16)(unsafe.Pointer(p)))
+	return windows.UTF16PtrToString((*uint16)(p))
 }
 
 func varString(s string) *VARIANT {
@@ -142,11 +141,11 @@ func varFree(v *VARIANT) {
 //   6 = ElementFromHandle ✓
 
 type uiaAuto struct {
-	p uintptr
+	p unsafe.Pointer
 }
 
 func newUIA() (*uiaAuto, error) {
-	var p uintptr
+	var p unsafe.Pointer
 	r, _, _ := procCoCreateInstance.Call(
 		uintptr(unsafe.Pointer(CLSID_CUIAutomation)),
 		0, CLSCTX_INPROC_SERVER,
@@ -159,11 +158,11 @@ func newUIA() (*uiaAuto, error) {
 	return &uiaAuto{p: p}, nil
 }
 
-func (a *uiaAuto) release() { comRelease(unsafe.Pointer(a.p)) }
+func (a *uiaAuto) release() { comRelease(a.p) }
 
 func (a *uiaAuto) getRootElement() (*uiaElement, error) {
-	var e uintptr
-	r, _, _ := syscall.SyscallN(vtblMethod(a.p, 5), a.p, uintptr(unsafe.Pointer(&e)))
+	var e unsafe.Pointer
+	r, _, _ := syscall.SyscallN(vtblMethod(a.p, 5), uintptr(a.p), uintptr(unsafe.Pointer(&e)))
 	if r != S_OK {
 		return nil, fmt.Errorf("GetRootElement: 0x%X", r)
 	}
@@ -171,8 +170,8 @@ func (a *uiaAuto) getRootElement() (*uiaElement, error) {
 }
 
 func (a *uiaAuto) elementFromHandle(hwnd uintptr) (*uiaElement, error) {
-	var e uintptr
-	r, _, _ := syscall.SyscallN(vtblMethod(a.p, 6), a.p, hwnd, uintptr(unsafe.Pointer(&e)))
+	var e unsafe.Pointer
+	r, _, _ := syscall.SyscallN(vtblMethod(a.p, 6), uintptr(a.p), hwnd, uintptr(unsafe.Pointer(&e)))
 	if r != S_OK {
 		return nil, fmt.Errorf("ElementFromHandle: 0x%X", r)
 	}
@@ -180,8 +179,8 @@ func (a *uiaAuto) elementFromHandle(hwnd uintptr) (*uiaElement, error) {
 }
 
 func (a *uiaAuto) createPropertyCondition(id int32, v *VARIANT) (*uiaCondition, error) {
-	var c uintptr
-	r, _, _ := syscall.SyscallN(vtblMethod(a.p, 23), a.p, uintptr(id),
+	var c unsafe.Pointer
+	r, _, _ := syscall.SyscallN(vtblMethod(a.p, 23), uintptr(a.p), uintptr(id),
 		uintptr(unsafe.Pointer(v)), uintptr(unsafe.Pointer(&c)))
 	if r != S_OK {
 		return nil, fmt.Errorf("CreatePropertyCondition(%d): 0x%X", id, r)
@@ -190,8 +189,8 @@ func (a *uiaAuto) createPropertyCondition(id int32, v *VARIANT) (*uiaCondition, 
 }
 
 func (a *uiaAuto) createTrueCondition() (*uiaCondition, error) {
-	var c uintptr
-	r, _, _ := syscall.SyscallN(vtblMethod(a.p, 21), a.p, uintptr(unsafe.Pointer(&c)))
+	var c unsafe.Pointer
+	r, _, _ := syscall.SyscallN(vtblMethod(a.p, 21), uintptr(a.p), uintptr(unsafe.Pointer(&c)))
 	if r != S_OK {
 		return nil, fmt.Errorf("CreateTrueCondition: 0x%X", r)
 	}
@@ -200,10 +199,10 @@ func (a *uiaAuto) createTrueCondition() (*uiaCondition, error) {
 
 // ── IUIAutomationCondition ──
 type uiaCondition struct {
-	p uintptr
+	p unsafe.Pointer
 }
 
-func (c *uiaCondition) release() { comRelease(unsafe.Pointer(c.p)) }
+func (c *uiaCondition) release() { comRelease(c.p) }
 
 // ── IUIAutomationElement vtable indices (after IUnknown) ──
 // Verified:
@@ -212,27 +211,27 @@ func (c *uiaCondition) release() { comRelease(unsafe.Pointer(c.p)) }
 //  10 = GetCurrentPropertyValue ✓
 
 type uiaElement struct {
-	p uintptr
+	p unsafe.Pointer
 }
 
-func (e *uiaElement) release() { comRelease(unsafe.Pointer(e.p)) }
+func (e *uiaElement) release() { comRelease(e.p) }
 
 func (e *uiaElement) findFirst(scope int, cond uintptr) (*uiaElement, error) {
-	var found uintptr
-	r, _, _ := syscall.SyscallN(vtblMethod(e.p, 5), e.p, uintptr(scope), cond,
+	var found unsafe.Pointer
+	r, _, _ := syscall.SyscallN(vtblMethod(e.p, 5), uintptr(e.p), uintptr(scope), cond,
 		uintptr(unsafe.Pointer(&found)))
 	if r != S_OK {
 		return nil, fmt.Errorf("FindFirst: 0x%X", r)
 	}
-	if found == 0 {
+	if found == nil {
 		return nil, nil
 	}
 	return &uiaElement{p: found}, nil
 }
 
 func (e *uiaElement) findAll(scope int, cond uintptr) (*uiaElementArray, error) {
-	var arr uintptr
-	r, _, _ := syscall.SyscallN(vtblMethod(e.p, 6), e.p, uintptr(scope), cond,
+	var arr unsafe.Pointer
+	r, _, _ := syscall.SyscallN(vtblMethod(e.p, 6), uintptr(e.p), uintptr(scope), cond,
 		uintptr(unsafe.Pointer(&arr)))
 	if r != S_OK {
 		return nil, fmt.Errorf("FindAll: 0x%X", r)
@@ -242,7 +241,7 @@ func (e *uiaElement) findAll(scope int, cond uintptr) (*uiaElementArray, error) 
 
 func (e *uiaElement) getPropValue(propId int32) (*VARIANT, error) {
 	var v VARIANT
-	r, _, _ := syscall.SyscallN(vtblMethod(e.p, 10), e.p, uintptr(propId),
+	r, _, _ := syscall.SyscallN(vtblMethod(e.p, 10), uintptr(e.p), uintptr(propId),
 		uintptr(unsafe.Pointer(&v)))
 	if r != S_OK {
 		return nil, fmt.Errorf("GetCurrentPropertyValue(%d): 0x%X", propId, r)
@@ -258,8 +257,7 @@ func (e *uiaElement) getName() string {
 	if v.VT != VT_BSTR {
 		return ""
 	}
-	s := bstrToGo(*(*uintptr)(unsafe.Pointer(&v.data)))
-	return s
+	return bstrToGo(*(*unsafe.Pointer)(unsafe.Pointer(&v.data)))
 }
 
 func (e *uiaElement) getPid() int {
@@ -294,7 +292,7 @@ type uiaNativeRect struct {
 func (e *uiaElement) getBoundingRect() (UIA_RECT, error) {
 	// Try direct property getter first (vtbl index 43 = get_CurrentBoundingRectangle)
 	var nr uiaNativeRect
-	hr, _, _ := syscall.SyscallN(vtblMethod(e.p, 43), e.p, uintptr(unsafe.Pointer(&nr)))
+	hr, _, _ := syscall.SyscallN(vtblMethod(e.p, 43), uintptr(e.p), uintptr(unsafe.Pointer(&nr)))
 	if hr == S_OK {
 		return UIA_RECT{
 			Left:   float64(nr.Left),
@@ -428,7 +426,7 @@ func (e *uiaElement) getAutomationId() string {
 	if err != nil || v.VT != VT_BSTR {
 		return ""
 	}
-	return bstrToGo(*(*uintptr)(unsafe.Pointer(&v.data)))
+	return bstrToGo(*(*unsafe.Pointer)(unsafe.Pointer(&v.data)))
 }
 
 func (e *uiaElement) getControlTypeId() int {
@@ -458,15 +456,15 @@ func (e *uiaElement) toElement() UIAElement {
 
 // ── IUIAutomationElement patterns (index 16 = GetCurrentPattern) ──
 
-func (e *uiaElement) getCurrentPattern(patternId int32) (uintptr, error) {
-	var p uintptr
-	r, _, _ := syscall.SyscallN(vtblMethod(e.p, 16), e.p, uintptr(patternId),
+func (e *uiaElement) getCurrentPattern(patternId int32) (unsafe.Pointer, error) {
+	var p unsafe.Pointer
+	r, _, _ := syscall.SyscallN(vtblMethod(e.p, 16), uintptr(e.p), uintptr(patternId),
 		uintptr(unsafe.Pointer(&p)))
 	if r != S_OK {
-		return 0, fmt.Errorf("GetCurrentPattern(%d): 0x%X", patternId, r)
+		return nil, fmt.Errorf("GetCurrentPattern(%d): 0x%X", patternId, r)
 	}
-	if p == 0 {
-		return 0, fmt.Errorf("GetCurrentPattern(%d): nil pattern (not supported)", patternId)
+	if p == nil {
+		return nil, fmt.Errorf("GetCurrentPattern(%d): nil pattern (not supported)", patternId)
 	}
 	return p, nil
 }
@@ -478,14 +476,14 @@ func (e *uiaElement) getValue() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("getValuePattern: %w", err)
 	}
-	defer comRelease(unsafe.Pointer(unk))
+	defer comRelease(unk)
 
-	var bstr uintptr
-	r, _, _ := syscall.SyscallN(vtblMethod(unk, 3), unk, uintptr(unsafe.Pointer(&bstr)))
+	var bstr unsafe.Pointer
+	r, _, _ := syscall.SyscallN(vtblMethod(unk, 3), uintptr(unk), uintptr(unsafe.Pointer(&bstr)))
 	if r != S_OK {
 		return "", fmt.Errorf("get_Value: 0x%X", r)
 	}
-	defer bstrFree(bstr)
+	defer bstrFree(uintptr(bstr))
 	return bstrToGo(bstr), nil
 }
 
@@ -494,7 +492,7 @@ func (e *uiaElement) setValue(val string) error {
 	if err != nil {
 		return fmt.Errorf("getValuePattern: %w", err)
 	}
-	defer comRelease(unsafe.Pointer(unk))
+	defer comRelease(unk)
 
 	b := bstrAlloc(val)
 	if b == 0 {
@@ -502,7 +500,7 @@ func (e *uiaElement) setValue(val string) error {
 	}
 	defer bstrFree(b)
 
-	r, _, _ := syscall.SyscallN(vtblMethod(unk, 4), unk, b)
+	r, _, _ := syscall.SyscallN(vtblMethod(unk, 4), uintptr(unk), b)
 	if r != S_OK {
 		return fmt.Errorf("SetValue: 0x%X", r)
 	}
@@ -516,9 +514,9 @@ func (e *uiaElement) invoke() error {
 	if err != nil {
 		return fmt.Errorf("getInvokePattern: %w", err)
 	}
-	defer comRelease(unsafe.Pointer(unk))
+	defer comRelease(unk)
 
-	r, _, _ := syscall.SyscallN(vtblMethod(unk, 3), unk)
+	r, _, _ := syscall.SyscallN(vtblMethod(unk, 3), uintptr(unk))
 	if r != S_OK {
 		return fmt.Errorf("Invoke: 0x%X", r)
 	}
@@ -529,14 +527,14 @@ func (e *uiaElement) invoke() error {
 //   3 = Length, 4 = GetElement
 
 type uiaElementArray struct {
-	p uintptr
+	p unsafe.Pointer
 }
 
-func (a *uiaElementArray) release() { comRelease(unsafe.Pointer(a.p)) }
+func (a *uiaElementArray) release() { comRelease(a.p) }
 
 func (a *uiaElementArray) length() int {
 	var l int32
-	r, _, _ := syscall.SyscallN(vtblMethod(a.p, 3), a.p, uintptr(unsafe.Pointer(&l)))
+	r, _, _ := syscall.SyscallN(vtblMethod(a.p, 3), uintptr(a.p), uintptr(unsafe.Pointer(&l)))
 	if r != S_OK {
 		return 0
 	}
@@ -544,8 +542,8 @@ func (a *uiaElementArray) length() int {
 }
 
 func (a *uiaElementArray) get(idx int) (*uiaElement, error) {
-	var e uintptr
-	r, _, _ := syscall.SyscallN(vtblMethod(a.p, 4), a.p, uintptr(idx),
+	var e unsafe.Pointer
+	r, _, _ := syscall.SyscallN(vtblMethod(a.p, 4), uintptr(a.p), uintptr(idx),
 		uintptr(unsafe.Pointer(&e)))
 	if r != S_OK {
 		return nil, fmt.Errorf("arrGet(%d): 0x%X", idx, r)

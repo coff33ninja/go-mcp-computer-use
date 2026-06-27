@@ -119,6 +119,77 @@ But `list_displays` only returns DISPLAY1.
 
 ---
 
+## Prompt Engineering: Learn-Once-Reuse-Forever Pattern
+
+The MCP server exposes 70 tools, but an AI agent using them starts **cold** every session — no knowledge of:
+- What windows exist on this user's desktop and where they're positioned
+- How specific applications render (Firefox tab bar vs URL bar, Outlook email list vs reading pane)
+- What sequences of tool calls successfully completed a task last time
+- What edge cases exist (Firefox containers, UIPI elevation blocks, OCR timing)
+
+### The Pattern
+
+**After any successful GUI interaction sequence, the AI should:**
+1. **Store the sequence** as a named macro/recipe (e.g., "open_chrome_search_google")
+2. **Annotate it** with application name, window layout details, and screen dimensions
+3. **Scope it** to the application so it's reusable across sessions
+4. **Next time the same task is asked**, recall the stored sequence and execute it directly — no need to rediscover coordinates and timings
+
+### Example memory entry
+
+```
+Application: Firefox (v134+ with Multi-Account Containers)
+Window size: 1123x791 (positioned at x=295, y=39)
+Tab bar: y≈50-70
+URL bar: y≈90-110 (click at x=350, y=105 to focus)
+Container new-tab: Ctrl+T bypasses popup, or click "No Container" at x=830,y=105
+Bookmarks bar: y≈120-140 (when enabled)
+
+Sequence "open_google_and_search":
+1. focus_window(handle=132490)
+2. click(x=350, y=105) — focus URL bar
+3. type_and_submit("google.com")
+4. wait(4000)
+5. type_and_submit("search query")
+6. wait(3000)
+7. scroll(clicks=-6)
+8. ocr(x=295, y=140, w=1123, h=700) — read results below URL bar
+```
+
+### Why this matters
+Without this pattern, the AI wastes time and tokens rediscovering basic facts each session — where the URL bar is, that Firefox uses containers, that scroll takes negative values for down. With it, the AI builds a **living knowledge base** that compounds with every session.
+
+## Lessons Learned (from live testing)
+
+### L1. Screen layout awareness is critical — always survey before acting
+**Problem:** Commands like `click(x,y)` / `type_text` fail silently when the AI doesn't know the screen layout — what windows exist, their positions, what UI elements are where.
+
+**Example from session:** Firefox had:
+- Window rect: `{left:295, top:39, right:1418, bottom:830}` (1123×791)
+- Multi-Account Containers extension modified the new-tab `+` button behavior — clicking it showed a container picker menu instead of opening a blank tab
+- The URL bar was at y≈96 (below the tab bar at y≈56), not at the very top of the window
+- Tab bar labels were partially visible but non-obvious ("< Intern PocketStac", "discwc")
+
+**Procedure for any GUI interaction:**
+1. `get_window_state(handle)` — get target window position
+2. `ocr(x,y,w,h)` over the window region — see what's actually displayed
+3. Locate the target element (button, text field, link) from OCR coordinates
+4. Click at the element's center position
+5. Verify with another OCR call after action
+
+**Firefox-specific layout (tested v134+):**
+- Tab bar: y≈50-70 (depends on title bar visibility). Compact tab mode changes spacing.
+- URL bar: y≈90-110. Contains: padlock icon + "about:" or URL text.
+- Container extensions add a popup menu on `+` click — must click "No Container" to open a regular tab.
+- Bookmarks toolbar: y≈120-140 (if enabled). Can shift content down.
+- Window top (y=39 for this session) includes the OS window title bar (if not maximized).
+
+### L2. Tools return "ok" even when the action had no visible effect
+`type`, `key_press`, `type_and_submit`, `click` all return `ok` — but the input may hit the wrong element or be dropped by UIPI. Always verify with OCR/screenshot after each action.
+
+### L3. Firefox containers intercept the `+` new tab button
+Firefox Multi-Account Containers changes the new-tab `+` behavior — instead of opening a blank tab immediately, it shows a popup asking which container to use. Click "No Container" (≈x=830, y=105 in this layout) or use `Ctrl+T` which bypasses the popup.
+
 ## Notes
 
 - First `UIA FindAll` call costs **16-37s** (one-time per process lifetime). Subsequent calls are fast (~280ms children, ~2ms FindFirst).

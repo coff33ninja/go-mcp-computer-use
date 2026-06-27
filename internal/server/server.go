@@ -889,7 +889,7 @@ func getScreenDPIHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, map[string]any{"monitors": dpi}, nil
 }
 
-func New() *mcp.Server {
+func New(version string) *mcp.Server {
 	cfg, err := config.Load()
 	if err != nil {
 		slog.Warn("config load failed, using defaults", "error", err)
@@ -902,11 +902,11 @@ func New() *mcp.Server {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
 	slog.SetDefault(logger)
 
-	slog.Info("starting go-mcp-computer-use", "tools", 69)
+	slog.Info("starting go-mcp-computer-use", "version", version, "tools", 70)
 
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "go-mcp-computer-use",
-		Version: "0.1.1",
+		Version: version,
 	}, nil)
 
 	mcp.AddTool(server, &mcp.Tool{

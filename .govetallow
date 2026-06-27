@@ -1,0 +1,35 @@
+# go vet allowance policy
+#
+# This project uses go vet strictly. Zero warnings are allowed at merge.
+# The following conventions explain how we satisfy the unsafeptr and unkeyed checkers
+# in the COM/WinRT interop code.
+
+[conventions]
+
+# 1. COM vtbl dispatch
+# vtblMethod takes unsafe.Pointer and uses unsafe.Add to read function pointers
+# from the vtable. This satisfies the unsafeptr checker because the interface
+# pointer is typed as unsafe.Pointer (not uintptr), keeping the object rooted
+# during the vtable traversal. See internal/actions/uia_com.go:86-89.
+
+# 2. COM interface storage
+# All COM interface pointers stored in struct fields are typed unsafe.Pointer
+# instead of uintptr. This avoids the "possible misuse of unsafe.Pointer"
+# warning when converting back to pass to syscall.SyscallN at call sites.
+
+# 3. Syscall output parameters
+# Local variables used as output parameters for SyscallN (written via
+# uintptr(unsafe.Pointer(&var))) are declared as unsafe.Pointer when they
+# receive pointer values. The syscall writes pointer-sized values regardless
+# of the Go type, and this avoids a later unsafe.Pointer(uintptr_var) conversion.
+
+# 4. GUID literals
+# All windows.GUID literals use keyed fields (Data1, Data2, Data3, Data4)
+# to satisfy the unkeyed composite literal checker.
+
+# 5. RAW_SYSCALL_RESULTS
+# When a syscall returns a uintptr that is a valid pointer (e.g.
+# WindowsGetStringRawBuffer), we use reinterpretation through
+# *(*unsafe.Pointer)(unsafe.Pointer(&uintptr_var)) to avoid the
+# unsafe.Pointer(uintptr_var) pattern that vet flags.
+# These are documented inline with a // SAFETY: comment at each site.

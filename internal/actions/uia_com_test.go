@@ -42,12 +42,12 @@ func TestUIA100_ColdStartProfile(t *testing.T) {
 	t.Logf("  CreateTrueCondition:  %v", time.Since(t0))
 
 	t0 = time.Now()
-	arr, _ := root.findAll(TreeScope_Children, cond.p)
+	arr, _ := root.findAll(TreeScope_Children, uintptr(cond.p))
 	t1 := time.Since(t0)
 	t.Logf("  FIRST FindAll(Chld):  %v", t1)
 
 	t0 = time.Now()
-	arr2, _ := root.findAll(TreeScope_Children, cond.p)
+	arr2, _ := root.findAll(TreeScope_Children, uintptr(cond.p))
 	t2 := time.Since(t0)
 	t.Logf("  SECOND FindAll(Chld): %v  (%.0fx)", t2, float64(t1)/float64(t2))
 
@@ -94,7 +94,7 @@ func TestUIA110_ElementFromHandle(t *testing.T) {
 	cond, _ := au.createTrueCondition()
 	defer cond.release()
 	start = time.Now()
-	first, err := elem.findFirst(TreeScope_Descendants, cond.p)
+	first, err := elem.findFirst(TreeScope_Descendants, uintptr(cond.p))
 	t.Logf("  FindFirst(Descendants, true): %v", time.Since(start))
 	if err != nil {
 		t.Fatalf("FindFirst: %v", err)
@@ -150,11 +150,11 @@ func BenchmarkUIA_FindAll_TrueCondition(b *testing.B) {
 	cond, _ := au.createTrueCondition()
 
 	// warmup
-	root.findAll(TreeScope_Children, cond.p)
+	root.findAll(TreeScope_Children, uintptr(cond.p))
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		arr, err := root.findAll(TreeScope_Children, cond.p)
+		arr, err := root.findAll(TreeScope_Children, uintptr(cond.p))
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -179,12 +179,12 @@ func BenchmarkUIA_FindFirst_ByName(b *testing.B) {
 	}
 	// warmup
 	for _, c := range conds {
-		root.findFirst(TreeScope_Descendants, c.p)
+		root.findFirst(TreeScope_Descendants, uintptr(c.p))
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		e, err := root.findFirst(TreeScope_Descendants, conds[i%len(conds)].p)
+		e, err := root.findFirst(TreeScope_Descendants, uintptr(conds[i%len(conds)].p))
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -234,7 +234,7 @@ func TestUIA999_LegacySanity(t *testing.T) {
 	}
 	tc.release()
 
-	arr, err := root.findAll(TreeScope_Children, cond.p)
+	arr, err := root.findAll(TreeScope_Children, uintptr(cond.p))
 	if err != nil {
 		t.Fatalf("FindAll (element vtbl[6]): %v", err)
 	}
@@ -243,7 +243,7 @@ func TestUIA999_LegacySanity(t *testing.T) {
 	n := arr.length()
 	t.Logf("Root children: %d", n)
 
-	found, err := root.findFirst(TreeScope_Descendants, cond.p)
+	found, err := root.findFirst(TreeScope_Descendants, uintptr(cond.p))
 	if err != nil {
 		t.Fatalf("FindFirst (element vtbl[5]): %v", err)
 	}
@@ -267,7 +267,7 @@ func TestUIA999_LegacySanity(t *testing.T) {
 
 	// Enum edits (children only for speed)
 	ec, _ := au.createPropertyCondition(UIA_ControlTypePropertyId, varInt(50004))
-	edits, _ := root.findAll(TreeScope_Children, ec.p)
+	edits, _ := root.findAll(TreeScope_Children, uintptr(ec.p))
 	t.Logf("Edit fields (children): %d", edits.length())
 	edits.release()
 	ec.release()
@@ -299,7 +299,7 @@ func TestUIA200_ComparePSandCOM(t *testing.T) {
 	cond, _ := au.createPropertyCondition(UIA_NamePropertyId, varString("Taskbar"))
 
 	start = time.Now()
-	found, err := root.findFirst(TreeScope_Descendants, cond.p)
+	found, err := root.findFirst(TreeScope_Descendants, uintptr(cond.p))
 	dur := time.Since(start)
 	if err != nil {
 		t.Fatalf("COM FindFirst: %v", err)
@@ -314,7 +314,7 @@ func TestUIA200_ComparePSandCOM(t *testing.T) {
 
 	// Second call
 	start = time.Now()
-	found2, _ := root.findFirst(TreeScope_Descendants, cond.p)
+	found2, _ := root.findFirst(TreeScope_Descendants, uintptr(cond.p))
 	t.Logf("  Second FindFirst: %v", time.Since(start))
 	if found2 != nil {
 		found2.release()

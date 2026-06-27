@@ -1,0 +1,67 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          cache: true
+
+      - name: Read version
+        id: version
+        shell: pwsh
+        run: |
+          $ver = (Get-Content VERSION -Raw).Trim()
+          $tag = "${{ github.ref_name }}" -replace '^v', ''
+          if ($ver -ne $tag) {
+            Write-Error "VERSION ($ver) does not match tag ($tag)"
+            exit 1
+          }
+          echo "version=$ver" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Lint
+        shell: pwsh
+        run: ./scripts/lint.ps1
+
+      - name: Build release
+        run: go build -ldflags="-X main.Version=${{ steps.version.outputs.version }}" -o mcp-server.exe ./cmd/mcp-server/
+
+      - name: Extract changelog
+        id: changelog
+        shell: pwsh
+        run: |
+          $ver = "${{ steps.version.outputs.version }}"
+          $content = Get-Content CHANGELOG.md -Raw
+          $pattern = "(?ms)## \[$ver\].*?(?=\n## \[|\z)"
+          if ($content -match $pattern) {
+            $Matches[0].Trim() | Set-Content -Path changelog-release.md
+            Write-Host "Changelog extracted for v$ver"
+          } else {
+            Write-Warning "No changelog entry found for v$ver"
+            "See CHANGELOG.md for details." | Set-Content -Path changelog-release.md
+          }
+
+      - name: Checksum
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash -Algorithm SHA256 mcp-server.exe).Hash.ToLower()
+          Set-Content -Path "mcp-server.exe.sha256" -Value "$hash  mcp-server.exe"
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: v${{ steps.version.outputs.version }}
+          body_path: changelog-release.md
+          files: |
+            mcp-server.exe
+            mcp-server.exe.sha256
+          fail_on_unmatched_files: true
+          generate_release_notes: false

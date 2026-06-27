@@ -71,7 +71,7 @@ func ctrlTypeFromName(name string) *int32 {
 
 // Build a combined condition from UIAFindOpts
 func buildCondition(au *uiaAuto, opts UIAFindOpts) (*uiaCondition, error) {
-	var conds []uintptr
+	var conds []unsafe.Pointer
 	if opts.Name != "" {
 		v := varString(opts.Name)
 		c, err := au.createPropertyCondition(UIA_NamePropertyId, v)
@@ -108,15 +108,15 @@ func buildCondition(au *uiaAuto, opts UIAFindOpts) (*uiaCondition, error) {
 	case 1:
 		return &uiaCondition{p: conds[0]}, nil
 	default:
-		var andC uintptr
-		r, _, _ := syscall.SyscallN(vtblMethod(au.p, 25), au.p, conds[0], conds[1],
+		var andC unsafe.Pointer
+		r, _, _ := syscall.SyscallN(vtblMethod(au.p, 25), uintptr(au.p), uintptr(conds[0]), uintptr(conds[1]),
 			uintptr(unsafe.Pointer(&andC)))
 		if r != S_OK {
 			return nil, fmt.Errorf("CreateAndCondition: 0x%X", r)
 		}
 		// Release individual conds since AndCondition holds refs
 		for _, c := range conds {
-			comRelease(unsafe.Pointer(c))
+			comRelease(c)
 		}
 		return &uiaCondition{p: andC}, nil
 	}
@@ -159,7 +159,7 @@ func UIAFindElement(opts UIAFindOpts) ([]UIAElement, error) {
 
 	// Case 1: Has name/automation_id — use FindFirst (very fast)
 	if hasExact {
-		elem, err := root.findFirst(TreeScope_Descendants, cond.p)
+		elem, err := root.findFirst(TreeScope_Descendants, uintptr(cond.p))
 		if err != nil {
 			return nil, fmt.Errorf("uia_find find: %w", err)
 		}
@@ -171,7 +171,7 @@ func UIAFindElement(opts UIAFindOpts) ([]UIAElement, error) {
 	}
 
 	// Case 2: Control-type only — search Children first (fast)
-	arr, err := root.findAll(TreeScope_Children, cond.p)
+	arr, err := root.findAll(TreeScope_Children, uintptr(cond.p))
 	if err != nil {
 		return nil, fmt.Errorf("uia_find find: %w", err)
 	}
@@ -233,7 +233,7 @@ func UIAGetText(name, automationID string) (string, error) {
 	}
 	defer cond.release()
 
-	elem, err := root.findFirst(TreeScope_Descendants, cond.p)
+	elem, err := root.findFirst(TreeScope_Descendants, uintptr(cond.p))
 	if err != nil {
 		return "", fmt.Errorf("uia_get_text find: %w", err)
 	}
@@ -292,7 +292,7 @@ func UIAInvoke(name, automationID string) (bool, error) {
 	}
 	defer cond.release()
 
-	elem, err := root.findFirst(TreeScope_Descendants, cond.p)
+	elem, err := root.findFirst(TreeScope_Descendants, uintptr(cond.p))
 	if err != nil {
 		return false, fmt.Errorf("uia_invoke find: %w", err)
 	}

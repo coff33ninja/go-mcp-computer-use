@@ -1,7 +1,8 @@
 # Agent Prompt Engineering Guide
 
 > How to configure AI agents with the right tool subset for different tasks.
-> The full 65-tool set is powerful but bloated for simple tasks. Load only what you need.
+> The full 70-tool set (v0.1.x) is powerful but bloated for simple tasks. Load only what you need.
+> v0.2.0 adds the `chain` tool (multi-step automation), SQLite memory store (persistent facts across sessions), and ONNX ML validation (visual element detection).
 
 ---
 
