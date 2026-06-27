@@ -465,6 +465,9 @@ func (e *uiaElement) getCurrentPattern(patternId int32) (uintptr, error) {
 	if r != S_OK {
 		return 0, fmt.Errorf("GetCurrentPattern(%d): 0x%X", patternId, r)
 	}
+	if p == 0 {
+		return 0, fmt.Errorf("GetCurrentPattern(%d): nil pattern (not supported)", patternId)
+	}
 	return p, nil
 }
 

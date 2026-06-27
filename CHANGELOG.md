@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.7] - 2026-06-27
+
+### Fixed
+
+- B4: `uia_get_text` / `uia_invoke` no longer crash MCP transport — `GetCurrentPattern` nil check added before pattern operations
+
 ## [0.1.6] - 2026-06-27
 
 ### Fixed
