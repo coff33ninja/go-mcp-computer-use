@@ -3,7 +3,6 @@ package actions
 import (
 	"fmt"
 	"syscall"
-	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -188,8 +187,7 @@ func Wait(ms int32) {
 	if ms <= 0 {
 		return
 	}
-	duration := time.Duration(ms) * time.Millisecond
-	du := -(int64(duration) * 10000)
+	du := -(int64(ms) * 10000)
 	delayExecution.Call(0, uintptr(unsafe.Pointer(&du)))
 }
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.5] - 2026-06-27
+
+### Fixed
+
+- B6: `Wait()` calculation was **1 million times too long** — `NtDelayExecution` argument was `-(ns * 10000)` instead of `-(ms * 10000)`, causing `hover` (and any tool calling `Wait`) to block for hours instead of milliseconds
+
 ## [0.1.4] - 2026-06-27
 
 ### Fixed
