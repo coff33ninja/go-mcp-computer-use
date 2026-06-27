@@ -21,7 +21,23 @@ MCP server for Windows desktop computer use. Exposes mouse, keyboard, screenshot
 - **Power** — shutdown, restart, sleep, hibernate
 - **Per-monitor DPI** — per-monitor DPI awareness, scale reporting
 - **UI Automation** — find elements by name/automationID, get text, invoke buttons via UIA
-- **68 MCP tools** — full list below
+- **69 MCP tools** — full list below
+
+## ⚠️ SECURITY WARNING — DANGEROUS CAPABILITIES
+
+This executable can **fully control the Windows machine it runs on**. It exposes these capabilities to any connected AI agent:
+
+- **Read anything on screen** — screenshot, OCR, screen recording
+- **Control input** — mouse clicks/moves, keyboard typing, key combos
+- **Read and write clipboard** — steal or replace clipboard contents
+- **Kill processes, launch executables, shutdown/restart** the machine
+- **Change system audio, volume, mute, default devices**
+- **Enumerate and interact with windows** — move, resize, close, find
+- **Read network config, ping hosts, enumerate adapters**
+- **Read disk usage, battery state, display modes**
+- **Automate UI elements** via UI Automation (find/invoke buttons, read text)
+
+**Treat this binary with the same caution as a remote-admin tool.** Only connect it to MCP clients you trust. The AI agent receiving these tools has equivalent access to a logged-in user at the keyboard. Do not expose it over a network without authentication, and never run it on a machine where you wouldn't let a remote user operate the mouse and keyboard.
 
 ## Requirements
 
@@ -160,3 +176,24 @@ Cross-compile with CGO via Zig:
 ```bash
 CC="zig cc" CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -o mcp-server.exe ./cmd/mcp-server/
 ```
+
+## Performance
+
+Benchmark results (1920x1080 display, averaged):
+
+| Operation | Time |
+|---|---|
+| Screenshot (full) | 123 ms |
+| Screenshot (400x400 region) | 17 ms |
+| OCR (full screen) | 534 ms |
+| OCR (400x400 region) | 444 ms |
+| Template match (full screen) | 19 ms |
+| Template match (in region) | 2 ms |
+| find_text_and_click | 526 ms |
+| get_pixel_color | 17 ms |
+| get_keyboard_layout | 247 ms |
+| get_network_info | 11 ms |
+| list_processes | 5 ms |
+| get_volume | 7 ms |
+
+Run `go run .\cmd\benchmark\` locally to produce current numbers.
