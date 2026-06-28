@@ -14,6 +14,28 @@
 - **Variable substitution** — `{{variable_name}}` in string args is replaced with captured output from earlier steps.
 - **ChainFromJSON** — convenience entry point for programmatic chain execution from JSON string.
 
+## [0.2.4] - 2026-06-28
+
+### Added
+
+- **`memory_set` / `memory_get` / `memory_search` / `memory_list` / `memory_forget` tools** — SQLite-backed memory store using `modernc.org/sqlite` (pure Go, zero CGO). Database at `%APPDATA%/go-mcp-computer-use/memory.db` with WAL mode, FTS5 full-text search, auto-syncing triggers, TTL support, scope isolation, and tag filtering.
+- **`layout_validate` tool** — validates stored UI element layouts against the current screen. Checks window existence, position drift (with tolerance), and OCR keyword verification around element coordinates. Returns per-element confidence (`ok`/`drifted`/`stale`) with adjusted coordinates.
+- **`template_store` / `template_find` / `template_list` / `template_forget` tools** — self-growing template library. `template_store` auto-crops a 48×48 PNG template around a coordinate from the current screen and stores it in the `element_templates` table. `template_find` uses NCC template matching (`find_image`) to relocate the element visually on the current screen, returning coordinates and drift. Hit count auto-increments on each successful find, enabling the system to self-train over time.
+- **`onnx_status` / `onnx_detect` / `onnx_download` tools** — ONNX ML backend for UI element detection. `onnx_status` checks runtime and model availability. `onnx_detect` runs YOLO11s inference on a screenshot or full screen to detect UI elements (button, textbox, checkbox, dropdown, icon, tab, menu_item) with bounding boxes and confidence scores. Uses `github.com/yalue/onnxruntime_go` for native ONNX Runtime support. Requires manual download of `onnxruntime.dll` and model files. Falls back gracefully when runtime/models are missing.
+- **`focus_window_by_title` tool** — focus management for reliable keyboard input. Finds a window by title, focuses it, and clicks its title bar to ensure activation.
+- **`ChainStep.FocusWindow` field** — chain steps can specify `focus_window: "window title"` to auto-focus and activate the window before executing the step. The chain executor handles window lookup, focus, title bar click, then runs the step.
+- **`browser_focus_url_bar` / `browser_new_tab` / `browser_navigate` / `browser_search` tools** — generic browser automation (Firefox, Chrome, Edge, Brave, Opera). `browser_focus_url_bar` focuses the URL bar (Ctrl+T for Firefox, Ctrl+L for others). `browser_new_tab` opens a new tab (Ctrl+T). `browser_navigate` opens a new tab and navigates to a URL. `browser_search` opens a new tab and performs a search query. Backed by `BrowserFocusURLBar`, `BrowserNewTab`, `BrowserNavigate`, `BrowserSearch` in `internal/actions/browseruse.go` — reusable composite functions that import existing modules instead of duplicating logic.
+- **`explorer_focus` / `explorer_open_path` tools** — File Explorer automation. `explorer_focus` finds and activates an existing File Explorer window by title. `explorer_open_path` opens explorer at a given path, reusing existing windows when possible (Ctrl+L + path) or launching a new one. Backed by `ExplorerFocus`, `ExplorerOpenPath`, `ExplorerNavigateTo` in `internal/actions/windowexploreruse.go`.
+
+### Changed
+
+- **Replaced `firefox_focus_url_bar`** — removed Firefox-specific function from `chained.go`. Replaced with generic `browseruse.go` that detects browser type from window title and uses browser-specific keyboard shortcuts (Ctrl+T for Firefox URL bar, Ctrl+L for Chrome/Edge).
+- **Refactored `FocusWindowByTitle`** — now delegates to shared `focusAndActivateWindow` helper, reducing duplication across browser, explorer, and generic focus code paths.
+
+### Removed
+
+- **`FirefoxFocusURLBar`** — removed from `internal/actions/chained.go`. Superseded by `BrowserFocusURLBar`. Tool name changed from `firefox_focus_url_bar` to `browser_focus_url_bar`.
+
 ## [0.2.3] - 2026-06-28
 
 ### Fixed

@@ -900,12 +900,317 @@ func recordScreenHandler(ctx context.Context, req *mcp.CallToolRequest, args Rec
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, result, nil
 }
 
+type LayoutValidateArgs struct {
+	Elements       []actions.LayoutElement `json:"elements"`
+	WindowTitle    string                  `json:"window_title,omitempty"`
+	DriftTolerance int32                   `json:"drift_tolerance,omitempty"`
+	Language       string                  `json:"language,omitempty"`
+}
+
+func layoutValidateHandler(ctx context.Context, req *mcp.CallToolRequest, args LayoutValidateArgs) (*mcp.CallToolResult, any, error) {
+	result, err := actions.ValidateLayout(actions.LayoutValidateInput{
+		Elements:       args.Elements,
+		WindowTitle:    args.WindowTitle,
+		DriftTolerance: args.DriftTolerance,
+		Language:       args.Language,
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("layout_validate: %w", err)
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, result, nil
+}
+
 func getScreenDPIHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
 	dpi, err := actions.GetScreenDPI()
 	if err != nil {
 		return nil, nil, fmt.Errorf("get_screen_dpi: %w", err)
 	}
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, map[string]any{"monitors": dpi}, nil
+}
+
+type FocusWindowByTitleArgs struct {
+	Title string `json:"title"`
+}
+
+func focusWindowByTitleHandler(ctx context.Context, req *mcp.CallToolRequest, args FocusWindowByTitleArgs) (*mcp.CallToolResult, any, error) {
+	if err := actions.FocusWindowByTitle(args.Title); err != nil {
+		return nil, nil, fmt.Errorf("focus_window_by_title: %w", err)
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
+}
+
+type BrowserArgs struct {
+	Browser string `json:"browser"`
+}
+
+type BrowserNavigateArgs struct {
+	Browser string `json:"browser"`
+	URL     string `json:"url"`
+}
+
+type BrowserSearchArgs struct {
+	Browser string `json:"browser"`
+	Query   string `json:"query"`
+}
+
+type ExplorerPathArgs struct {
+	Path string `json:"path"`
+}
+
+func browserFocusURLBarHandler(ctx context.Context, req *mcp.CallToolRequest, args BrowserArgs) (*mcp.CallToolResult, any, error) {
+	if err := actions.BrowserFocusURLBar(args.Browser); err != nil {
+		return nil, nil, fmt.Errorf("browser_focus_url_bar: %w", err)
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
+}
+
+func browserNewTabHandler(ctx context.Context, req *mcp.CallToolRequest, args BrowserArgs) (*mcp.CallToolResult, any, error) {
+	if err := actions.BrowserNewTab(args.Browser); err != nil {
+		return nil, nil, fmt.Errorf("browser_new_tab: %w", err)
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
+}
+
+func browserNavigateHandler(ctx context.Context, req *mcp.CallToolRequest, args BrowserNavigateArgs) (*mcp.CallToolResult, any, error) {
+	if err := actions.BrowserNavigate(args.Browser, args.URL); err != nil {
+		return nil, nil, fmt.Errorf("browser_navigate: %w", err)
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
+}
+
+func browserSearchHandler(ctx context.Context, req *mcp.CallToolRequest, args BrowserSearchArgs) (*mcp.CallToolResult, any, error) {
+	if err := actions.BrowserSearch(args.Browser, args.Query); err != nil {
+		return nil, nil, fmt.Errorf("browser_search: %w", err)
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
+}
+
+func explorerFocusHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
+	if err := actions.ExplorerFocus(); err != nil {
+		return nil, nil, fmt.Errorf("explorer_focus: %w", err)
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
+}
+
+func explorerOpenPathHandler(ctx context.Context, req *mcp.CallToolRequest, args ExplorerPathArgs) (*mcp.CallToolResult, any, error) {
+	if err := actions.ExplorerOpenPath(args.Path); err != nil {
+		return nil, nil, fmt.Errorf("explorer_open_path: %w", err)
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
+}
+
+type ONNXDetectArgs struct {
+	ImageB64     string  `json:"image_b64,omitempty"`
+	Threshold    float64 `json:"threshold,omitempty"`
+	IOUThreshold float64 `json:"iou_threshold,omitempty"`
+}
+
+func onnxStatusHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
+	status := actions.ONNXStatus()
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, status, nil
+}
+
+func onnxDetectHandler(ctx context.Context, req *mcp.CallToolRequest, args ONNXDetectArgs) (*mcp.CallToolResult, any, error) {
+	// If no image provided, capture full screen
+	imgB64 := args.ImageB64
+	if imgB64 == "" {
+		var err error
+		imgB64, err = actions.CaptureScreen()
+		if err != nil {
+			return nil, nil, fmt.Errorf("onnx_detect screenshot: %w", err)
+		}
+	}
+
+	result, err := actions.ONNXDetect(actions.DetectionInput{
+		ImageB64:     imgB64,
+		Threshold:    args.Threshold,
+		IOUThreshold: args.IOUThreshold,
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("onnx_detect: %w", err)
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, result, nil
+}
+
+func onnxDownloadHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
+	result, err := actions.ONNXDownload()
+	if err != nil {
+		return nil, nil, fmt.Errorf("onnx_download: %w", err)
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, result, nil
+}
+
+type TemplateStoreArgs struct {
+	ElementKey        string   `json:"element_key"`
+	Scope             string   `json:"scope,omitempty"`
+	CenterX           int32    `json:"center_x"`
+	CenterY           int32    `json:"center_y"`
+	CropSize          int      `json:"crop_size,omitempty"`
+	WindowTitle       string   `json:"window_title,omitempty"`
+	SignatureKeywords []string `json:"signature_keywords,omitempty"`
+}
+
+type TemplateFindArgs struct {
+	ElementKey string  `json:"element_key"`
+	Scope      string  `json:"scope,omitempty"`
+	Threshold  float64 `json:"threshold,omitempty"`
+}
+
+type TemplateListArgs struct {
+	Scope string `json:"scope,omitempty"`
+	Limit int    `json:"limit,omitempty"`
+}
+
+type TemplateForgetArgs struct {
+	ElementKey string `json:"element_key"`
+	Scope      string `json:"scope,omitempty"`
+}
+
+func templateStoreHandler(ctx context.Context, req *mcp.CallToolRequest, args TemplateStoreArgs) (*mcp.CallToolResult, any, error) {
+	info, err := actions.TemplateStore(actions.TemplateStoreInput{
+		ElementKey:        args.ElementKey,
+		Scope:             args.Scope,
+		CenterX:           args.CenterX,
+		CenterY:           args.CenterY,
+		CropSize:          args.CropSize,
+		WindowTitle:       args.WindowTitle,
+		SignatureKeywords: args.SignatureKeywords,
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("template_store: %w", err)
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, info, nil
+}
+
+func templateFindHandler(ctx context.Context, req *mcp.CallToolRequest, args TemplateFindArgs) (*mcp.CallToolResult, any, error) {
+	result, err := actions.TemplateFind(actions.TemplateFindInput{
+		ElementKey: args.ElementKey,
+		Scope:      args.Scope,
+		Threshold:  args.Threshold,
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("template_find: %w", err)
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, result, nil
+}
+
+func templateListHandler(ctx context.Context, req *mcp.CallToolRequest, args TemplateListArgs) (*mcp.CallToolResult, any, error) {
+	results, err := actions.TemplateList(actions.TemplateListInput{
+		Scope: args.Scope,
+		Limit: args.Limit,
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("template_list: %w", err)
+	}
+	if results == nil {
+		results = []actions.TemplateInfo{}
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, map[string]any{"templates": results}, nil
+}
+
+func templateForgetHandler(ctx context.Context, req *mcp.CallToolRequest, args TemplateForgetArgs) (*mcp.CallToolResult, any, error) {
+	deleted, err := actions.TemplateForget(args.ElementKey, args.Scope)
+	if err != nil {
+		return nil, nil, fmt.Errorf("template_forget: %w", err)
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, map[string]any{"deleted": deleted}, nil
+}
+
+type MemorySetArgs struct {
+	Key   string `json:"key"`
+	Value any    `json:"value"`
+	Scope string `json:"scope,omitempty"`
+	Tags  string `json:"tags,omitempty"`
+	TTL   int    `json:"ttl,omitempty"`
+}
+
+type MemoryGetArgs struct {
+	Key   string `json:"key"`
+	Scope string `json:"scope,omitempty"`
+}
+
+type MemorySearchArgs struct {
+	Query string `json:"query"`
+	Scope string `json:"scope,omitempty"`
+	Limit int    `json:"limit,omitempty"`
+}
+
+type MemoryListArgs struct {
+	Scope string `json:"scope,omitempty"`
+	Tags  string `json:"tags,omitempty"`
+	Limit int    `json:"limit,omitempty"`
+}
+
+type MemoryForgetArgs struct {
+	Key   string `json:"key,omitempty"`
+	Scope string `json:"scope,omitempty"`
+	Tags  string `json:"tags,omitempty"`
+}
+
+func memorySetHandler(ctx context.Context, req *mcp.CallToolRequest, args MemorySetArgs) (*mcp.CallToolResult, any, error) {
+	if err := actions.MemorySet(actions.MemorySetInput{
+		Key:   args.Key,
+		Value: args.Value,
+		Scope: args.Scope,
+		Tags:  args.Tags,
+		TTL:   args.TTL,
+	}); err != nil {
+		return nil, nil, fmt.Errorf("memory_set: %w", err)
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
+}
+
+func memoryGetHandler(ctx context.Context, req *mcp.CallToolRequest, args MemoryGetArgs) (*mcp.CallToolResult, any, error) {
+	fact, err := actions.MemoryGet(args.Key, args.Scope)
+	if err != nil {
+		return nil, nil, fmt.Errorf("memory_get: %w", err)
+	}
+	if fact == nil {
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "not_found"}}}, map[string]any{"found": false}, nil
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, fact, nil
+}
+
+func memorySearchHandler(ctx context.Context, req *mcp.CallToolRequest, args MemorySearchArgs) (*mcp.CallToolResult, any, error) {
+	results, err := actions.MemorySearch(actions.MemorySearchInput{
+		Query: args.Query,
+		Scope: args.Scope,
+		Limit: args.Limit,
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("memory_search: %w", err)
+	}
+	if results == nil {
+		results = []actions.MemorySearchResult{}
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, map[string]any{"results": results}, nil
+}
+
+func memoryListHandler(ctx context.Context, req *mcp.CallToolRequest, args MemoryListArgs) (*mcp.CallToolResult, any, error) {
+	results, err := actions.MemoryList(actions.MemoryListInput{
+		Scope: args.Scope,
+		Tags:  args.Tags,
+		Limit: args.Limit,
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("memory_list: %w", err)
+	}
+	if results == nil {
+		results = []actions.MemorySearchResult{}
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, map[string]any{"results": results}, nil
+}
+
+func memoryForgetHandler(ctx context.Context, req *mcp.CallToolRequest, args MemoryForgetArgs) (*mcp.CallToolResult, any, error) {
+	deleted, err := actions.MemoryForget(actions.MemoryForgetInput{
+		Key:   args.Key,
+		Scope: args.Scope,
+		Tags:  args.Tags,
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("memory_forget: %w", err)
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, map[string]any{"deleted": deleted}, nil
 }
 
 func New(version string) *mcp.Server {
@@ -921,7 +1226,7 @@ func New(version string) *mcp.Server {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
 	slog.SetDefault(logger)
 
-	slog.Info("starting go-mcp-computer-use", "version", version, "tools", 70)
+	slog.Info("starting go-mcp-computer-use", "version", version, "tools", 84)
 
 	// Warm up UIA to absorb the one-time 16-37s cold-start cost
 	if err := actions.WarmupUIA(); err != nil {
@@ -989,6 +1294,41 @@ func New(version string) *mcp.Server {
 		Name:        "focus_window",
 		Description: "Bring a window to the foreground by handle.",
 	}, focusWindowHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "focus_window_by_title",
+		Description: "Find a window by title and focus it, clicking its title bar to ensure activation. Useful before keyboard input in chain steps.",
+	}, focusWindowByTitleHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "browser_focus_url_bar",
+		Description: "Focus a browser window's URL bar. Supports Firefox (Ctrl+T), Chrome/Edge (Ctrl+L), and other browsers. Provide browser name (firefox, chrome, edge, brave, opera) or window title substring.",
+	}, browserFocusURLBarHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "browser_new_tab",
+		Description: "Open a new tab in a browser window. Uses Ctrl+T for all browsers.",
+	}, browserNewTabHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "browser_navigate",
+		Description: "Open a new tab in a browser and navigate to a URL.",
+	}, browserNavigateHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "browser_search",
+		Description: "Open a new tab in a browser and perform a search query.",
+	}, browserSearchHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "explorer_focus",
+		Description: "Focus an existing File Explorer window.",
+	}, explorerFocusHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "explorer_open_path",
+		Description: "Open a File Explorer window at the specified path. Reuses existing window when possible.",
+	}, explorerOpenPathHandler)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_volume",
@@ -1284,6 +1624,71 @@ func New(version string) *mcp.Server {
 		Name:        "uia_invoke",
 		Description: "Click or invoke a UI element by name or automation_id using UI Automation.",
 	}, uiaInvokeHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "onnx_status",
+		Description: "Check ONNX runtime and model availability. Returns presence of YOLO model, MobileNet model, and onnxruntime.dll.",
+	}, onnxStatusHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "onnx_detect",
+		Description: "Run YOLO-based UI element detection on a screenshot (or full screen if no image provided). Returns detected elements with class labels, confidence scores, and bounding boxes. Requires onnxruntime.dll and YOLO model file.",
+	}, onnxDetectHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "onnx_download",
+		Description: "Check and prepare ONNX model files. Lists which models are present and which need manual download.",
+	}, onnxDownloadHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "layout_validate",
+		Description: "Validate stored UI element layout against the current screen. Checks window existence, position drift, and OCR keyword verification. Returns adjusted coordinates and confidence levels (ok/drifted/stale).",
+	}, layoutValidateHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "template_store",
+		Description: "Capture a UI element template from the current screen by cropping around a coordinate. Stores as base64 PNG in the element_templates table for visual re-identification.",
+	}, templateStoreHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "template_find",
+		Description: "Find a stored UI element template on the current screen using NCC template matching. Returns coordinates, score, and drift from stored position.",
+	}, templateFindHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "template_list",
+		Description: "List stored UI element templates with metadata (element key, scope, window title, hit count, etc.).",
+	}, templateListHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "template_forget",
+		Description: "Delete a stored UI element template by element_key and optional scope.",
+	}, templateForgetHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "memory_set",
+		Description: "Store a fact into the memory store. Fields: key (required), value (any JSON), scope, tags (comma-separated), ttl (optional expiry in seconds).",
+	}, memorySetHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "memory_get",
+		Description: "Retrieve a fact from the memory store by key and optional scope.",
+	}, memoryGetHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "memory_search",
+		Description: "Full-text search across keys, values, scope, and tags using FTS5. Supports SQLite FTS5 query syntax.",
+	}, memorySearchHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "memory_list",
+		Description: "List stored facts under a scope with optional tag filter.",
+	}, memoryListHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "memory_forget",
+		Description: "Delete facts by key, scope, or tags. At least one filter is required to prevent accidental mass deletion.",
+	}, memoryForgetHandler)
 
 	return server
 }

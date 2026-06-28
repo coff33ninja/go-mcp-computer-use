@@ -211,3 +211,11 @@ func clickFirstMatch(result *OCRResult, text string, offsetX, offsetY int32) err
 	}
 	return fmt.Errorf("text %q not found in OCR result", text)
 }
+
+func FocusWindowByTitle(title string) error {
+	hwnd := FindWindowByTitle(title)
+	if hwnd == 0 {
+		return fmt.Errorf("window not found: %s", title)
+	}
+	return focusAndActivateWindow(hwnd)
+}

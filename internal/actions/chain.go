@@ -46,14 +46,15 @@ type ChainRequest struct {
 }
 
 type ChainStep struct {
-	Type    string         `json:"type,omitempty"`
-	Capture string         `json:"capture,omitempty"`
-	Tool    string         `json:"tool,omitempty"`
-	Args    map[string]any `json:"args,omitempty"`
-	WaitMs  int            `json:"wait_ms,omitempty"`
-	Poll    *PollConfig    `json:"poll,omitempty"`
-	If      *IfConfig      `json:"if,omitempty"`
-	Loop    *LoopConfig    `json:"loop,omitempty"`
+	Type        string         `json:"type,omitempty"`
+	Capture     string         `json:"capture,omitempty"`
+	Tool        string         `json:"tool,omitempty"`
+	Args        map[string]any `json:"args,omitempty"`
+	WaitMs      int            `json:"wait_ms,omitempty"`
+	Poll        *PollConfig    `json:"poll,omitempty"`
+	If          *IfConfig      `json:"if,omitempty"`
+	Loop        *LoopConfig    `json:"loop,omitempty"`
+	FocusWindow string         `json:"focus_window,omitempty"`
 }
 
 type ChainResult struct {
@@ -70,6 +71,38 @@ type StepResult struct {
 	Error   string       `json:"error,omitempty"`
 	Output  any          `json:"output,omitempty"`
 	Steps   []StepResult `json:"steps,omitempty"`
+}
+
+// ── Focus management ──
+
+func ensureWindowFocus(windowTitle string) StepResult {
+	hwnd := FindWindowByTitle(windowTitle)
+	if hwnd == 0 {
+		return StepResult{
+			Tool:    "focus_window",
+			Success: false,
+			Error:   fmt.Sprintf("window not found: %s", windowTitle),
+		}
+	}
+	if err := FocusWindow(hwnd); err != nil {
+		return StepResult{
+			Tool:    "focus_window",
+			Success: false,
+			Error:   fmt.Sprintf("focus failed: %v", err),
+		}
+	}
+	// Click title bar area to ensure activation before keyboard input
+	state, err := GetWindowState(hwnd)
+	if err == nil && state != nil {
+		clickX := (state.Rect.Left + state.Rect.Right) / 2
+		clickY := state.Rect.Top + 10
+		if clickY < state.Rect.Top+30 {
+			if err := Click(ClickInput{X: clickX, Y: clickY}); err == nil {
+				Wait(50)
+			}
+		}
+	}
+	return StepResult{Tool: "focus_window", Success: true}
 }
 
 // ── Tool dispatch ──
@@ -183,6 +216,20 @@ func execSteps(steps []ChainStep, state *chainState) ([]StepResult, int) {
 
 		stepArgs := substituteVars(step.Args, state.variables)
 		var stepResult StepResult
+
+		// Auto-focus window before step if specified
+		if step.FocusWindow != "" {
+			if fr := ensureWindowFocus(step.FocusWindow); !fr.Success {
+				stepResult = fr
+				stepResult.Index = i
+				results = append(results, stepResult)
+				stepCount++
+				if state.onError == "stop" {
+					break
+				}
+				continue
+			}
+		}
 
 		switch stepType {
 		case StepWait:

@@ -111,6 +111,48 @@ func FindImage(screenB64, templateB64 string, threshold float64) (*MatchResult, 
 	}, nil
 }
 
+func CropRegion(srcB64 string, x, y, w, h int32) (string, error) {
+	src, err := decodePNGB64(srcB64)
+	if err != nil {
+		return "", fmt.Errorf("crop decode: %w", err)
+	}
+
+	bounds := src.Bounds()
+	cropX := int(x)
+	cropY := int(y)
+	cropW := int(w)
+	cropH := int(h)
+
+	if cropX < 0 {
+		cropX = 0
+	}
+	if cropY < 0 {
+		cropY = 0
+	}
+	if cropX+cropW > bounds.Dx() {
+		cropW = bounds.Dx() - cropX
+	}
+	if cropY+cropH > bounds.Dy() {
+		cropH = bounds.Dy() - cropY
+	}
+	if cropW <= 0 || cropH <= 0 {
+		return "", fmt.Errorf("crop region out of bounds")
+	}
+
+	cropped := image.NewRGBA(image.Rect(0, 0, cropW, cropH))
+	for dy := 0; dy < cropH; dy++ {
+		for dx := 0; dx < cropW; dx++ {
+			cropped.Set(dx, dy, src.At(cropX+dx, cropY+dy))
+		}
+	}
+
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, cropped); err != nil {
+		return "", fmt.Errorf("crop encode: %w", err)
+	}
+	return base64.StdEncoding.EncodeToString(buf.Bytes()), nil
+}
+
 func decodePNGB64(b64 string) (image.Image, error) {
 	data, err := base64.StdEncoding.DecodeString(strings.TrimSpace(b64))
 	if err != nil {
