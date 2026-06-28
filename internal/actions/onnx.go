@@ -2,8 +2,6 @@ package actions
 
 import (
 	"archive/zip"
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"image"
 	"image/png"
@@ -11,7 +9,6 @@ import (
 	"math"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"sync"
@@ -40,9 +37,9 @@ const (
 	yoloInputSize      = 640
 	yoloConfThresh     = 0.25
 	yoloNMSThresh      = 0.45
-	yoloNumClasses     = 7
-	yoloModelURL       = "https://huggingface.co/IndextDataLab/windows-ui-locator/resolve/main/best.pt"
-	yoloModelFile      = "yolov11s_windows_ui.onnx"
+	yoloNumClasses     = 80
+	yoloModelURL       = "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n.onnx"
+	yoloModelFile      = "yolo11n.onnx"
 	mobilenetModelURL  = "https://huggingface.co/diogoneno/gui-element-classifier/resolve/main/mobilenetv3_small.onnx"
 	mobilenetModelFile = "mobilenetv3_small.onnx"
 	onnxDLLURL         = "https://github.com/microsoft/onnxruntime/releases/download/v1.20.1/onnxruntime-win-x64-1.20.1.zip"
@@ -50,7 +47,15 @@ const (
 )
 
 var yoloLabels = []string{
-	"button", "textbox", "checkbox", "dropdown", "icon", "tab", "menu_item",
+	"person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat",
+	"traffic_light", "fire_hydrant", "stop_sign", "parking_meter", "bench", "bird", "cat", "dog", "horse",
+	"sheep", "cow", "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie",
+	"suitcase", "frisbee", "skis", "snowboard", "sports_ball", "kite", "baseball_bat", "baseball_glove",
+	"skateboard", "surfboard", "tennis_racket", "bottle", "wine_glass", "cup", "fork", "knife", "spoon",
+	"bowl", "banana", "apple", "sandwich", "orange", "broccoli", "carrot", "hot_dog", "pizza", "donut",
+	"cake", "chair", "couch", "potted_plant", "bed", "dining_table", "toilet", "tv", "laptop", "mouse",
+	"remote", "keyboard", "cell_phone", "microwave", "oven", "toaster", "sink", "refrigerator", "book",
+	"clock", "vase", "scissors", "teddy_bear", "hair_drier", "toothbrush",
 }
 
 func getModelsDir() string {
@@ -114,35 +119,31 @@ func findONNXRuntime() string {
 }
 
 type ONNXModelStatus struct {
-	YoloModel     string `json:"yolo_model"`
-	Mobilenet     string `json:"mobilenet"`
-	YoloFormat    string `json:"yolo_format,omitempty"`
-	RuntimeDLL    string `json:"runtime_dll,omitempty"`
+	YoloModel  string `json:"yolo_model"`
+	Mobilenet  string `json:"mobilenet"`
+	RuntimeDLL string `json:"runtime_dll,omitempty"`
 }
 
-func checkYoloModel(dir string) (string, string) {
-	onnxPath := filepath.Join(dir, "yolov11s_windows_ui.onnx")
+func checkYoloModel(dir string) string {
+	onnxPath := filepath.Join(dir, yoloModelFile)
 	if _, err := os.Stat(onnxPath); err == nil {
-		return "present", "onnx"
+		return "present"
 	}
-	ptPath := filepath.Join(dir, "best.pt")
-	if _, err := os.Stat(ptPath); err == nil {
-		return "present_pt", "pytorch"
-	}
-	return "missing", ""
+	return "missing"
 }
 
 func ONNXStatus() *ONNXModelStatus {
 	s := &ONNXModelStatus{}
-	if modelsDir != "" {
-		s.YoloModel, s.YoloFormat = checkYoloModel(modelsDir)
-		mobPath := filepath.Join(modelsDir, "mobilenetv3_small.onnx")
+	dir := getModelsDir()
+	if dir != "" {
+		s.YoloModel = checkYoloModel(dir)
+		mobPath := filepath.Join(dir, "mobilenetv3_small.onnx")
 		if _, err := os.Stat(mobPath); err == nil {
 			s.Mobilenet = "present"
 		} else {
 			s.Mobilenet = "missing"
 		}
-		rtPath := findONNXRuntime()
+		rtPath := filepath.Join(dir, onnxDLLFile)
 		if _, err := os.Stat(rtPath); err == nil {
 			s.RuntimeDLL = rtPath
 		}
@@ -172,6 +173,7 @@ type DetectionOutput struct {
 	Elements    []DetectedElement `json:"elements"`
 	TotalMs     int64             `json:"total_ms"`
 	ModelInput  string            `json:"model_input,omitempty"`
+	SavedRef    string            `json:"saved_ref,omitempty"`
 }
 
 func ONNXDetect(in DetectionInput) (*DetectionOutput, error) {
@@ -200,15 +202,6 @@ func ONNXDetect(in DetectionInput) (*DetectionOutput, error) {
 
 	yoloPath := filepath.Join(modelsDir, yoloModelFile)
 	if _, err := os.Stat(yoloPath); os.IsNotExist(err) {
-		// ONNX not available — try Python/Ultralytics fallback with best.pt
-		ptPath := filepath.Join(modelsDir, "best.pt")
-		if _, ptErr := os.Stat(ptPath); ptErr == nil {
-			out, pyErr := detectWithPython(img, ptPath, in.Threshold, in.IOUThreshold)
-			if pyErr == nil {
-				out.TotalMs = time.Since(start).Milliseconds()
-				return out, nil
-			}
-		}
 		return &DetectionOutput{
 			Elements:   []DetectedElement{},
 			TotalMs:    time.Since(start).Milliseconds(),
@@ -269,9 +262,23 @@ func ONNXDetect(in DetectionInput) (*DetectionOutput, error) {
 		})
 	}
 
+	// Auto-save reference PNG when detection returns nothing — AI can use
+	// this later for retraining, confusion analysis, or step validation.
+	var savedRef string
+	if len(elements) == 0 && modelsDir != "" {
+		refDir := filepath.Join(modelsDir, "references")
+		if err := os.MkdirAll(refDir, 0755); err == nil {
+			refPath := filepath.Join(refDir, fmt.Sprintf("ref_%d.png", time.Now().UnixMilli()))
+			if err := savePNG(refPath, img); err == nil {
+				savedRef = refPath
+			}
+		}
+	}
+
 	return &DetectionOutput{
 		Elements:   elements,
 		TotalMs:    time.Since(start).Milliseconds(),
+		SavedRef:   savedRef,
 	}, nil
 }
 
@@ -421,132 +428,6 @@ func min32(a, b float32) float32 {
 	return b
 }
 
-type ONNXDownloadResult struct {
-	YoloModel      string `json:"yolo_model"`
-	Mobilenet      string `json:"mobilenet"`
-	RuntimeDLL     string `json:"runtime_dll"`
-	YoloBytes      int64  `json:"yolo_bytes,omitempty"`
-	MobilenetBytes int64  `json:"mobilenet_bytes,omitempty"`
-	RuntimeStatus  string `json:"runtime_status,omitempty"`
-}
-
-type pythonDetectResult struct {
-	Elements []struct {
-		Class      string  `json:"class"`
-		Confidence float64 `json:"confidence"`
-		X          float64 `json:"x"`
-		Y          float64 `json:"y"`
-		W          float64 `json:"w"`
-		H          float64 `json:"h"`
-	} `json:"elements"`
-}
-
-func detectWithPython(img image.Image, ptPath string, threshold, iouThreshold float64) (*DetectionOutput, error) {
-	// Find Python interpreter
-	python, err := exec.LookPath("python")
-	if err != nil {
-		python, err = exec.LookPath("python3")
-		if err != nil {
-			return nil, fmt.Errorf("python not found")
-		}
-	}
-
-	// Save image to temp file
-	tmpDir := os.TempDir()
-	imgPath := filepath.Join(tmpDir, "yolo_detect_input.png")
-	if err := savePNG(imgPath, img); err != nil {
-		return nil, fmt.Errorf("save temp image: %w", err)
-	}
-	defer os.Remove(imgPath)
-
-	// Choose label mapping for this model (7 UI classes from best.pt)
-	var labelsJSON bytes.Buffer
-	labelsJSON.WriteString("[")
-	for i, l := range yoloLabels {
-		if i > 0 {
-			labelsJSON.WriteString(",")
-		}
-		b, _ := json.Marshal(l)
-		labelsJSON.Write(b)
-	}
-	labelsJSON.WriteString("]")
-
-	// Python script that loads the model and runs detection
-	script := fmt.Sprintf(`
-import json, sys, warnings
-warnings.filterwarnings("ignore")
-try:
-    from ultralytics import YOLO
-except ImportError:
-    print(json.dumps({"error": "ultralytics not installed"}))
-    sys.exit(0)
-
-model = YOLO(%q)
-results = model.predict(%q, conf=%f, iou=%f, verbose=False)
-labels = %s
-elements = []
-for r in results:
-    if r.boxes is None:
-        continue
-    for box, cls, conf in zip(r.boxes.xywh, r.boxes.cls, r.boxes.conf):
-        cx, cy, w, h = box.tolist()
-        elements.append({
-            "class": labels[int(cls.item())],
-            "confidence": round(float(conf), 4),
-            "x": round(cx - w/2, 1),
-            "y": round(cy - h/2, 1),
-            "w": round(w, 1),
-            "h": round(h, 1),
-        })
-print(json.dumps({"elements": elements}))
-`, ptPath, imgPath, threshold, iouThreshold, labelsJSON.String())
-
-	scriptPath := filepath.Join(tmpDir, "yolo_detect_runner.py")
-	if err := os.WriteFile(scriptPath, []byte(script), 0644); err != nil {
-		return nil, fmt.Errorf("write script: %w", err)
-	}
-	defer os.Remove(scriptPath)
-
-	var stdout, stderr bytes.Buffer
-	cmd := exec.Command(python, scriptPath)
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("python exec: %w\nstderr: %s", err, stderr.String())
-	}
-
-	if stderr.Len() > 0 {
-		// Non-fatal, log but continue
-	}
-
-	var result pythonDetectResult
-	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
-		// Check if it's a known import error
-		var errResult struct {
-			Error string `json:"error"`
-		}
-		if json.Unmarshal(stdout.Bytes(), &errResult) == nil && errResult.Error != "" {
-			return nil, fmt.Errorf("python: %s", errResult.Error)
-		}
-		return nil, fmt.Errorf("parse python output: %w\noutput: %s", err, stdout.String())
-	}
-
-	elements := make([]DetectedElement, 0, len(result.Elements))
-	for _, e := range result.Elements {
-		elements = append(elements, DetectedElement{
-			Class:      e.Class,
-			Confidence: e.Confidence,
-			X:          int32(e.X),
-			Y:          int32(e.Y),
-			W:          int32(e.W),
-			H:          int32(e.H),
-		})
-	}
-
-	return &DetectionOutput{Elements: elements, ModelInput: "pytorch"}, nil
-}
-
 func savePNG(path string, img image.Image) error {
 	f, err := os.Create(path)
 	if err != nil {
@@ -554,6 +435,15 @@ func savePNG(path string, img image.Image) error {
 	}
 	defer f.Close()
 	return png.Encode(f, img)
+}
+
+type ONNXDownloadResult struct {
+	YoloModel      string `json:"yolo_model"`
+	Mobilenet      string `json:"mobilenet"`
+	RuntimeDLL     string `json:"runtime_dll"`
+	YoloBytes      int64  `json:"yolo_bytes,omitempty"`
+	MobilenetBytes int64  `json:"mobilenet_bytes,omitempty"`
+	RuntimeStatus  string `json:"runtime_status,omitempty"`
 }
 
 func downloadFile(url, dest string) (int64, error) {
@@ -633,18 +523,18 @@ func ONNXDownload() (*ONNXDownloadResult, error) {
 
 	result := &ONNXDownloadResult{}
 
-	// YOLO model: HF only provides PyTorch (.pt), not ONNX
-	yoloPath := filepath.Join(dir, "best.pt")
+	// YOLO model: download pre-exported ONNX directly (no Python/Ultralytics needed)
+	yoloPath := filepath.Join(dir, yoloModelFile)
 	if _, err := os.Stat(yoloPath); os.IsNotExist(err) {
 		n, err := downloadFile(yoloModelURL, yoloPath)
 		if err != nil {
 			result.YoloModel = fmt.Sprintf("download_failed: %s", err)
 		} else {
-			result.YoloModel = "downloaded_pt"
+			result.YoloModel = "downloaded"
 			result.YoloBytes = n
 		}
 	} else {
-		result.YoloModel = "present_pt"
+		result.YoloModel = "present"
 	}
 
 	// MobileNetV3-small: ONNX format available

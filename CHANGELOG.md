@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.2.5] - 2026-06-28
+
+### Fixed
+
+- **`memory_set` schema validation** — `MemorySetArgs.Value any` generated `"value": true` in JSON Schema, which OpenCode's MCP validator rejected. Fixed with explicit `InputSchema` using `json.RawMessage` + description-only schema.
+- **`close_window` Win32 API** — was calling `ShowWindowAsync(hwnd, 0x10)` but `0x10 = WM_CLOSE` is not a `ShowWindow` command. Changed to `PostMessageW(hwnd, WM_CLOSE, 0, 0)`.
+- **`onnx_status` global state bug** — used global `modelsDir` which was empty when `InitONNX` failed. Now calls `getModelsDir()` directly.
+
+### Added
+
+- **Background watcher** (`onnx_watch_start/stop/status/cache`) — goroutine that periodically captures screen, runs ONNX detection, caches last 20 results, and auto-saves reference PNGs when detection returns zero elements.
+- **`savePNG` auto-save in detection** — `onnx_detect` now saves a `ref_<ts>.png` to `%APPDATA%/go-mcp-computer-use/models/references/` when detection returns zero elements (AI confusion signal).
+- **`focus_window_by_title`** — finds window by title, focuses, and clicks title bar to ensure activation.
+- **Browser automation** — `browser_focus_url_bar`, `browser_new_tab`, `browser_navigate`, `browser_search`.
+- **File Explorer automation** — `explorer_focus`, `explorer_open_path`.
+- **`uia_warmup` config field** and async UIA warmup on startup.
+
+### Changed
+
+- **Eliminated Python dependency entirely** — removed `convertYoloToONNX()`, `detectWithPython()`, `pythonDetectResult` struct, `os/exec`, `bytes`, `strings` imports.
+- **Switched YOLO model** — from HuggingFace `best.pt` (PyTorch, 57 MB, 7 UI classes) to Ultralytics pre-exported `yolo11n.onnx` (10.9 MB, 80 COCO classes).
+
 ## [0.2.0] - 2026-06-27
 
 ### Changed

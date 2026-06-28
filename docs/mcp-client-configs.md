@@ -602,7 +602,15 @@ Some clients (OpenCode, VS Code) treat `.jsonc` and `.json` differently. OpenCod
 
 **Fix:** Try renaming to `.json` (or `.jsonc` to match what the client expects).
 
-### 5. Env var not expanded in shell-launched process
+### 5. Server startup blocked by UIA warmup (16-37s delay)
+
+The UIA (UI Automation) layer has a one-time cold-start cost of 16-37 seconds. Since v0.2.3, this warmup runs asynchronously at startup so it no longer blocks the MCP initialize handshake. If you're on an older version or still experiencing timeouts:
+
+**Fix:** Add `"uia_warmup": false` to `~/.config/go-mcp-computer-use/config.json` to skip UIA warmup entirely. UIA tools will be slow on first call, but the server will respond instantly.
+
+---
+
+### 6. Env var not expanded in shell-launched process
 
 If you use `$VAR` or `%VAR%` in the `env` block but the client doesn't expand it (Gemini CLI does, but some clients don't), the server starts with literal `$VAR` as the value.
 

@@ -93,7 +93,7 @@ func runInit() {
 
 	// ONNX status (model presence)
 	status := actions.ONNXStatus()
-	fmt.Printf("[*] YOLO model: %s (format: %s)\n", status.YoloModel, status.YoloFormat)
+	fmt.Printf("[*] YOLO model: %s\n", status.YoloModel)
 	fmt.Printf("[*] MobileNet: %s\n", status.Mobilenet)
 	if status.RuntimeDLL != "" {
 		fmt.Printf("[*] ONNX Runtime DLL: %s\n", status.RuntimeDLL)

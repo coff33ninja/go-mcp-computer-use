@@ -78,15 +78,19 @@ Or use the install script:
   "mouse_speed": 500,
   "click_delay_ms": 100,
   "verify_bounds": true,
-  "action_timeout_ms": 30000
+  "action_timeout_ms": 30000,
+  "uia_warmup": true
 }
 ```
 
 | Field | Default | Description |
 |-------|---------|-------------|
 | `log_level` | `info` | One of: `debug`, `info`, `warn`, `error` |
+| `mouse_speed` | `500` | Mouse movement speed |
+| `click_delay_ms` | `100` | Delay between mouse down/up (ms) |
 | `verify_bounds` | `true` | Validate coordinates against screen bounds |
 | `action_timeout_ms` | `30000` | Max time (ms) for blocking operations |
+| `uia_warmup` | `true` | Warm up UIA at startup (async) to avoid cold-start delay. Set `false` if clients timeout during init. |
 
 ## Tools (70) — v0.1.x
 

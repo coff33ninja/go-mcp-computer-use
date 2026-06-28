@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -1040,6 +1041,30 @@ func onnxDownloadHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, result, nil
 }
 
+type ONNXWatchStartArgs struct {
+	IntervalSeconds int `json:"interval_seconds"`
+}
+
+func onnxWatchStartHandler(ctx context.Context, req *mcp.CallToolRequest, args ONNXWatchStartArgs) (*mcp.CallToolResult, any, error) {
+	if err := actions.StartWatcher(args.IntervalSeconds); err != nil {
+		return nil, nil, fmt.Errorf("onnx_watch_start: %w", err)
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, actions.GetWatcherStatus(), nil
+}
+
+func onnxWatchStopHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
+	actions.StopWatcher()
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, actions.GetWatcherStatus(), nil
+}
+
+func onnxWatchStatusHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, actions.GetWatcherStatus(), nil
+}
+
+func onnxWatchCacheHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, actions.GetCachedDetections(), nil
+}
+
 type TemplateStoreArgs struct {
 	ElementKey        string   `json:"element_key"`
 	Scope             string   `json:"scope,omitempty"`
@@ -1228,11 +1253,17 @@ func New(version string) *mcp.Server {
 
 	slog.Info("starting go-mcp-computer-use", "version", version, "tools", 84)
 
-	// Warm up UIA to absorb the one-time 16-37s cold-start cost
-	if err := actions.WarmupUIA(); err != nil {
-		slog.Warn("uia warmup failed (UIA tools may be slow on first call)", "error", err)
+	if cfg.UIAWarmup {
+		go func() {
+			slog.Debug("uia warmup starting (async)")
+			if err := actions.WarmupUIA(); err != nil {
+				slog.Warn("uia warmup failed (UIA tools may be slow on first call)", "error", err)
+			} else {
+				slog.Info("uia warmup complete")
+			}
+		}()
 	} else {
-		slog.Info("uia warmup complete")
+		slog.Info("uia warmup disabled by config")
 	}
 
 	server := mcp.NewServer(&mcp.Implementation{
@@ -1641,6 +1672,26 @@ func New(version string) *mcp.Server {
 	}, onnxDownloadHandler)
 
 	mcp.AddTool(server, &mcp.Tool{
+		Name:        "onnx_watch_start",
+		Description: "Start a background watcher that periodically screenshots the screen, runs ONNX detection, and caches results. Takes interval_seconds (default 5).",
+	}, onnxWatchStartHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "onnx_watch_stop",
+		Description: "Stop the background ONNX watcher.",
+	}, onnxWatchStopHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "onnx_watch_status",
+		Description: "Get the current ONNX watcher state: running, interval, last run time, cache size.",
+	}, onnxWatchStatusHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "onnx_watch_cache",
+		Description: "Retrieve cached detections from the background watcher. Returns the most recent detection results with timestamps and saved reference paths.",
+	}, onnxWatchCacheHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "layout_validate",
 		Description: "Validate stored UI element layout against the current screen. Checks window existence, position drift, and OCR keyword verification. Returns adjusted coordinates and confidence levels (ok/drifted/stale).",
 	}, layoutValidateHandler)
@@ -1667,7 +1718,19 @@ func New(version string) *mcp.Server {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "memory_set",
-		Description: "Store a fact into the memory store. Fields: key (required), value (any JSON), scope, tags (comma-separated), ttl (optional expiry in seconds).",
+		Description: "Store a fact into the memory store. Fields: key (required), value (required, any JSON value), scope, tags (comma-separated), ttl (optional expiry in seconds).",
+		InputSchema: json.RawMessage(`{
+			"type": "object",
+			"properties": {
+				"key": {"type": "string"},
+				"value": {"description": "any JSON value"},
+				"scope": {"type": "string"},
+				"tags": {"type": "string"},
+				"ttl": {"type": "integer"}
+			},
+			"required": ["key", "value"],
+			"additionalProperties": false
+		}`),
 	}, memorySetHandler)
 
 	mcp.AddTool(server, &mcp.Tool{

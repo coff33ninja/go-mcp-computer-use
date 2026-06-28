@@ -88,6 +88,30 @@
 - [x] `internal/actions/user32.go` — centralized user32.dll proc loading
 - [x] `internal/actions/system.go` — kernel32, winmm, shell32, clipboard
 
+### ONNX & ML
+- [x] `onnx_status` / `onnx_download` / `onnx_detect` — ONNX backend
+- [x] Python/Ultralytics dependency eliminated — pre-exported models only
+- [x] Switched from `best.pt` (PyTorch, 7 UI classes) to `yolo11n.onnx` (COCO, 80 classes)
+- [x] `savePNG` auto-saves reference PNG on zero-element detection
+- [x] Background watcher: `onnx_watch_start/stop/status/cache`
+
+### Memory & Templates
+- [x] `memory_set/get/search/list/forget` — SQLite-backed memory store
+- [x] `layout_validate` — window drift + OCR keyword verification
+- [x] `template_store/find/list/forget` — self-growing template library
+
+### Browser & Explorer
+- [x] `browser_focus_url_bar/navigate/new_tab/search`
+- [x] `explorer_focus/open_path`
+
+### Bug Fixes
+- [x] `memory_set` schema validation (value:true → explicit InputSchema)
+- [x] `close_window` Win32 API fix (ShowWindowAsync → PostMessageW)
+- [x] `onnx_status` global state bug (modelsDir empty on InitONNX failure)
+
+### Chain Tool
+- [x] `chain` — sequential step executor with poll/loop/if/capture
+
 ## Next Up
 
 ### Slice 4 — Robustness

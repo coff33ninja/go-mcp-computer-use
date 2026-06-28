@@ -1,8 +1,9 @@
 {
-  "mcpServers": {
+  "mcp": {
     "computer-use": {
-      "command": "C:\\tools\\mcp-server.exe",
-      "description": "Desktop computer use (mouse, keyboard, screenshot, OCR)"
+      "type": "local",
+      "command": ["C:\\tools\\mcp-server.exe"],
+      "enabled": true
     }
   }
 }

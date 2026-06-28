@@ -11,6 +11,7 @@ var (
 	moveWindow       = user32.NewProc("MoveWindow")
 	getWindowRect    = user32.NewProc("GetWindowRect")
 	showWindowAsync  = user32.NewProc("ShowWindowAsync")
+	postMessageW     = user32.NewProc("PostMessageW")
 	isIconic         = user32.NewProc("IsIconic")
 	isZoomed         = user32.NewProc("IsZoomed")
 	findWindowW      = user32.NewProc("FindWindowW")
@@ -20,7 +21,7 @@ const (
 	SW_MINIMIZE = 6
 	SW_MAXIMIZE = 3
 	SW_HIDE     = 0
-	SW_CLOSE    = 0x10
+	WM_CLOSE    = 0x0010
 )
 
 type WindowRect struct {
@@ -83,7 +84,7 @@ func RestoreWindow(hwnd uintptr) error {
 }
 
 func CloseWindow(hwnd uintptr) error {
-	ret, _, _ := showWindowAsync.Call(hwnd, SW_CLOSE)
+	ret, _, _ := postMessageW.Call(hwnd, WM_CLOSE, 0, 0)
 	if ret == 0 {
 		return syscall.GetLastError()
 	}

@@ -13,6 +13,7 @@ type Config struct {
 	ClickDelay     int    `json:"click_delay_ms"`
 	VerifyBounds   bool   `json:"verify_bounds"`
 	ActionTimeoutMs int   `json:"action_timeout_ms"`
+	UIAWarmup      bool   `json:"uia_warmup"`
 }
 
 func Default() *Config {
@@ -22,6 +23,7 @@ func Default() *Config {
 		ClickDelay:      100,
 		VerifyBounds:    true,
 		ActionTimeoutMs: 30000,
+		UIAWarmup:       true,
 	}
 }
 

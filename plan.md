@@ -12,13 +12,13 @@ AI agents (opencode, Claude Code, GitHub Copilot, Cursor, etc.) can control the 
 3. Agent calls the corresponding tool
 4. Repeat
 
-This project implements **71 MCP tools** as an MCP server, using Go's Windows API bindings with zero CGO dependency — including native COM WinRT (OCR, UIA) and Win32 via syscall.
+This project implements **94 MCP tools** as an MCP server, using Go's Windows API bindings with zero CGO dependency — including native COM WinRT (OCR, UIA) and Win32 via syscall.
 
 ## Architecture
 
 ```
 cmd/mcp-server/main.go        — entrypoint, stdio transport
-internal/server/server.go     — MCP tool registration (70 tools + 1 chain)
+internal/server/server.go     — MCP tool registration (94 tools)
 internal/actions/
   ├── user32.go               — shared user32.dll proc loading
   ├── screenshot.go           — GDI BitBlt capture → PNG → base64
@@ -45,10 +45,17 @@ internal/actions/
   ├── power.go                — uptime, shutdown, restart, sleep, hibernate
   ├── layout.go               — keyboard layout, screen DPI
   ├── disk.go                 — disk usage
-  └── validate.go             — coordinate bounds validation
+  ├── validate.go             — coordinate bounds validation
+  ├── memory.go               — SQLite-backed memory store (facts, sequences, templates)
+  ├── layout.go               — layout validation
+  ├── template.go             — template matching via find_image + template lib
+  ├── onnx.go                 — ONNX ML backend (YOLO11n + MobileNetV3-small)
+  ├── watcher.go              — background ONNX watcher (screenshot → detect → cache)
+  ├── browseruse.go           — browser automation (focus URL bar, navigate, new tab, search)
+  └── windowexploreruse.go    — File Explorer automation (focus, open path)
 ```
 
-## Tools (71 total)
+## Tools (94 total)
 
 ### Screenshot & Vision (7)
 `screenshot` `get_pixel_color` `get_screen_size` `get_screen_dpi`
@@ -60,10 +67,11 @@ internal/actions/
 ### Keyboard (5)
 `type` `key_press` `type_and_submit` `select_all_and_type`
 
-### Window Management (11)
+### Window Management (13)
 `list_windows` `focus_window` `find_window` `wait_for_window`
 `move_window` `minimize_window` `maximize_window` `restore_window`
 `close_window` `get_window_state` `screenshot_element`
+`focus_window_by_title` `get_active_window`
 
 ### UI Automation (3)
 `uia_find` `uia_get_text` `uia_invoke`
@@ -85,11 +93,26 @@ internal/actions/
 `show_notification` `lock_workstation` `wait`
 `shutdown` `restart` `sleep` `hibernate`
 
-### Process Management (3)
+### Process Management (4)
 `launch_app` `launch_and_wait` `kill_process` `list_processes`
 
-### Automation Pipeline (1)
+### Memory Store (5)
+`memory_set` `memory_get` `memory_search` `memory_list` `memory_forget`
+
+### Layout & Templates (5)
+`layout_validate` `template_store` `template_find` `template_list` `template_forget`
+
+### ONNX ML (8)
+`onnx_status` `onnx_download` `onnx_detect`
+`onnx_watch_start` `onnx_watch_stop` `onnx_watch_status` `onnx_watch_cache`
+
+### Browser & Explorer (6)
+`browser_focus_url_bar` `browser_new_tab` `browser_navigate` `browser_search`
+`explorer_focus` `explorer_open_path`
+
+### Automation Pipeline (2)
 `chain` — executes a sequence of steps with polling, waiting, and branching
+`layout_validate` — layout drift + OCR verification
 
 ## Design Decisions
 
@@ -108,7 +131,7 @@ v<major>.<minor>.<patch>
 | `+0.1.0` (minor) | New tools, new capabilities, architecture changes, dependency adds | Adding native COM OCR, adding UIA layer, adding `chain` tool, introducing SQLite memory store |
 | `+1.0.0` (major) | Stable release with proven architecture, all planned slices complete, field-tested | Full automation pipeline working, memory store battle-tested, ONNX integration verified |
 
-**Current trajectory:** v0.1.x (bug-fix cycle on initial tools) → v0.2.0 (automation pipeline + memory + ML) → v0.3.x (iterative improvements) → v1.0.0 (stable release)
+**Current trajectory:** v0.1.x (bug-fix cycle on initial tools) → v0.2.x (automation pipeline + memory + ML + watcher) → v0.3.x (iterative improvements) → v1.0.0 (stable release)
 
 ## Constraints
 
@@ -249,14 +272,13 @@ Hardcoded coordinates + OCR keywords work for known layouts but break when users
 5. **Template matching fallback chain**: for any stored element → try coordinate (fastest) → verify via OCR keywords → if mismatch, try `find_image` with stored template → if still fail, mark stale and re-discover.
 6. **ONNX runtime (v2+)** — two-tier model architecture using existing pre-trained models:
 
-   **Tier 1: UI Element Detector — `IndextDataLab/windows-ui-locator` (YOLO11s)**
-   - Trained specifically on Windows-style UI screenshots (3,000 synthetic, but covers standard Win10/11 controls)
-   - 7 classes: `button`, `textbox`, `checkbox`, `dropdown`, `icon`, `tab`, `menu_item`
-   - mAP50: **0.9886** — near-perfect on its domain
-   - 9.4M params, ~18 MB ONNX export, ~44-80ms on CPU (M2 Pro)
-   - MIT licensed — no copyleft concerns
-   - Purpose: given a full screenshot region, returns bounding boxes + class labels for all visible UI elements
-   - **Usage in pipeline**: before clicking a stored coordinate, run detector → verify expected element type exists at that location → if not, template-match fallback → if still fail, mark stale
+   **Tier 1: UI Element Detector — `ultralytics/yolo11n` (pre-exported ONNX)**
+   - COCO-trained (80 classes) — no Windows-UI-specific fine-tuning
+   - Pre-exported ONNX from Ultralytics assets (~10.9 MB)
+   - Directly usable with Go ONNX runtime — no Python/Ultralytics dependency
+   - 2.6M params, fast CPU inference
+   - Purpose: general object detection on full-screen screenshots, providing bounding boxes + COCO class labels
+   - **Usage in pipeline**: fallback when UI-specific detection is unavailable; auto-saves reference PNGs when no elements found for AI review
 
    **Tier 2: Element Type Classifier — `diogoneno/gui-element-classifier` (MobileNetV3-small)**
    - 15 element types: `button`, `checkbox`, `container`, `dropdown`, `icon_button`, `image`, `label`, `link`, `menu_item`, `scrollbar`, `slider`, `tab`, `text_input`, `toggle`, `unknown`
@@ -265,6 +287,8 @@ Hardcoded coordinates + OCR keywords work for known layouts but break when users
    - Catches what YOLO misses: `scrollbar`, `slider`, `toggle`, `text_input` vs plain `textbox`
 
    **Why two-tier:** The YOLO detector answers "what is this region?" → gives approximate element type + location. The classifier answers "exactly what control is this?" → refines the label + confidence. Together they provide a fallback when OCR keywords fail or coordinates drift.
+
+   **Note:** The original `IndextDataLab/windows-ui-locator best.pt` (7 UI classes, PyTorch) was replaced with `ultralytics/yolo11n.onnx` (80 COCO classes, pre-exported ONNX) to eliminate Python/Ultralytics dependency. The COCO model provides broader detection coverage at the cost of UI-specific precision.
 
    **Hierarchical validation chain (3-layer → 100x layer):**
    ```
