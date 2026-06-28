@@ -923,6 +923,13 @@ func New(version string) *mcp.Server {
 
 	slog.Info("starting go-mcp-computer-use", "version", version, "tools", 70)
 
+	// Warm up UIA to absorb the one-time 16-37s cold-start cost
+	if err := actions.WarmupUIA(); err != nil {
+		slog.Warn("uia warmup failed (UIA tools may be slow on first call)", "error", err)
+	} else {
+		slog.Info("uia warmup complete")
+	}
+
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "go-mcp-computer-use",
 		Version: version,

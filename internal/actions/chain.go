@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -12,7 +13,29 @@ import (
 const (
 	StepTool = "tool"
 	StepWait = "wait"
+	StepPoll = "poll"
+	StepIf   = "if"
+	StepLoop = "loop"
 )
+
+// ── Poll / If / Loop config ──
+
+type PollConfig struct {
+	EveryMs     int    `json:"every_ms"`
+	TimeoutMs   int    `json:"timeout_ms"`
+	OCRContains string `json:"ocr_contains"`
+}
+
+type IfConfig struct {
+	OCRContains string `json:"ocr_contains"`
+	Then        []any  `json:"then,omitempty"`
+	Else        []any  `json:"else,omitempty"`
+}
+
+type LoopConfig struct {
+	Times int   `json:"times"`
+	Steps []any `json:"steps,omitempty"`
+}
 
 // ── Data structures ──
 
@@ -28,6 +51,9 @@ type ChainStep struct {
 	Tool    string         `json:"tool,omitempty"`
 	Args    map[string]any `json:"args,omitempty"`
 	WaitMs  int            `json:"wait_ms,omitempty"`
+	Poll    *PollConfig    `json:"poll,omitempty"`
+	If      *IfConfig      `json:"if,omitempty"`
+	Loop    *LoopConfig    `json:"loop,omitempty"`
 }
 
 type ChainResult struct {
@@ -38,11 +64,12 @@ type ChainResult struct {
 }
 
 type StepResult struct {
-	Index   int    `json:"index"`
-	Tool    string `json:"tool,omitempty"`
-	Success bool   `json:"success"`
-	Error   string `json:"error,omitempty"`
-	Output  any    `json:"output,omitempty"`
+	Index   int          `json:"index"`
+	Tool    string       `json:"tool,omitempty"`
+	Success bool         `json:"success"`
+	Error   string       `json:"error,omitempty"`
+	Output  any          `json:"output,omitempty"`
+	Steps   []StepResult `json:"steps,omitempty"`
 }
 
 // ── Tool dispatch ──
@@ -95,6 +122,9 @@ func init() {
 		"get_window_state":    chainGetWindowState,
 		"find_text_and_click": chainFindTextAndClick,
 		"wait_for_text":       chainWaitForText,
+		"wait_for_window":     chainWaitForWindow,
+		"launch_and_wait":     chainLaunchAndWait,
+		"find_window":         chainFindWindow,
 	}
 }
 
@@ -118,33 +148,9 @@ func ExecuteChain(req ChainRequest) (*ChainResult, error) {
 
 	done := make(chan bool, 1)
 	go func() {
-		for i, step := range req.Steps {
-			stepType := step.Type
-			if stepType == "" {
-				stepType = StepTool
-			}
-
-			stepArgs := substituteVars(step.Args, state.variables)
-			stepResult := StepResult{Index: i}
-
-			switch stepType {
-			case StepWait:
-				stepResult = execWait(step, state)
-			default:
-				stepResult = execTool(step, stepArgs, state)
-			}
-
-			result.Results = append(result.Results, stepResult)
-			result.StepCount++
-
-			if step.Capture != "" && stepResult.Success {
-				state.variables[step.Capture] = stepResult.Output
-			}
-
-			if !stepResult.Success && state.onError == "stop" {
-				break
-			}
-		}
+		results, sc := execSteps(req.Steps, state)
+		result.Results = results
+		result.StepCount = sc
 		done <- true
 	}()
 
@@ -162,6 +168,48 @@ func ExecuteChain(req ChainRequest) (*ChainResult, error) {
 	}
 	result.Success = true
 	return result, nil
+}
+
+// execSteps executes a slice of steps and collects results. Returns results and count.
+// Used recursively by if/loop steps.
+func execSteps(steps []ChainStep, state *chainState) ([]StepResult, int) {
+	var results []StepResult
+	var stepCount int
+	for i, step := range steps {
+		stepType := step.Type
+		if stepType == "" {
+			stepType = detectStepType(step)
+		}
+
+		stepArgs := substituteVars(step.Args, state.variables)
+		var stepResult StepResult
+
+		switch stepType {
+		case StepWait:
+			stepResult = execWait(step, state)
+		case StepPoll:
+			stepResult = execPoll(step, state)
+		case StepIf:
+			stepResult = execIf(step, state)
+		case StepLoop:
+			stepResult = execLoop(step, state)
+		default:
+			stepResult = execTool(step, stepArgs, state)
+		}
+		stepResult.Index = i
+
+		if step.Capture != "" && stepResult.Success {
+			state.variables[step.Capture] = stepResult.Output
+		}
+
+		results = append(results, stepResult)
+		stepCount++
+
+		if !stepResult.Success && state.onError == "stop" {
+			break
+		}
+	}
+	return results, stepCount
 }
 
 type chainState struct {
@@ -212,9 +260,177 @@ func execTool(step ChainStep, args map[string]any, _ *chainState) StepResult {
 	}
 }
 
+// ── Poll step ──
+
+func execPoll(step ChainStep, state *chainState) StepResult {
+	cfg := step.Poll
+	if cfg == nil {
+		return StepResult{Tool: "poll", Success: false, Error: "missing poll config"}
+	}
+	if cfg.OCRContains == "" {
+		return StepResult{Tool: "poll", Success: false, Error: "poll: ocr_contains required"}
+	}
+
+	everyMs := cfg.EveryMs
+	if everyMs <= 0 {
+		everyMs = 500
+	}
+	timeoutMs := cfg.TimeoutMs
+	if timeoutMs <= 0 {
+		timeoutMs = 30000
+	}
+
+	deadline := time.Now().Add(time.Duration(timeoutMs) * time.Millisecond)
+	lowerText := strings.ToLower(cfg.OCRContains)
+
+	for time.Now().Before(deadline) {
+		result, err := OCRScreen("")
+		if err == nil {
+			for _, word := range result.Words {
+				if strings.Contains(strings.ToLower(word.Text), lowerText) {
+					return StepResult{
+						Tool:    "poll",
+						Success: true,
+						Output:  map[string]any{"found": true, "text": word.Text},
+					}
+				}
+			}
+			for _, line := range result.Lines {
+				if strings.Contains(strings.ToLower(line.Text), lowerText) {
+					return StepResult{
+						Tool:    "poll",
+						Success: true,
+						Output:  map[string]any{"found": true, "text": line.Text},
+					}
+				}
+			}
+		}
+		time.Sleep(time.Duration(everyMs) * time.Millisecond)
+	}
+
+	return StepResult{
+		Tool:    "poll",
+		Success: false,
+		Error:   fmt.Sprintf("poll: text %q not found within %dms", cfg.OCRContains, timeoutMs),
+	}
+}
+
+// ── If step ──
+
+func execIf(step ChainStep, state *chainState) StepResult {
+	cfg := step.If
+	if cfg == nil {
+		return StepResult{Tool: "if", Success: false, Error: "missing if config"}
+	}
+	if cfg.OCRContains == "" {
+		return StepResult{Tool: "if", Success: false, Error: "if: ocr_contains required"}
+	}
+
+	// Check condition via OCR
+	lowerText := strings.ToLower(cfg.OCRContains)
+	conditionMet := false
+
+	result, err := OCRScreen("")
+	if err == nil {
+		for _, word := range result.Words {
+			if strings.Contains(strings.ToLower(word.Text), lowerText) {
+				conditionMet = true
+				break
+			}
+		}
+		if !conditionMet {
+			for _, line := range result.Lines {
+				if strings.Contains(strings.ToLower(line.Text), lowerText) {
+					conditionMet = true
+					break
+				}
+			}
+		}
+	}
+
+	var branch string
+	var subSteps []ChainStep
+	if conditionMet {
+		branch = "then"
+		subSteps = rawToSteps(cfg.Then)
+	} else {
+		branch = "else"
+		subSteps = rawToSteps(cfg.Else)
+	}
+
+	subResults, _ := execSteps(subSteps, state)
+	return StepResult{
+		Tool:    "if",
+		Success: true,
+		Output:  map[string]any{"condition": fmt.Sprintf("ocr_contains: %s", cfg.OCRContains), "branch": branch},
+		Steps:   subResults,
+	}
+}
+
+// ── Loop step ──
+
+func execLoop(step ChainStep, state *chainState) StepResult {
+	cfg := step.Loop
+	if cfg == nil {
+		return StepResult{Tool: "loop", Success: false, Error: "missing loop config"}
+	}
+	if cfg.Times <= 0 {
+		return StepResult{Tool: "loop", Success: true}
+	}
+
+	subSteps := rawToSteps(cfg.Steps)
+	var allResults []StepResult
+	for iter := 0; iter < cfg.Times; iter++ {
+		subResults, _ := execSteps(subSteps, state)
+		allResults = append(allResults, subResults...)
+
+		// Stop early if on_error=stop and a sub-step failed
+		if state.onError == "stop" {
+			for _, r := range subResults {
+				if !r.Success {
+					return StepResult{
+						Tool:    "loop",
+						Success: false,
+						Error:   fmt.Sprintf("loop iteration %d failed", iter),
+						Steps:   allResults,
+					}
+				}
+			}
+		}
+	}
+
+	return StepResult{
+		Tool:    "loop",
+		Success: true,
+		Output:  map[string]any{"iterations": cfg.Times},
+		Steps:   allResults,
+	}
+}
+
+// ── Step type detection ──
+
+func detectStepType(s ChainStep) string {
+	if s.WaitMs > 0 {
+		return StepWait
+	}
+	if s.Poll != nil {
+		return StepPoll
+	}
+	if s.If != nil {
+		return StepIf
+	}
+	if s.Loop != nil {
+		return StepLoop
+	}
+	if s.Tool != "" {
+		return StepTool
+	}
+	return StepTool
+}
+
 // ── Variable substitution ──
 
-var varPattern = regexp.MustCompile(`\{\{([a-zA-Z0-9_]+)\}\}`)
+var varPattern = regexp.MustCompile(`\{\{([a-zA-Z0-9_.]+)\}\}`)
 
 func substituteVars(args map[string]any, vars map[string]any) map[string]any {
 	if args == nil || vars == nil {
@@ -225,17 +441,52 @@ func substituteVars(args map[string]any, vars map[string]any) map[string]any {
 		s, ok := v.(string)
 		if ok {
 			out[k] = varPattern.ReplaceAllStringFunc(s, func(match string) string {
-				name := varPattern.FindStringSubmatch(match)[1]
-				if val, exists := vars[name]; exists {
-					return fmt.Sprintf("%v", val)
-				}
-				return match
+				path := varPattern.FindStringSubmatch(match)[1]
+				return resolveVarPath(path, vars)
 			})
 		} else {
 			out[k] = v
 		}
 	}
 	return out
+}
+
+// resolveVarPath resolves "var.field" or "var" paths against vars map.
+func resolveVarPath(path string, vars map[string]any) string {
+	parts := strings.SplitN(path, ".", 2)
+	if len(parts) == 1 {
+		if val, exists := vars[parts[0]]; exists {
+			return fmt.Sprintf("%v", val)
+		}
+		return path // not found, return unresolved placeholder
+	}
+	// parts[0]=varName, parts[1]=fieldName
+	if val, exists := vars[parts[0]]; exists {
+		if m, ok := val.(map[string]any); ok {
+			if field, exists := m[parts[1]]; exists {
+				return fmt.Sprintf("%v", field)
+			}
+		}
+	}
+	return path
+}
+
+// rawToSteps converts a []any (from JSON unmarshaling) to []ChainStep.
+// Used to break the circular type chain in IfConfig/LoopConfig (MCP SDK
+// schema generator panics on recursive types).
+func rawToSteps(raw []any) []ChainStep {
+	if raw == nil {
+		return nil
+	}
+	steps := make([]ChainStep, len(raw))
+	for i, r := range raw {
+		b, err := json.Marshal(r)
+		if err != nil {
+			continue
+		}
+		json.Unmarshal(b, &steps[i])
+	}
+	return steps
 }
 
 // ── Arg helpers ──
@@ -635,6 +886,51 @@ func chainWaitForText(args map[string]any) (any, error) {
 	timeoutMs, _ := getInt(args, "timeout_ms")
 	lang, _ := getString(args, "language")
 	return WaitForText(text, int32(timeoutMs), lang)
+}
+
+func chainWaitForWindow(args map[string]any) (any, error) {
+	title, ok := getString(args, "title")
+	if !ok {
+		return nil, fmt.Errorf("wait_for_window: title required")
+	}
+	timeoutMs, _ := getInt(args, "timeout_ms")
+	if timeoutMs <= 0 {
+		timeoutMs = 5000
+	}
+	hwnd, err := WaitForWindow(title, int32(timeoutMs))
+	if err != nil {
+		return map[string]any{"found": false}, nil
+	}
+	return map[string]any{"handle": hwnd, "found": true}, nil
+}
+
+func chainLaunchAndWait(args map[string]any) (any, error) {
+	path, ok := getString(args, "path")
+	if !ok {
+		return nil, fmt.Errorf("launch_and_wait: path required")
+	}
+	title, ok := getString(args, "window_title")
+	if !ok {
+		return nil, fmt.Errorf("launch_and_wait: window_title required")
+	}
+	timeoutMs, _ := getInt(args, "timeout_ms")
+	if timeoutMs <= 0 {
+		timeoutMs = 10000
+	}
+	hwnd, err := LaunchAndWait(path, title, int32(timeoutMs))
+	if err != nil {
+		return map[string]any{"found": false}, nil
+	}
+	return map[string]any{"handle": hwnd, "found": true}, nil
+}
+
+func chainFindWindow(args map[string]any) (any, error) {
+	title, ok := getString(args, "title")
+	if !ok {
+		return nil, fmt.Errorf("find_window: title required")
+	}
+	hwnd := FindWindowByTitle(title)
+	return map[string]any{"handle": hwnd, "found": hwnd != 0}, nil
 }
 
 // ── ChainFromJSON ──

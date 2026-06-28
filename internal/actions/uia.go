@@ -122,6 +122,37 @@ func buildCondition(au *uiaAuto, opts UIAFindOpts) (*uiaCondition, error) {
 	}
 }
 
+// WarmupUIA pre-initializes COM and creates/releases a UIA instance.
+// This absorbs the one-time 16-37s cold-start cost of UIA's FindAll so
+// subsequent handler calls respond instantly. Call at server startup.
+func WarmupUIA() error {
+	ensureCOM()
+	if comInitErr != nil {
+		return fmt.Errorf("uia warmup com: %w", comInitErr)
+	}
+
+	au, err := newUIA()
+	if err != nil {
+		return err
+	}
+	defer au.release()
+
+	root, err := au.getRootElement()
+	if err != nil {
+		return err
+	}
+	defer root.release()
+
+	// Force UIA internal caches by creating a TrueCondition and releasing it
+	trueCond, err := au.createTrueCondition()
+	if err != nil {
+		return err
+	}
+	defer trueCond.release()
+
+	return nil
+}
+
 // ── UIAFindElement ──
 // Strategy:
 //  1. If name/automation_id is specified, use FindFirst(Descendants) — fast (~2ms)
