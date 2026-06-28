@@ -29,6 +29,8 @@ const (
 	wmMouseWheel   = 0x020A
 	wmMouseHwheel  = 0x020E
 	llkhfUp        = 0x80
+	eventSystemForeground = 0x0003
+	wineventOutOfContext  = 0x0000
 )
 
 type kbdLLHookStruct struct {
@@ -78,9 +80,12 @@ var (
 	klLastEventTime  time.Time
 	klKbdHook        windows.Handle
 	klMouseHook      windows.Handle
+	klWinEventHandle windows.Handle
 	klThreadID       uint32
 	klDone           chan struct{}
 	klDownKeys       map[uint32]bool
+	klStartWindow    string
+	klEndWindow      string
 	klMouseDown      struct {
 		left  bool
 		right bool
@@ -95,13 +100,32 @@ var (
 )
 
 var (
-	klUser32      = windows.NewLazySystemDLL("user32.dll")
-	klSetHook     = klUser32.NewProc("SetWindowsHookExW")
-	klUnhook      = klUser32.NewProc("UnhookWindowsHookEx")
-	klCallNext    = klUser32.NewProc("CallNextHookEx")
-	klGetMsg      = klUser32.NewProc("GetMessageW")
-	klPostThread  = klUser32.NewProc("PostThreadMessageW")
+	klUser32        = windows.NewLazySystemDLL("user32.dll")
+	klSetHook       = klUser32.NewProc("SetWindowsHookExW")
+	klUnhook        = klUser32.NewProc("UnhookWindowsHookEx")
+	klCallNext      = klUser32.NewProc("CallNextHookEx")
+	klGetMsg        = klUser32.NewProc("GetMessageW")
+	klPostThread    = klUser32.NewProc("PostThreadMessageW")
+	klWinEventHook  = klUser32.NewProc("SetWinEventHook")
+	klUnhookEvent   = klUser32.NewProc("UnhookWinEvent")
+	klGetForeground = klUser32.NewProc("GetForegroundWindow")
+	klGetWinText    = klUser32.NewProc("GetWindowTextW")
+	klGetWinTextLen = klUser32.NewProc("GetWindowTextLengthW")
 )
+
+func klGetForegroundTitle() string {
+	hwnd, _, _ := klGetForeground.Call()
+	if hwnd == 0 {
+		return ""
+	}
+	len, _, _ := klGetWinTextLen.Call(hwnd)
+	if len == 0 {
+		return ""
+	}
+	buf := make([]uint16, len+1)
+	klGetWinText.Call(hwnd, uintptr(unsafe.Pointer(&buf[0])), uintptr(len+1))
+	return windows.UTF16ToString(buf)
+}
 
 var vkSpecialRev map[uint32]string
 var vkModRev map[uint32]string
@@ -268,8 +292,19 @@ func mouseHookProc(nCode int, wParam uintptr, lParam uintptr) uintptr {
 	return ret
 }
 
+func winEventHookProc(hWinEventHook uintptr, event uint32, hwnd uintptr, idObject int32, idChild int32, dwEventThread uint32, dwmsEventTime uint32) uintptr {
+	if event == eventSystemForeground {
+		title := klGetForegroundTitle()
+		if title != "" {
+			klRecord(recordedEvent{kind: "focus", keyName: title})
+		}
+	}
+	return 0
+}
+
 var klKbdCallback uintptr
 var klMouseCallback uintptr
+var klWinEventCallback uintptr
 
 func StartKeylogger() error {
 	klMu.Lock()
@@ -286,6 +321,7 @@ func StartKeylogger() error {
 	klDone = make(chan struct{})
 	klStartTime = time.Now()
 	klLastEventTime = time.Now()
+	klStartWindow = klGetForegroundTitle()
 
 	errCh := make(chan error, 1)
 
@@ -301,6 +337,7 @@ func StartKeylogger() error {
 
 		klKbdCallback = syscall.NewCallback(kbdHookProc)
 		klMouseCallback = syscall.NewCallback(mouseHookProc)
+		klWinEventCallback = syscall.NewCallback(winEventHookProc)
 
 		kbdHook, _, _ := klSetHook.Call(whKeyboardLL, klKbdCallback, 0, 0)
 		if kbdHook == 0 {
@@ -315,9 +352,20 @@ func StartKeylogger() error {
 			return
 		}
 
+		winEventHook, _, _ := klWinEventHook.Call(
+			eventSystemForeground, eventSystemForeground,
+			0, klWinEventCallback, 0, 0, wineventOutOfContext)
+		if winEventHook == 0 {
+			klUnhook.Call(kbdHook)
+			klUnhook.Call(mouseHook)
+			errCh <- fmt.Errorf("SetWinEventHook failed")
+			return
+		}
+
 		klMu.Lock()
 		klKbdHook = windows.Handle(kbdHook)
 		klMouseHook = windows.Handle(mouseHook)
+		klWinEventHandle = windows.Handle(winEventHook)
 		klThreadID = windows.GetCurrentThreadId()
 		klMu.Unlock()
 
@@ -335,14 +383,16 @@ func StartKeylogger() error {
 	return <-errCh
 }
 
-func StopKeylogger() ([]map[string]any, error) {
+func StopKeylogger() ([]map[string]any, map[string]any, error) {
 	klMu.Lock()
 	if !klActive {
 		klMu.Unlock()
-		return nil, fmt.Errorf("keylogger not active")
+		return nil, nil, fmt.Errorf("keylogger not active")
 	}
 	tid := klThreadID
 	klMu.Unlock()
+
+	klEndWindow = klGetForegroundTitle()
 
 	klPostThread.Call(uintptr(tid), wmQuit, 0, 0)
 	<-klDone
@@ -350,11 +400,23 @@ func StopKeylogger() ([]map[string]any, error) {
 	klMu.Lock()
 	klUnhook.Call(uintptr(klKbdHook))
 	klUnhook.Call(uintptr(klMouseHook))
+	klUnhookEvent.Call(uintptr(klWinEventHandle))
 	events := klEvents
+	startWin := klStartWindow
+	endWin := klEndWindow
+	startTime := klStartTime
 	klMu.Unlock()
 
 	steps := klEventsToSteps(events)
-	return steps, nil
+
+	meta := map[string]any{
+		"window_start":      startWin,
+		"window_end":        endWin,
+		"duration_seconds":  int(time.Since(startTime).Seconds()),
+		"total_events":      len(events),
+	}
+
+	return steps, meta, nil
 }
 
 func KeyloggerStatus() (bool, int, string) {
@@ -424,6 +486,11 @@ func klEventsToSteps(events []recordedEvent) []map[string]any {
 			steps = append(steps, map[string]any{
 				"tool": "scroll",
 				"args": map[string]any{"clicks": ev.scrollDelta},
+			})
+		case "focus":
+			steps = append(steps, map[string]any{
+				"tool": "_focus",
+				"args": map[string]any{"window": ev.keyName},
 			})
 		}
 

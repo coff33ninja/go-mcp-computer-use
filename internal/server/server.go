@@ -398,11 +398,15 @@ func keyloggerStartHandler(ctx context.Context, req *mcp.CallToolRequest, args K
 }
 
 func keyloggerStopHandler(ctx context.Context, req *mcp.CallToolRequest, args KeyloggerStartArgs) (*mcp.CallToolResult, any, error) {
-	steps, err := actions.StopKeylogger()
+	steps, meta, err := actions.StopKeylogger()
 	if err != nil {
 		return nil, nil, fmt.Errorf("keylogger_stop failed: %w", err)
 	}
-	jsonBytes, _ := json.MarshalIndent(steps, "", "  ")
+	out := map[string]any{
+		"meta":  meta,
+		"steps": steps,
+	}
+	jsonBytes, _ := json.MarshalIndent(out, "", "  ")
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: string(jsonBytes)}},
 	}, nil, nil
