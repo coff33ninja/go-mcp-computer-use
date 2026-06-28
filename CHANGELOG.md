@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.2.7] - 2026-06-28
+
+### Added
+
+- **Statistical prior model** (`priors_stats` tool) — Go-native "training" without Python. Element frequency + position distributions are learned per window from collected training samples. Priors boost confidence for expected elements (e.g., "laptop" in browser windows) and suppress unlikely ones (e.g., "tv" in code editor). Position outliers beyond 3σ are penalized.
+- **Prior-based confidence adjustment** — `ONNXDetect` now calls `AdjustConfidenceWithPriors()` after NMS, adjusting every detection's confidence based on learned per-window statistics. Gated by `prior_adjustment` config field (default: `true`).
+- **`export_yolo_dataset` tool** — exports unused training samples (signal_level >= 1) as a YOLO-format dataset (images + normalized label files + train/val split + `dataset.yaml`). Users with Python can train externally via Ultralytics.
+- **`training_cleanup_noise` tool** — deletes low-signal (signal_level=0) samples older than a threshold. Supports `dry_run=true` to preview deletions. Frees disk space from watcher noise frames.
+- **`training_enabled` config field** — when set to `false`, disables all auto-save training snapshots (both from actions and the background watcher). Default: `true`.
+- **`prior_adjustment` config field** — when set to `false`, disables prior-based confidence adjustment in ONNXDetect. Default: `true`.
+- **Priors auto-populated on save** — every training sample save (raw or watcher) also updates element priors via `UpdatePriorsFromDetections`. Negative samples (zero elements) update frequency denominators.
+
+### Changed
+
+- **`set_config` tool** — runtime config changes without restart. Accepts: `training_enabled` (stop/start background data collection), `prior_adjustment`, `verify_bounds`, `log_level`, `watcher_enabled` (start/stop watcher), `watcher_interval_seconds` (change polling frequency live). Changes persist to disk immediately. Enables users to disable data collection and control the watcher mid-session for privacy or debugging.
+- **`watcher_auto_start` / `watcher_interval_seconds` config** — `watcher_auto_start: true` starts the background watcher on server boot with the configured interval. Default: `false`.
+- **Tool count**: 99 → 103 (added `priors_stats`, `export_yolo_dataset`, `training_cleanup_noise`, `set_config`).
+
 ## [0.2.6] - 2026-06-28
 
 ### Added

@@ -251,20 +251,28 @@ func ONNXDetect(in DetectionInput) (*DetectionOutput, error) {
 	filtered := nms(filterBoxes(boxes, float32(thresh)), float32(iouThresh))
 
 	elements := make([]DetectedElement, 0, len(filtered))
+	winTitle := ""
+	if info, err := GetActiveWindowInfo(); err == nil && info != nil {
+		winTitle = info.Title
+	}
 	for _, b := range filtered {
-		elements = append(elements, DetectedElement{
+		el := DetectedElement{
 			Class:      yoloLabels[b.classID],
 			Confidence: float64(b.confidence),
 			X:          int32(b.x),
 			Y:          int32(b.y),
 			W:          int32(b.w),
 			H:          int32(b.h),
-		})
+		}
+		if winTitle != "" {
+			el.Confidence = AdjustConfidenceWithPriors(el.Class, winTitle, el.Confidence, float64(el.X), float64(el.Y))
+		}
+		elements = append(elements, el)
 	}
 
 	// Store detections in memory for AI reuse
-	if info, err := GetActiveWindowInfo(); err == nil && info != nil {
-		MemoryStoreDetectionElements(elements, info.Title)
+	if winTitle != "" {
+		MemoryStoreDetectionElements(elements, winTitle)
 	}
 
 	return &DetectionOutput{

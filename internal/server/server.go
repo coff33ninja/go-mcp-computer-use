@@ -1345,6 +1345,155 @@ func findUIElementHandler(ctx context.Context, req *mcp.CallToolRequest, args Fi
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, result, nil
 }
 
+type PriorStatsArgs struct {
+	MinCount int `json:"min_count,omitempty"`
+}
+
+func priorStatsHandler(ctx context.Context, req *mcp.CallToolRequest, args PriorStatsArgs) (*mcp.CallToolResult, any, error) {
+	stats, err := actions.GetPriorStats(args.MinCount)
+	if err != nil {
+		return nil, nil, fmt.Errorf("priors_stats: %w", err)
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, stats, nil
+}
+
+type ExportYoloDatasetArgs struct {
+	OutputDir string `json:"output_dir"`
+	MinSignal int    `json:"min_signal,omitempty"`
+}
+
+func exportYoloDatasetHandler(ctx context.Context, req *mcp.CallToolRequest, args ExportYoloDatasetArgs) (*mcp.CallToolResult, any, error) {
+	if args.OutputDir == "" {
+		return nil, nil, fmt.Errorf("output_dir is required")
+	}
+	stats, err := actions.ExportYoloDataset(args.OutputDir, args.MinSignal)
+	if err != nil {
+		return nil, nil, fmt.Errorf("export_yolo_dataset: %w", err)
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, stats, nil
+}
+
+type TrainingCleanupNoiseArgs struct {
+	MaxAgeHours int  `json:"max_age_hours,omitempty"`
+	DryRun      bool `json:"dry_run,omitempty"`
+}
+
+func trainingCleanupNoiseHandler(ctx context.Context, req *mcp.CallToolRequest, args TrainingCleanupNoiseArgs) (*mcp.CallToolResult, any, error) {
+	result, err := actions.TrainingCleanupNoise(args.MaxAgeHours, args.DryRun)
+	if err != nil {
+		return nil, nil, fmt.Errorf("training_cleanup_noise: %w", err)
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, result, nil
+}
+
+type SetConfigArgs struct {
+	TrainingEnabled      *bool   `json:"training_enabled,omitempty"`
+	PriorAdjustment      *bool   `json:"prior_adjustment,omitempty"`
+	VerifyBounds         *bool   `json:"verify_bounds,omitempty"`
+	LogLevel             *string `json:"log_level,omitempty"`
+	WatcherEnabled       *bool   `json:"watcher_enabled,omitempty"`
+	WatcherIntervalSecs  *int    `json:"watcher_interval_seconds,omitempty"`
+}
+
+func setConfigHandler(ctx context.Context, req *mcp.CallToolRequest, args SetConfigArgs) (*mcp.CallToolResult, any, error) {
+	cfg := actions.ActiveConfig
+	if cfg == nil {
+		cfg = config.Default()
+		actions.ActiveConfig = cfg
+	}
+
+	changed := false
+
+	if args.TrainingEnabled != nil {
+		val := *args.TrainingEnabled
+		if cfg.TrainingEnabled != val {
+			cfg.TrainingEnabled = val
+			changed = true
+		}
+	}
+	if args.PriorAdjustment != nil {
+		val := *args.PriorAdjustment
+		if cfg.PriorAdjustment != val {
+			cfg.PriorAdjustment = val
+			changed = true
+		}
+	}
+	if args.VerifyBounds != nil {
+		val := *args.VerifyBounds
+		if cfg.VerifyBounds != val {
+			cfg.VerifyBounds = val
+			changed = true
+		}
+	}
+	if args.LogLevel != nil {
+		val := *args.LogLevel
+		if cfg.LogLevel != val {
+			cfg.LogLevel = val
+			changed = true
+		}
+	}
+
+	if args.WatcherEnabled != nil {
+		val := *args.WatcherEnabled
+		wantRunning := val
+		status := actions.GetWatcherStatus()
+		if wantRunning && !status.Running {
+			interval := cfg.WatcherIntervalSecs
+			if interval < 1 {
+				interval = 5
+			}
+			if err := actions.StartWatcher(interval); err != nil {
+				return nil, nil, fmt.Errorf("start watcher: %w", err)
+			}
+			changed = true
+			cfg.WatcherAutoStart = true
+		} else if !wantRunning && status.Running {
+			actions.StopWatcher()
+			changed = true
+			cfg.WatcherAutoStart = false
+		}
+	}
+
+	if args.WatcherIntervalSecs != nil {
+		val := *args.WatcherIntervalSecs
+		if val < 1 {
+			val = 5
+		}
+		if cfg.WatcherIntervalSecs != val {
+			cfg.WatcherIntervalSecs = val
+			changed = true
+			status := actions.GetWatcherStatus()
+			if status.Running {
+				actions.StopWatcher()
+				if err := actions.StartWatcher(val); err != nil {
+					slog.Warn("restart watcher with new interval failed", "error", err)
+				}
+			}
+		}
+	}
+
+	if changed {
+		slog.Info("config updated", "training_enabled", cfg.TrainingEnabled,
+			"prior_adjustment", cfg.PriorAdjustment, "verify_bounds", cfg.VerifyBounds,
+			"log_level", cfg.LogLevel)
+		if err := cfg.Save(); err != nil {
+			slog.Warn("failed to save config", "error", err)
+		}
+	}
+
+	watcherStatus := actions.GetWatcherStatus()
+
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, map[string]any{
+		"training_enabled":       cfg.TrainingEnabled,
+		"prior_adjustment":       cfg.PriorAdjustment,
+		"verify_bounds":          cfg.VerifyBounds,
+		"log_level":              cfg.LogLevel,
+		"watcher_running":        watcherStatus.Running,
+		"watcher_interval_secs":  cfg.WatcherIntervalSecs,
+		"saved":                  changed,
+	}, nil
+}
+
 func New(version string) *mcp.Server {
 	cfg, err := config.Load()
 	if err != nil {
@@ -1358,7 +1507,7 @@ func New(version string) *mcp.Server {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
 	slog.SetDefault(logger)
 
-	slog.Info("starting go-mcp-computer-use", "version", version, "tools", 99)
+	slog.Info("starting go-mcp-computer-use", "version", version, "tools", 103)
 
 	if cfg.UIAWarmup {
 		go func() {
@@ -1371,6 +1520,21 @@ func New(version string) *mcp.Server {
 		}()
 	} else {
 		slog.Info("uia warmup disabled by config")
+	}
+
+	if cfg.WatcherAutoStart && cfg.TrainingEnabled {
+		go func() {
+			secs := cfg.WatcherIntervalSecs
+			if secs < 1 {
+				secs = 5
+			}
+			slog.Info("auto-starting background watcher", "interval_seconds", secs)
+			if err := actions.StartWatcher(secs); err != nil {
+				slog.Warn("watcher auto-start failed", "error", err)
+			}
+		}()
+	} else if cfg.WatcherAutoStart && !cfg.TrainingEnabled {
+		slog.Info("watcher auto-start skipped: training disabled")
 	}
 
 	server := mcp.NewServer(&mcp.Implementation{
@@ -1884,6 +2048,26 @@ func New(version string) *mcp.Server {
 		Name:        "find_ui_element",
 		Description: "Find a UI element on screen by label. Checks memory first (from past ONNX detections), then runs ONNX detection, then falls back to OCR. Stores findings in memory for future reuse. Use this when the AI needs to locate an element it has seen before or needs to find programmatically.",
 	}, findUIElementHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "priors_stats",
+		Description: "Show learned element frequency and position statistics per window. Returns priors with sample count, frequency, and position distributions. Use min_count to filter out low-sample entries.",
+	}, priorStatsHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "export_yolo_dataset",
+		Description: "Export unused training samples as a YOLO-format dataset (images + labels + dataset.yaml) for external training with Ultralytics or other YOLO frameworks. Outputs to a directory of your choice.",
+	}, exportYoloDatasetHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "training_cleanup_noise",
+		Description: "Delete low-signal (signal_level=0) training samples older than max_age_hours. Use dry_run=true to see what would be deleted without actually removing anything. Returns deleted count and freed bytes.",
+	}, trainingCleanupNoiseHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "set_config",
+		Description: "Update runtime configuration. Accepts any subset of: training_enabled (stop/start background screenshot saving), prior_adjustment (enable/disable ML prior confidence tuning), verify_bounds (toggle coordinate bounds checking), log_level (debug/info/warn/error), watcher_enabled (start/stop the background screenshot watcher), watcher_interval_seconds (change polling frequency while running). Changes persist to disk. Use this to disable data collection or control the watcher at runtime.",
+	}, setConfigHandler)
 
 	return server
 }

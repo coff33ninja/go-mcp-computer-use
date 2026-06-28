@@ -135,12 +135,14 @@ func (w *watcher) runOnce() {
 		TotalMs:     result.TotalMs,
 	}
 
-	if sample, err := saveTrainingSampleDirect(
-		TrainingSourceWatcher, cat,
-		fmt.Sprintf("find UI elements in window: %s", title),
-		b64, title, "", result.Elements,
-	); err == nil && sample != nil {
-		det.SavedRef = sample.ImagePath
+	if ActiveConfig == nil || ActiveConfig.TrainingEnabled {
+		if sample, err := saveTrainingSampleDirect(
+			TrainingSourceWatcher, cat,
+			fmt.Sprintf("find UI elements in window: %s", title),
+			b64, title, "", result.Elements,
+		); err == nil && sample != nil {
+			det.SavedRef = sample.ImagePath
+		}
 	}
 
 	w.mu.Lock()

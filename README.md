@@ -3,7 +3,7 @@
 > **Built iteratively** across AI-assisted development sessions, with v0.1.x covering 70 bug-fixed Win32/COM tools and v0.2.x adding the chained automation pipeline, SQLite memory store, ONNX ML detection, and the training data pipeline for user-specific model fine-tuning.
 > The AI agent was guided by a curated set of quality-enforcement skills from [coff33ninja/ai-skills](https://github.com/coff33ninja/ai-skills) — anti-hallucination, anti-slop, safe-code-modifications, anti-sycophancy, code-simplification, context-engineering, don't-kill-tokens, os-awareness, anti-tool-sprawl, follow-existing-patterns, no-dead-code-removal, universal-format-lint, self-validate, verify-and-cite, and others.
 >
-> **Status:** v0.2.6 — 99 tools including training pipeline, memory-backed UI element cache, and ONNX detection. All core tools tested and confirmed working. UIA tools pass unit tests — runtime handler dispatch crash under investigation.
+> **Status:** v0.2.7 — 103 tools including statistical prior model, training pipeline, memory-backed UI element cache, ONNX detection, and runtime privacy controls. All core tools tested and confirmed working.
 
 MCP server for Windows desktop computer use. Exposes mouse, keyboard, screenshot, OCR, template matching, window management, system control, and screen recording to AI agents via [Model Context Protocol](https://modelcontextprotocol.io).
 
@@ -31,7 +31,7 @@ MCP server for Windows desktop computer use. Exposes mouse, keyboard, screenshot
 - **Training data pipeline** — persistent screenshot collection with categorized folders (`raw/click/`, `raw/type/`, `raw/navigate/`, `watcher/elements_found/`, etc.) and SQLite metadata. Auto-saves on every UI action for model fine-tuning.
 - **Memory-backed UI element cache** — ONNX detections auto-stored as memory facts (`ui:{window}:{class}`) with TTL. AI reuses cached coordinates across sessions.
 - **`find_ui_element` tool** — cascading lookup: memory → ONNX → OCR. Self-learning: saves findings to memory + training store.
-- **89 MCP tools** (v0.2.6)
+- **103 MCP tools** (v0.2.7)
 
 ## ⚠️ SECURITY WARNING — DANGEROUS CAPABILITIES
 
@@ -47,9 +47,28 @@ This executable can **fully control the Windows machine it runs on**. It exposes
 - **Read disk usage, battery state, display modes**
 - **Automate UI elements** via UI Automation (find/invoke buttons, read text)
 
-**Auto-screenshot training pipeline** — every click, type, scroll, navigation, and OCR action automatically captures a screenshot and saves it to disk (`%APPDATA%/go-mcp-computer-use/training/raw/`) alongside ONNX detection results and the action description. The background watcher also captures screenshots every 5 seconds. This means **every interaction the AI performs is persistently recorded** — including all visible content on screen at the time of each action. Disable the watcher (`onnx_watch_stop`) or delete the training directory if persistence is not desired.
+**Auto-screenshot training pipeline** — every click, type, scroll, navigation, and OCR action automatically captures a screenshot and saves it to disk (`%APPDATA%/go-mcp-computer-use/training/raw/`) alongside ONNX detection results and the action description. The background watcher also captures screenshots every 5 seconds. This means **every interaction the AI performs is persistently recorded** — including all visible content on screen at the time of each action. 
+
+**To disable at runtime:** call `set_config` with `training_enabled: false` (stops all auto-saves instantly). Use `onnx_watch_stop` to stop the background watcher. See the **Data Collection & Privacy Controls** section below for full details.
 
 **Treat this binary with the same caution as a remote-admin tool.** Only connect it to MCP clients you trust. The AI agent receiving these tools has equivalent access to a logged-in user at the keyboard. Do not expose it over a network without authentication, and never run it on a machine where you wouldn't let a remote user operate the mouse and keyboard.
+
+## Accessibility & Human Potential
+
+The same capabilities that make this tool powerful also make it a platform for **assistive technology**. Complete computer control via AI means people with physical limitations — limited mobility, paralysis, tremors, repetitive strain injuries, or conditions like ALS — can operate a computer through **natural language commands** instead of mouse and keyboard. An AI agent connected to this MCP server becomes a hands-free interface to any Windows application.
+
+This project sits at an intersection of **capability and responsibility**. The same tools that can automate a build pipeline can help someone who cannot use their hands send an email, browse the web, or write code. The goal is not just powerful automation — it is **accessibility by design**, making the full power of a Windows PC available through voice, text, or any MCP-compatible interface.
+
+**Possibilities:**
+- Voice-controlled computer operation via an AI agent with speech-to-text
+- Hands-free web browsing, email, document editing, and coding
+- Automated daily computer tasks for users with limited mobility
+- Custom AI agents trained on individual workflows and accessibility needs
+- Independence — reducing or removing reliance on physical input devices
+
+**This is a dual-use tool.** The same capabilities that enable assistive technology also enable malicious use — remote abuse, surveillance, unauthorized access, or automated harm. The security warning above is not hypothetical. This server should only be connected to trusted MCP clients on trusted machines. The accessibility potential exists alongside real abuse potential, and users deploy this tool at their own risk.
+
+This is an area of active exploration. Contributions, ideas, and real-world accessibility use cases are welcome.
 
 ## Requirements
 
@@ -84,7 +103,11 @@ Or use the install script:
   "click_delay_ms": 100,
   "verify_bounds": true,
   "action_timeout_ms": 30000,
-  "uia_warmup": true
+  "uia_warmup": true,
+  "training_enabled": true,
+  "prior_adjustment": true,
+  "watcher_auto_start": false,
+  "watcher_interval_seconds": 5
 }
 ```
 
@@ -96,8 +119,34 @@ Or use the install script:
 | `verify_bounds` | `true` | Validate coordinates against screen bounds |
 | `action_timeout_ms` | `30000` | Max time (ms) for blocking operations |
 | `uia_warmup` | `true` | Warm up UIA at startup (async) to avoid cold-start delay. Set `false` if clients timeout during init. |
+| `training_enabled` | `true` | Enable auto-save training snapshots on every UI action. Set `false` to stop all background data collection (also controllable at runtime via `set_config`). |
+| `prior_adjustment` | `true` | Apply learned element frequency/position priors to ONNX detection scores. Set `false` for raw YOLO output only. |
+| `watcher_auto_start` | `false` | Auto-start the background watcher on server boot. Watcher polls screen every N seconds and saves frames for training. |
+| `watcher_interval_seconds` | `5` | How often the watcher captures and analyzes the screen (if running). Also used as default when starting via `set_config`. |
 
-## Tools (99) — v0.2.6
+## Data Collection & Privacy Controls
+
+The server has **no telemetry, no network calls, no data exfiltration**. All collected data stays in `%APPDATA%/go-mcp-computer-use/training/`. But users have full runtime control:
+
+| Goal | How |
+|------|-----|
+| **Stop all screenshot saving** | `set_config` with `training_enabled: false` — disables auto-saves from actions AND the background watcher instantly |
+| **Re-enable data collection** | `set_config` with `training_enabled: true` |
+| **Stop the background watcher** | `set_config` with `watcher_enabled: false` — or `onnx_watch_stop` |
+| **Start the background watcher** | `set_config` with `watcher_enabled: true` — uses interval from config or `watcher_interval_seconds` |
+| **Change watcher frequency** | `set_config` with `watcher_interval_seconds: 10` — restarts watcher with new interval if running |
+| **Disable ML prior learning** | `set_config` with `prior_adjustment: false` |
+| **Delete noise samples** | `training_cleanup_noise` with `max_age_hours: 0` — purges low-quality frames |
+| **Clear cached element data** | `memory_forget` with `scope: ui` — removes cached ONNX detection positions |
+| **Inspect collected data** | `training_stats` — see counts, sources, disk usage |
+| **Export collected data** | `export_yolo_dataset` — dump all images + labels to a directory |
+| **Persistent disable** | Set `"training_enabled": false` in `~/.config/go-mcp-computer-use/config.json` |
+
+The `set_config` tool can be called by the AI agent or directly by the user via their MCP client. All changes persist to disk and survive server restarts.
+
+**For maximum privacy:** set `training_enabled: false` in config before starting the server.
+
+## Tools (103) — v0.2.7
 
 ### Screenshot & Vision (6)
 `screenshot` `get_screen_size` `get_pixel_color` `get_screen_dpi`

@@ -109,6 +109,7 @@ func createTrainingTables(db *sql.DB) error {
 	}
 	// Migration: add signal_level column to existing databases
 	db.Exec("ALTER TABLE training_samples ADD COLUMN signal_level INTEGER NOT NULL DEFAULT 0")
+	_ = createPriorsTable(db)
 	return nil
 }
 
@@ -193,6 +194,12 @@ func saveTrainingSampleDirect(source, category, taskPrompt, imageB64, windowTitl
 		ocrText, detJSON, detCount, signalLevel, now)
 	if err != nil {
 		return nil, fmt.Errorf("insert training sample: %w", err)
+	}
+
+	if len(detections) > 0 && windowTitle != "" {
+		go UpdatePriorsFromDetections(windowTitle, detections)
+	} else if len(detections) == 0 && windowTitle != "" {
+		go UpdatePriorsForNegative(windowTitle)
 	}
 
 	return &TrainingSample{
@@ -392,6 +399,9 @@ func TrainingMarkUsed(sampleID int64) error {
 }
 
 func SaveSnapshotAfterAction(source, category, taskPrompt string) {
+	if ActiveConfig != nil && !ActiveConfig.TrainingEnabled {
+		return
+	}
 	go func() {
 		SaveScreenshotTrainingSample(source, category, taskPrompt, "", "")
 	}()

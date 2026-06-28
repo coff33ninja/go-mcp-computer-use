@@ -8,22 +8,30 @@ import (
 )
 
 type Config struct {
-	LogLevel       string `json:"log_level"`
-	MouseSpeed     int    `json:"mouse_speed"`
-	ClickDelay     int    `json:"click_delay_ms"`
-	VerifyBounds   bool   `json:"verify_bounds"`
-	ActionTimeoutMs int   `json:"action_timeout_ms"`
-	UIAWarmup      bool   `json:"uia_warmup"`
+	LogLevel         string `json:"log_level"`
+	MouseSpeed       int    `json:"mouse_speed"`
+	ClickDelay       int    `json:"click_delay_ms"`
+	VerifyBounds     bool   `json:"verify_bounds"`
+	ActionTimeoutMs  int    `json:"action_timeout_ms"`
+	UIAWarmup        bool   `json:"uia_warmup"`
+	TrainingEnabled     bool `json:"training_enabled"`
+	PriorAdjustment     bool `json:"prior_adjustment"`
+	WatcherAutoStart    bool `json:"watcher_auto_start"`
+	WatcherIntervalSecs int  `json:"watcher_interval_seconds"`
 }
 
 func Default() *Config {
 	return &Config{
-		LogLevel:        "info",
-		MouseSpeed:      500,
-		ClickDelay:      100,
-		VerifyBounds:    true,
-		ActionTimeoutMs: 30000,
-		UIAWarmup:       true,
+		LogLevel:         "info",
+		MouseSpeed:       500,
+		ClickDelay:       100,
+		VerifyBounds:     true,
+		ActionTimeoutMs:  30000,
+		UIAWarmup:        true,
+		TrainingEnabled:     true,
+		PriorAdjustment:     true,
+		WatcherAutoStart:    false,
+		WatcherIntervalSecs: 5,
 	}
 }
 

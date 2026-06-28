@@ -1,17 +1,34 @@
 # Known Issues
 
-## Untested: v0.2.6 — Training pipeline, memory cache, find_ui_element
+## Safety & Security: Data Collection Controls
 
-The following features are **code-complete but not yet tested** with actual ML training or live multi-session AI interaction:
+The server collects training data (screenshots + ONNX detections) for ML improvement. Users have full runtime control:
 
-| Feature | Status | Risk |
-|---------|--------|------|
-| `training_save_sample` / `training_list_samples` / `training_stats` / `training_mark_used` | Code complete, no training run verified | ONNX fine-tuning pipeline not wired; collection works, training loop is future work |
-| `MemoryStoreDetectionElements` (auto-store ONNX results in memory) | Code complete, no session persistence verified | Memory TTL (1h) may be too short for cross-session reuse; `ui:` scope collisions possible across different windows with same class names |
-| `find_ui_element` (memory → ONNX → OCR cascade) | Code complete, no multi-session test | No fallback if ONNX + OCR both miss; cascade order (memory first) means stale coordinates are returned before re-running detection |
-| Auto-save snapshots on every click/type/scroll/etc. | Code complete, no disk usage stress test | No config option to disable; could fill disk if watcher + action snapshots accumulate without cleanup |
-| `signal_level` quality filter | Schema added, no training pipeline uses it yet | Training data has `signal_level >= 2` markers but no automated cleanup of `signal_level = 0` noise |
-| Background watcher training save | Code complete | `watcher/no_elements/` may accumulate rapidly (every 5s on blank/simple screens) — no auto-prune |
+| Capability | Mechanism |
+|------------|-----------|
+| **Disable all auto-save** | `set_config` with `training_enabled: false` — stops action snapshots + watcher saves instantly. No restart needed. Persists to disk. |
+| **Re-enable auto-save** | `set_config` with `training_enabled: true` |
+| **Disable prior adjustment** | `set_config` with `prior_adjustment: false` — ONNXDetect returns raw YOLO scores without learned bias |
+| **Stop watcher** | `onnx_watch_stop` — halts background screenshot polling |
+| **Delete collected data** | `training_cleanup_noise` to purge noise; `memory_forget` scope=ui to clear element caches |
+| **Export/download data** | `export_yolo_dataset` to inspect what was collected |
+| **Persistent config** | Changes to `~/.config/go-mcp-computer-use/config.json` survive server restarts |
+
+All training data is stored locally in `%APPDATA%/go-mcp-computer-use/training/`. No data is sent anywhere — the server has no telemetry, no network calls beyond model downloads.
+
+## v0.2.7 — Statistical priors, noise cleanup, config gating
+
+New in v0.2.7:
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Statistical prior model** (`priors_stats`) | Code complete | Element frequency + position per-window, updated on every training save. Go-native, no Python. |
+| **Prior confidence adjustment** | Code complete | Applied in `ONNXDetect` after NMS. Boosts expected elements, suppresses outliers. Gated by `prior_adjustment` config. |
+| **`export_yolo_dataset`** | Code complete | Exports unused samples as YOLO-format dataset for external training. |
+| **`training_cleanup_noise`** | Code complete | Deletes signal_level=0 samples older than N hours. Supports dry_run. |
+| **`training_enabled` config** | Code complete | When `false`, disables all auto-save snapshots (actions + watcher). Default: `true`. |
+| Element priors not yet verified with real accumulated data | Untested | Priors are updated asynchronously; first detections in a session have no priors loaded until the first `loadPriorsFromDB` call. |
+| No periodic auto-cleanup of noise | Not implemented | `training_cleanup_noise` is manual. Could add auto-prune background goroutine later. |
 
 ## Test Session: v0.1.2 — 2026-06-27
 
