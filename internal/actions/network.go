@@ -24,12 +24,12 @@ type NetworkInfo struct {
 }
 
 type FIXED_INFO struct {
-	HostName         [132]uint16
-	DomainName       [132]uint16
+	HostName         [132]byte
+	DomainName       [132]byte
 	CurrentDNSServer *byte
 	DNSServerList    IP_ADDR_STRING
 	NodeType         uint32
-	ScopeId          [260]uint16
+	ScopeId          [260]byte
 	EnableRouting    uint32
 	EnableProxy      uint32
 	EnableDNS        uint32
@@ -40,18 +40,20 @@ type IP_ADDR_STRING struct {
 	IPAddress [16]byte
 	IPMask    [16]byte
 	Context   uint32
+	_         [4]byte
 }
 
 type IP_ADAPTER_INFO struct {
 	Next                *IP_ADAPTER_INFO
 	ComboIndex          uint32
-	AdapterName         [260]uint16
-	Description         [260]uint16
+	AdapterName         [260]byte
+	Description         [260]byte
 	AddressLength       uint32
 	Address             [8]byte
 	Index               uint32
 	Type                uint32
 	DhcpEnabled         uint32
+	_                   [4]byte
 	CurrentIPAddress    *byte
 	IPAddressList       IP_ADDR_STRING
 	GatewayList         IP_ADDR_STRING
