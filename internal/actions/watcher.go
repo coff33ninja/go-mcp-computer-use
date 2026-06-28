@@ -2,8 +2,6 @@ package actions
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -17,18 +15,18 @@ const (
 )
 
 type CachedDetection struct {
-	Timestamp   int64            `json:"ts"`
-	WindowTitle string           `json:"window_title,omitempty"`
+	Timestamp   int64             `json:"ts"`
+	WindowTitle string            `json:"window_title,omitempty"`
 	Elements    []DetectedElement `json:"elements"`
-	SavedRef    string           `json:"saved_ref,omitempty"`
-	TotalMs     int64            `json:"total_ms"`
+	SavedRef    string            `json:"saved_ref,omitempty"`
+	TotalMs     int64             `json:"total_ms"`
 }
 
 type WatcherStatus struct {
-	Running   bool   `json:"running"`
-	IntervalMs int64 `json:"interval_ms"`
-	LastRun   int64  `json:"last_run,omitempty"`
-	CacheSize int    `json:"cache_size"`
+	Running    bool   `json:"running"`
+	IntervalMs int64  `json:"interval_ms"`
+	LastRun    int64  `json:"last_run,omitempty"`
+	CacheSize  int    `json:"cache_size"`
 }
 
 type watcher struct {
@@ -118,17 +116,17 @@ func (w *watcher) runOnce() {
 		return
 	}
 
-	img, err := decodePNGB64(b64)
-	if err != nil {
-		return
-	}
-
 	result, err := ONNXDetect(DetectionInput{ImageB64: b64})
 	if err != nil {
 		return
 	}
 
 	title := getActiveWindowTitle()
+
+	cat := TrainingCatNoElements
+	if len(result.Elements) > 0 {
+		cat = TrainingCatElementsFound
+	}
 
 	det := CachedDetection{
 		Timestamp:   start.UnixMilli(),
@@ -137,20 +135,12 @@ func (w *watcher) runOnce() {
 		TotalMs:     result.TotalMs,
 	}
 
-	if result.SavedRef != "" {
-		det.SavedRef = result.SavedRef
-	}
-
-	// Also save reference when watcher collects data — build a library of
-	// annotated screenshots for the AI to learn from.
-	if len(result.Elements) > 0 && modelsDir != "" {
-		refDir := filepath.Join(modelsDir, "references")
-		if err := os.MkdirAll(refDir, 0755); err == nil {
-			refPath := filepath.Join(refDir, fmt.Sprintf("watch_%d.png", start.UnixMilli()))
-			if err := savePNG(refPath, img); err == nil {
-				det.SavedRef = refPath
-			}
-		}
+	if sample, err := saveTrainingSampleDirect(
+		TrainingSourceWatcher, cat,
+		fmt.Sprintf("find UI elements in window: %s", title),
+		b64, title, "", result.Elements,
+	); err == nil && sample != nil {
+		det.SavedRef = sample.ImagePath
 	}
 
 	w.mu.Lock()

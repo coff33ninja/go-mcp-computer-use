@@ -320,6 +320,8 @@ func clickHandler(ctx context.Context, req *mcp.CallToolRequest, args ClickArgs)
 	}); err != nil {
 		return nil, nil, fmt.Errorf("click failed: %w", err)
 	}
+	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatClick,
+		fmt.Sprintf("click at (%d,%d)", args.X, args.Y))
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
 	}, nil, nil
@@ -342,6 +344,7 @@ func scrollHandler(ctx context.Context, req *mcp.CallToolRequest, args ScrollArg
 	if err := actions.Scroll(clicks); err != nil {
 		return nil, nil, fmt.Errorf("scroll failed: %w", err)
 	}
+	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatGeneral, "scroll")
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
 	}, nil, nil
@@ -351,6 +354,7 @@ func keyPressHandler(ctx context.Context, req *mcp.CallToolRequest, args KeyPres
 	if err := actions.KeyPress(args.Keys); err != nil {
 		return nil, nil, fmt.Errorf("key_press failed: %w", err)
 	}
+	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatGeneral, "key press")
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
 	}, nil, nil
@@ -360,6 +364,7 @@ func typeHandler(ctx context.Context, req *mcp.CallToolRequest, args TypeArgs) (
 	if err := actions.TypeText(args.Text); err != nil {
 		return nil, nil, fmt.Errorf("type failed: %w", err)
 	}
+	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatType, "type text")
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
 	}, nil, nil
@@ -386,6 +391,8 @@ func dragHandler(ctx context.Context, req *mcp.CallToolRequest, args DragArgs) (
 	if err := actions.Drag(args.FromX, args.FromY, args.ToX, args.ToY); err != nil {
 		return nil, nil, fmt.Errorf("drag failed: %w", err)
 	}
+	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatGeneral,
+		fmt.Sprintf("drag from (%d,%d) to (%d,%d)", args.FromX, args.FromY, args.ToX, args.ToY))
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
 	}, nil, nil
@@ -481,6 +488,8 @@ func openURLHandler(ctx context.Context, req *mcp.CallToolRequest, args OpenURLA
 	if err := actions.OpenURL(args.URL); err != nil {
 		return nil, nil, fmt.Errorf("open_url failed: %w", err)
 	}
+	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatNavigate,
+		fmt.Sprintf("open url %s", args.URL))
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
 	}, nil, nil
@@ -730,6 +739,8 @@ func findTextAndClickHandler(ctx context.Context, req *mcp.CallToolRequest, args
 	if err := actions.FindTextAndClick(opts); err != nil {
 		return nil, nil, fmt.Errorf("find_text_and_click: %w", err)
 	}
+	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatClick,
+		fmt.Sprintf("find text and click: %s", args.Text))
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
 }
 
@@ -737,6 +748,7 @@ func typeAndSubmitHandler(ctx context.Context, req *mcp.CallToolRequest, args Ty
 	if err := actions.TypeAndSubmit(args.Text); err != nil {
 		return nil, nil, fmt.Errorf("type_and_submit: %w", err)
 	}
+	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatType, "type and submit")
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
 }
 
@@ -762,6 +774,8 @@ func hoverHandler(ctx context.Context, req *mcp.CallToolRequest, args HoverArgs)
 	if err := actions.Hover(args.X, args.Y); err != nil {
 		return nil, nil, fmt.Errorf("hover: %w", err)
 	}
+	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatGeneral,
+		fmt.Sprintf("hover at (%d,%d)", args.X, args.Y))
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
 }
 
@@ -779,6 +793,7 @@ func selectAllAndTypeHandler(ctx context.Context, req *mcp.CallToolRequest, args
 	if err := actions.SelectAllAndType(args.Text); err != nil {
 		return nil, nil, fmt.Errorf("select_all_and_type: %w", err)
 	}
+	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatType, "select all and type")
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
 }
 
@@ -976,6 +991,8 @@ func browserNavigateHandler(ctx context.Context, req *mcp.CallToolRequest, args 
 	if err := actions.BrowserNavigate(args.Browser, args.URL); err != nil {
 		return nil, nil, fmt.Errorf("browser_navigate: %w", err)
 	}
+	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatNavigate,
+		fmt.Sprintf("navigate to %s", args.URL))
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
 }
 
@@ -983,6 +1000,8 @@ func browserSearchHandler(ctx context.Context, req *mcp.CallToolRequest, args Br
 	if err := actions.BrowserSearch(args.Browser, args.Query); err != nil {
 		return nil, nil, fmt.Errorf("browser_search: %w", err)
 	}
+	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatNavigate,
+		fmt.Sprintf("search %s", args.Query))
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
 }
 
@@ -1172,6 +1191,28 @@ type MemoryForgetArgs struct {
 	Tags  string `json:"tags,omitempty"`
 }
 
+type TrainingSaveSampleArgs struct {
+	Category    string `json:"category"`
+	TaskPrompt  string `json:"task_prompt"`
+	WindowTitle string `json:"window_title,omitempty"`
+}
+
+type TrainingListSamplesArgs struct {
+	Category   string `json:"category,omitempty"`
+	UnusedOnly bool   `json:"unused_only,omitempty"`
+	Limit      int    `json:"limit,omitempty"`
+}
+
+type TrainingMarkUsedArgs struct {
+	ID int64 `json:"id"`
+}
+
+type FindUIElementArgs struct {
+	Label       string `json:"label"`
+	WindowTitle string `json:"window_title,omitempty"`
+	UseOCR      bool   `json:"use_ocr,omitempty"`
+}
+
 func memorySetHandler(ctx context.Context, req *mcp.CallToolRequest, args MemorySetArgs) (*mcp.CallToolResult, any, error) {
 	if err := actions.MemorySet(actions.MemorySetInput{
 		Key:   args.Key,
@@ -1236,6 +1277,72 @@ func memoryForgetHandler(ctx context.Context, req *mcp.CallToolRequest, args Mem
 		return nil, nil, fmt.Errorf("memory_forget: %w", err)
 	}
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, map[string]any{"deleted": deleted}, nil
+}
+
+func trainingSaveSampleHandler(ctx context.Context, req *mcp.CallToolRequest, args TrainingSaveSampleArgs) (*mcp.CallToolResult, any, error) {
+	b64, err := actions.CaptureScreen()
+	if err != nil {
+		return nil, nil, fmt.Errorf("training_save_sample screenshot: %w", err)
+	}
+	winTitle := args.WindowTitle
+	if winTitle == "" {
+		if info, err := actions.GetActiveWindowInfo(); err == nil {
+			winTitle = info.Title
+		}
+	}
+	sample, err := actions.SaveTrainingSample(actions.SaveTrainingSampleInput{
+		Source:      actions.TrainingSourceRaw,
+		Category:    args.Category,
+		TaskPrompt:  args.TaskPrompt,
+		ImageB64:    b64,
+		WindowTitle: winTitle,
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("training_save_sample: %w", err)
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, sample, nil
+}
+
+func trainingListSamplesHandler(ctx context.Context, req *mcp.CallToolRequest, args TrainingListSamplesArgs) (*mcp.CallToolResult, any, error) {
+	samples, err := actions.TrainingSampleList(actions.TrainingListInput{
+		Category:   args.Category,
+		UnusedOnly: args.UnusedOnly,
+		Limit:      args.Limit,
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("training_list_samples: %w", err)
+	}
+	if samples == nil {
+		samples = []actions.TrainingSample{}
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, map[string]any{"samples": samples}, nil
+}
+
+func trainingStatsHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
+	stats, err := actions.TrainingStatsReport()
+	if err != nil {
+		return nil, nil, fmt.Errorf("training_stats: %w", err)
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, stats, nil
+}
+
+func trainingMarkUsedHandler(ctx context.Context, req *mcp.CallToolRequest, args TrainingMarkUsedArgs) (*mcp.CallToolResult, any, error) {
+	if err := actions.TrainingMarkUsed(args.ID); err != nil {
+		return nil, nil, fmt.Errorf("training_mark_used: %w", err)
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, map[string]any{"marked": args.ID}, nil
+}
+
+func findUIElementHandler(ctx context.Context, req *mcp.CallToolRequest, args FindUIElementArgs) (*mcp.CallToolResult, any, error) {
+	result, err := actions.FindUIElement(actions.FindUIElementInput{
+		Label:       args.Label,
+		WindowTitle: args.WindowTitle,
+		UseOCR:      args.UseOCR,
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("find_ui_element: %w", err)
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, result, nil
 }
 
 func New(version string) *mcp.Server {
@@ -1752,6 +1859,31 @@ func New(version string) *mcp.Server {
 		Name:        "memory_forget",
 		Description: "Delete facts by key, scope, or tags. At least one filter is required to prevent accidental mass deletion.",
 	}, memoryForgetHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "training_save_sample",
+		Description: "Capture screenshot and save as a training sample with a task prompt (e.g. 'click the submit button'). The ONNX model learns from these during idle retraining.",
+	}, trainingSaveSampleHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "training_list_samples",
+		Description: "List saved training samples, optionally filtered by category or unused-only status.",
+	}, trainingListSamplesHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "training_stats",
+		Description: "Get training data statistics: total samples, unused samples, breakdown by category, disk usage.",
+	}, trainingStatsHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "training_mark_used",
+		Description: "Mark a training sample as used (after the model has been trained on it).",
+	}, trainingMarkUsedHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "find_ui_element",
+		Description: "Find a UI element on screen by label. Checks memory first (from past ONNX detections), then runs ONNX detection, then falls back to OCR. Stores findings in memory for future reuse. Use this when the AI needs to locate an element it has seen before or needs to find programmatically.",
+	}, findUIElementHandler)
 
 	return server
 }

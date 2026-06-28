@@ -1,9 +1,9 @@
 # go-mcp-computer-use
 
-> **Built iteratively** across AI-assisted development sessions, with v0.1.x covering 70 bug-fixed Win32/COM tools and v0.2.0 adding the chained automation pipeline, SQLite memory store, and ONNX ML validation.
+> **Built iteratively** across AI-assisted development sessions, with v0.1.x covering 70 bug-fixed Win32/COM tools and v0.2.x adding the chained automation pipeline, SQLite memory store, ONNX ML detection, and the training data pipeline for user-specific model fine-tuning.
 > The AI agent was guided by a curated set of quality-enforcement skills from [coff33ninja/ai-skills](https://github.com/coff33ninja/ai-skills) — anti-hallucination, anti-slop, safe-code-modifications, anti-sycophancy, code-simplification, context-engineering, don't-kill-tokens, os-awareness, anti-tool-sprawl, follow-existing-patterns, no-dead-code-removal, universal-format-lint, self-validate, verify-and-cite, and others.
 >
-> **Status:** v0.2.x — 71 tools, chain tool shipped. v0.2.2 planned — SQLite memory store, layout validation, ML fallback. All core tools tested and confirmed working. UIA tools pass unit tests — runtime handler dispatch crash under investigation.
+> **Status:** v0.2.6 — 89 tools including training pipeline, memory-backed UI element cache, and ONNX detection. All core tools tested and confirmed working. UIA tools pass unit tests — runtime handler dispatch crash under investigation.
 
 MCP server for Windows desktop computer use. Exposes mouse, keyboard, screenshot, OCR, template matching, window management, system control, and screen recording to AI agents via [Model Context Protocol](https://modelcontextprotocol.io).
 
@@ -28,7 +28,10 @@ MCP server for Windows desktop computer use. Exposes mouse, keyboard, screenshot
 - **UI Automation** — find elements by name/automationID, get text, invoke buttons via native COM UIAutomation (no PowerShell)
 - **OCR via native WinRT COM** — StorageFile → BitmapDecoder → OcrEngine pipeline, 2-8x faster than PowerShell (falls back to PowerShell on error)
 - **UIPI detection** — warns when keyboard input targets elevated/admin windows
-- **70 MCP tools** (v0.1.x), plus planned `chain` + memory store + ML validation (v0.2.0)
+- **Training data pipeline** — persistent screenshot collection with categorized folders (`raw/click/`, `raw/type/`, `raw/navigate/`, `watcher/elements_found/`, etc.) and SQLite metadata. Auto-saves on every UI action for model fine-tuning.
+- **Memory-backed UI element cache** — ONNX detections auto-stored as memory facts (`ui:{window}:{class}`) with TTL. AI reuses cached coordinates across sessions.
+- **`find_ui_element` tool** — cascading lookup: memory → ONNX → OCR. Self-learning: saves findings to memory + training store.
+- **89 MCP tools** (v0.2.6)
 
 ## ⚠️ SECURITY WARNING — DANGEROUS CAPABILITIES
 
@@ -43,6 +46,8 @@ This executable can **fully control the Windows machine it runs on**. It exposes
 - **Read network config, ping hosts, enumerate adapters**
 - **Read disk usage, battery state, display modes**
 - **Automate UI elements** via UI Automation (find/invoke buttons, read text)
+
+**Auto-screenshot training pipeline** — every click, type, scroll, navigation, and OCR action automatically captures a screenshot and saves it to disk (`%APPDATA%/go-mcp-computer-use/training/raw/`) alongside ONNX detection results and the action description. The background watcher also captures screenshots every 5 seconds. This means **every interaction the AI performs is persistently recorded** — including all visible content on screen at the time of each action. Disable the watcher (`onnx_watch_stop`) or delete the training directory if persistence is not desired.
 
 **Treat this binary with the same caution as a remote-admin tool.** Only connect it to MCP clients you trust. The AI agent receiving these tools has equivalent access to a logged-in user at the keyboard. Do not expose it over a network without authentication, and never run it on a machine where you wouldn't let a remote user operate the mouse and keyboard.
 
@@ -92,13 +97,13 @@ Or use the install script:
 | `action_timeout_ms` | `30000` | Max time (ms) for blocking operations |
 | `uia_warmup` | `true` | Warm up UIA at startup (async) to avoid cold-start delay. Set `false` if clients timeout during init. |
 
-## Tools (70) — v0.1.x
+## Tools (89) — v0.2.6
 
-### Screenshot & Vision (7)
+### Screenshot & Vision (6)
 `screenshot` `get_screen_size` `get_pixel_color` `get_screen_dpi`
 `get_display_modes` `ocr` `find_image` `record_screen`
 
-### Mouse (6)
+### Mouse (7)
 `click` `move_mouse` `scroll` `drag` `hover` `get_cursor_position`
 
 ### Keyboard (5)
@@ -109,17 +114,39 @@ Or use the install script:
 `move_window` `minimize_window` `maximize_window` `restore_window`
 `close_window` `get_window_state` `screenshot_element`
 
-### Chained / Composite (8)
+### Chained / Composite (6)
 `find_text_and_click` `wait_for_text` `click_menu_item`
-`launch_and_wait` `hover` `type_and_submit` `select_all_and_type`
+`launch_and_wait` `type_and_submit` `select_all_and_type`
+
+### Chain Automation (1)
+`chain` — sequential step executor with tool dispatch, wait, poll, if/else, loop, variable capture, and 40+ tool dispatch
 
 ### UI Automation (3)
 `uia_find` `uia_get_text` `uia_invoke`
 
+### Browser Automation (4)
+`browser_navigate` `browser_search` `browser_new_tab` `browser_focus_url_bar`
+
+### File Explorer (2)
+`explorer_focus` `explorer_open_path`
+
 ### Audio (2)
 `list_audio_devices` `set_default_audio_device`
 
-### System (22)
+### Memory & Templates (10)
+`memory_set` `memory_get` `memory_search` `memory_list` `memory_forget`
+`template_store` `template_find` `template_list` `template_forget`
+`layout_validate`
+
+### ONNX ML (4)
+`onnx_detect` `onnx_status` `onnx_download` `onnx_watch_start` `onnx_watch_stop`
+`onnx_watch_status` `onnx_watch_cache`
+
+### Training Pipeline (5)
+`training_save_sample` `training_list_samples` `training_stats` `training_mark_used`
+`find_ui_element`
+
+### System (23)
 `get_volume` `set_volume` `set_mute`
 `get_clipboard` `set_clipboard`
 `get_brightness` `set_brightness`
@@ -128,15 +155,11 @@ Or use the install script:
 `get_network_info` `ping` `get_system_info`
 `get_uptime` `get_idle_time`
 `list_displays` `get_screen_dpi`
-`open_url` `open_file_explorer` `open_file_location`
-`show_notification` `lock_workstation`
+`open_url` `show_notification` `lock_workstation`
 `shutdown` `restart` `sleep` `hibernate` `wait`
 
-### Process Management (3)
+### Process Management (4)
 `launch_app` `launch_and_wait` `kill_process` `list_processes`
-
-### Planned: v0.2.0+
-`chain` (sequential automation pipeline), `memory_set/get/search/list/forget` (SQLite store), ONNX ML validation (YOLO11s + MobileNetV3), self-growing template library
 
 ## Documentation
 
@@ -178,6 +201,7 @@ internal/actions/
   ├── system.go               — volume, clipboard, system info
   ├── misc.go                 — battery, displays, pixel color, notification, wait
   ├── chained.go              — composite tools (find_text_and_click, etc.)
+  ├── chain.go                — chain step executor (poll, if/else, loop, variables)
   ├── validate.go             — coordinate bounds validation
   ├── uia_com.go              — COM UIAutomation (IUIAutomation via vtblMethod)
   ├── uia.go                  — UIA wrappers (find, get text, invoke)
@@ -191,7 +215,14 @@ internal/actions/
   ├── power.go                — shutdown, restart, sleep, hibernate
   ├── layout.go               — keyboard layout, screen DPI
   ├── disk.go                 — disk usage
-  └── brightness.go           — display brightness via WMI
+  ├── brightness.go           — display brightness via WMI
+  ├── browseruse.go           — browser automation (navigate, search, tab, url bar)
+  ├── windowexploreruse.go    — File Explorer automation (focus, open path)
+  ├── onnx.go                 — ONNX ML inference (YOLO detection)
+  ├── watcher.go              — background ONNX detection loop with caching
+  ├── memory.go               — SQLite-backed facts + element templates
+  ├── training.go             — training data storage (categorized PNGs + samples.db)
+  ├── ui_finder.go            — cascading element locator (memory → ONNX → OCR)
 internal/config/config.go     — JSON config file
 ```
 

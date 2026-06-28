@@ -700,6 +700,19 @@ func TemplateList(in TemplateListInput) ([]TemplateInfo, error) {
 	return results, rows.Err()
 }
 
+func MemoryStoreDetectionElements(elements []DetectedElement, windowTitle string) {
+	for _, el := range elements {
+		key := fmt.Sprintf("ui:%s:%s", windowTitle, el.Class)
+		MemorySet(MemorySetInput{
+			Key:   key,
+			Value: el,
+			Scope: "ui",
+			Tags:  fmt.Sprintf("ui,element,%s", el.Class),
+			TTL:   3600,
+		})
+	}
+}
+
 func TemplateForget(elementKey, scope string) (int64, error) {
 	memMu.Lock()
 	defer memMu.Unlock()

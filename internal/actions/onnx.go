@@ -262,23 +262,14 @@ func ONNXDetect(in DetectionInput) (*DetectionOutput, error) {
 		})
 	}
 
-	// Auto-save reference PNG when detection returns nothing — AI can use
-	// this later for retraining, confusion analysis, or step validation.
-	var savedRef string
-	if len(elements) == 0 && modelsDir != "" {
-		refDir := filepath.Join(modelsDir, "references")
-		if err := os.MkdirAll(refDir, 0755); err == nil {
-			refPath := filepath.Join(refDir, fmt.Sprintf("ref_%d.png", time.Now().UnixMilli()))
-			if err := savePNG(refPath, img); err == nil {
-				savedRef = refPath
-			}
-		}
+	// Store detections in memory for AI reuse
+	if info, err := GetActiveWindowInfo(); err == nil && info != nil {
+		MemoryStoreDetectionElements(elements, info.Title)
 	}
 
 	return &DetectionOutput{
 		Elements:   elements,
 		TotalMs:    time.Since(start).Milliseconds(),
-		SavedRef:   savedRef,
 	}, nil
 }
 

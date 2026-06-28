@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.2.6] - 2026-06-28
+
+### Added
+
+- **Training data pipeline** (`training_save_sample`, `training_list_samples`, `training_stats`, `training_mark_used`) — persistent screenshot + ONNX detection storage for model fine-tuning. Images saved to categorized folders (`raw/click/`, `raw/type/`, `raw/navigate/`, `raw/ocr/`, `raw/general/`, `watcher/elements_found/`, `watcher/no_elements/`) with metadata in `samples.db`. Each sample carries a `task_prompt` string that the ML learns to predict during training.
+- **Auto-save on every UI action** — `click`, `type`, `scroll`, `drag`, `hover`, `key_press`, `type_and_submit`, `select_all_and_type`, `browser_navigate`, `browser_search`, `open_url`, and `find_text_and_click` handlers (both direct MCP and chain steps) automatically capture a screenshot + ONNX detection + save to `raw/{category}/` with the action description as `task_prompt`.
+- **`find_ui_element` tool** — three-layer cascading element locator: checks memory first (cached ONNX detections by window+label), runs ONNX detection with label matching, falls back to OCR for text elements. Stores findings in memory for reuse. Saves training samples (positive + negative).
+- **Memory-backed element caching** — every `ONNXDetect` call auto-stores detected elements as memory facts (`memory_set`, scope `ui`, keyed `ui:{window_title}:{class}`) with 1-hour TTL. AI can query memory for known element locations without re-running ML.
+- **Quality/signal filtering** — every training sample gets a `signal_level` (0=noise, 1=elements found, 2=elements+task context). `training_list_samples` accepts `min_signal` filter. Noise samples (watcher frames with zero elements) are flagged for discard.
+
+### Changed
+
+- **Restructured training directories** — from flat `samples/{cat}_{ts}.png` to `raw/{cat}/{ts}.png` + `watcher/{cat}/{ts}.png` layout. Database renamed from `training.db` to `samples.db`.
+- **Watcher save path** — frames now save to `watcher/elements_found/` or `watcher/no_elements/` instead of flat `references/` dir.
+- **ONNXDetect no longer auto-saves** — removal of inline `saveTrainingSampleDirect` in ONNXDetect to avoid caller confusion. Watcher handles persistence; explicit calls handle the rest.
+
 ## [0.2.5] - 2026-06-28
 
 ### Fixed

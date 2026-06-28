@@ -283,6 +283,22 @@ func execWait(step ChainStep, _ *chainState) StepResult {
 
 // ── Tool step ──
 
+var trainingTools = map[string]struct {
+	Category    string
+	MakePrompt  func(map[string]any) string
+}{
+	"click":               {TrainingCatClick, func(a map[string]any) string { return fmt.Sprintf("click at (%v,%v)", a["x"], a["y"]) }},
+	"type":                {TrainingCatType, func(a map[string]any) string { return "type text" }},
+	"type_and_submit":     {TrainingCatType, func(a map[string]any) string { return "type and submit" }},
+	"select_all_and_type": {TrainingCatType, func(a map[string]any) string { return "select all and type" }},
+	"key_press":           {TrainingCatGeneral, func(a map[string]any) string { return fmt.Sprintf("key press: %v", a["keys"]) }},
+	"scroll":              {TrainingCatGeneral, func(a map[string]any) string { return "scroll" }},
+	"drag":                {TrainingCatGeneral, func(a map[string]any) string { return fmt.Sprintf("drag from (%v,%v) to (%v,%v)", a["from_x"], a["from_y"], a["to_x"], a["to_y"]) }},
+	"hover":               {TrainingCatGeneral, func(a map[string]any) string { return fmt.Sprintf("hover at (%v,%v)", a["x"], a["y"]) }},
+	"find_text_and_click": {TrainingCatClick, func(a map[string]any) string { return fmt.Sprintf("find and click: %s", a["text"]) }},
+	"open_url":            {TrainingCatNavigate, func(a map[string]any) string { return fmt.Sprintf("navigate to %s", a["url"]) }},
+}
+
 func execTool(step ChainStep, args map[string]any, _ *chainState) StepResult {
 	fn, ok := toolDispatch[step.Tool]
 	if !ok {
@@ -299,6 +315,9 @@ func execTool(step ChainStep, args map[string]any, _ *chainState) StepResult {
 			Success: false,
 			Error:   err.Error(),
 		}
+	}
+	if t, ok := trainingTools[step.Tool]; ok {
+		SaveSnapshotAfterAction(TrainingSourceRaw, t.Category, t.MakePrompt(args))
 	}
 	return StepResult{
 		Tool:    step.Tool,
