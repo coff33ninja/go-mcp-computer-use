@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"fmt"
 	"strings"
 	"unicode"
 	"unsafe"
@@ -161,6 +162,9 @@ func sendCharWithVK(r rune) {
 }
 
 func keyNameToVK(name string) (uint16, bool) {
+	if vk, ok := vkModMap[name]; ok {
+		return vk, true
+	}
 	if vk, ok := vkSpecialMap[name]; ok {
 		return vk, true
 	}
@@ -177,6 +181,30 @@ func keyNameToVK(name string) (uint16, bool) {
 		}
 	}
 	return 0, false
+}
+
+func KeyDown(key string) error {
+	if err := warnElevated(); err != nil {
+		return err
+	}
+	vk, ok := keyNameToVK(key)
+	if !ok {
+		return fmt.Errorf("key_down: unknown key %q", key)
+	}
+	sendVK(vk, true)
+	return nil
+}
+
+func KeyUp(key string) error {
+	if err := warnElevated(); err != nil {
+		return err
+	}
+	vk, ok := keyNameToVK(key)
+	if !ok {
+		return fmt.Errorf("key_up: unknown key %q", key)
+	}
+	sendVK(vk, false)
+	return nil
 }
 
 func KeyPress(keys []string) error {

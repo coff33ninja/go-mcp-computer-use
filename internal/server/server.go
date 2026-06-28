@@ -40,6 +40,10 @@ type KeyPressArgs struct {
 	Keys []string `json:"keys"`
 }
 
+type KeyEventArgs struct {
+	Key string `json:"key"`
+}
+
 type TypeArgs struct {
 	Text string `json:"text"`
 }
@@ -355,6 +359,26 @@ func keyPressHandler(ctx context.Context, req *mcp.CallToolRequest, args KeyPres
 		return nil, nil, fmt.Errorf("key_press failed: %w", err)
 	}
 	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatGeneral, "key press")
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
+	}, nil, nil
+}
+
+func keyDownHandler(ctx context.Context, req *mcp.CallToolRequest, args KeyEventArgs) (*mcp.CallToolResult, any, error) {
+	if err := actions.KeyDown(args.Key); err != nil {
+		return nil, nil, fmt.Errorf("key_down failed: %w", err)
+	}
+	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatGeneral, "key down")
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
+	}, nil, nil
+}
+
+func keyUpHandler(ctx context.Context, req *mcp.CallToolRequest, args KeyEventArgs) (*mcp.CallToolResult, any, error) {
+	if err := actions.KeyUp(args.Key); err != nil {
+		return nil, nil, fmt.Errorf("key_up failed: %w", err)
+	}
+	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatGeneral, "key up")
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
 	}, nil, nil
@@ -1566,6 +1590,16 @@ func New(version string) *mcp.Server {
 		Name:        "key_press",
 		Description: "Press key combination. Example: [\"Ctrl\", \"C\"] for copy.",
 	}, keyPressHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "key_down",
+		Description: "Hold a key down (does not release it). Use key_up to release. Example: \"W\"",
+	}, keyDownHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "key_up",
+		Description: "Release a key that was held down with key_down. Example: \"W\"",
+	}, keyUpHandler)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "type",

@@ -120,6 +120,8 @@ func init() {
 		"drag":                chainDrag,
 		"type":                chainType,
 		"key_press":           chainKeyPress,
+		"key_down":            chainKeyDown,
+		"key_up":              chainKeyUp,
 		"type_and_submit":     chainTypeAndSubmit,
 		"select_all_and_type": chainSelectAllAndType,
 		"screenshot":          chainScreenshot,
@@ -292,6 +294,8 @@ var trainingTools = map[string]struct {
 	"type_and_submit":     {TrainingCatType, func(a map[string]any) string { return "type and submit" }},
 	"select_all_and_type": {TrainingCatType, func(a map[string]any) string { return "select all and type" }},
 	"key_press":           {TrainingCatGeneral, func(a map[string]any) string { return fmt.Sprintf("key press: %v", a["keys"]) }},
+	"key_down":            {TrainingCatGeneral, func(a map[string]any) string { return fmt.Sprintf("key down: %s", a["key"]) }},
+	"key_up":              {TrainingCatGeneral, func(a map[string]any) string { return fmt.Sprintf("key up: %s", a["key"]) }},
 	"scroll":              {TrainingCatGeneral, func(a map[string]any) string { return "scroll" }},
 	"drag":                {TrainingCatGeneral, func(a map[string]any) string { return fmt.Sprintf("drag from (%v,%v) to (%v,%v)", a["from_x"], a["from_y"], a["to_x"], a["to_y"]) }},
 	"hover":               {TrainingCatGeneral, func(a map[string]any) string { return fmt.Sprintf("hover at (%v,%v)", a["x"], a["y"]) }},
@@ -694,6 +698,22 @@ func chainKeyPress(args map[string]any) (any, error) {
 		return nil, fmt.Errorf("key_press: keys required")
 	}
 	return nil, KeyPress(keys)
+}
+
+func chainKeyDown(args map[string]any) (any, error) {
+	key, ok := getString(args, "key")
+	if !ok {
+		return nil, fmt.Errorf("key_down: key required")
+	}
+	return nil, KeyDown(key)
+}
+
+func chainKeyUp(args map[string]any) (any, error) {
+	key, ok := getString(args, "key")
+	if !ok {
+		return nil, fmt.Errorf("key_up: key required")
+	}
+	return nil, KeyUp(key)
 }
 
 func chainTypeAndSubmit(args map[string]any) (any, error) {

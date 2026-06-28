@@ -1,7 +1,9 @@
 package actions
 
 import (
+	"math"
 	"syscall"
+	"time"
 	"unsafe"
 )
 
@@ -113,18 +115,6 @@ func Scroll(clicks int32) error {
 	return nil
 }
 
-func sendMouseEvent(flags uint32, dx, dy int32) {
-	i := input{
-		inputType: inputMouse,
-		mi: mouseInput{
-			dx:      dx,
-			dy:      dy,
-			dwFlags: flags,
-		},
-	}
-	sendInput.Call(1, uintptr(unsafe.Pointer(&i)), unsafe.Sizeof(i))
-}
-
 func Drag(fromX, fromY, toX, toY int32) error {
 	if err := ValidateClickCoord(fromX, fromY); err != nil {
 		return err
@@ -141,14 +131,51 @@ func Drag(fromX, fromY, toX, toY int32) error {
 	fx, fy := norm(fromX, fromY)
 	tx, ty := norm(toX, toY)
 
-	// 1. Move to start position (absolute)
-	sendMouseEvent(mouseEventMove|mouseEventAbsolute, fx, fy)
-	// 2. Press left button (relative — at current position)
-	sendMouseEvent(mouseEventLeftDown, 0, 0)
-	// 3. Move to end position while holding (absolute)
-	sendMouseEvent(mouseEventMove|mouseEventAbsolute, tx, ty)
-	// 4. Release left button (relative — at current position)
-	sendMouseEvent(mouseEventLeftUp, 0, 0)
+	down := input{
+		inputType: inputMouse,
+		mi: mouseInput{
+			dx:      fx,
+			dy:      fy,
+			dwFlags: mouseEventLeftDown | mouseEventAbsolute | mouseEventMove,
+		},
+	}
+	sendInput.Call(1, uintptr(unsafe.Pointer(&down)), unsafe.Sizeof(down))
+
+	dx := tx - fx
+	dy := ty - fy
+	dist := int32(math.Sqrt(float64(dx*dx + dy*dy)))
+	steps := dist / 400
+	if steps < 5 {
+		steps = 5
+	}
+	if steps > 50 {
+		steps = 50
+	}
+
+	for i := int32(1); i <= steps; i++ {
+		px := fx + dx*i/steps
+		py := fy + dy*i/steps
+		move := input{
+			inputType: inputMouse,
+			mi: mouseInput{
+				dx:      px,
+				dy:      py,
+				dwFlags: mouseEventMove | mouseEventAbsolute,
+			},
+		}
+		sendInput.Call(1, uintptr(unsafe.Pointer(&move)), unsafe.Sizeof(move))
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	up := input{
+		inputType: inputMouse,
+		mi: mouseInput{
+			dx:      tx,
+			dy:      ty,
+			dwFlags: mouseEventLeftUp | mouseEventAbsolute | mouseEventMove,
+		},
+	}
+	sendInput.Call(1, uintptr(unsafe.Pointer(&up)), unsafe.Sizeof(up))
 
 	return nil
 }

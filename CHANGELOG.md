@@ -2,6 +2,10 @@
 
 ## [0.2.8] - 2026-06-29
 
+### Added
+
+- **`key_down` / `key_up` MCP tools** — separate key hold/release for game-play sequences. Chains can now hold movement keys while dragging camera and pressing abilities, all server-side with no round-trip latency. `KeyDown("W")` holds the key, `KeyUp("W")` releases. Full VK support including modifiers, letters, digits, and special keys.
+
 ### Fixed
 
 - **`warnElevated` false positive when both server and target are elevated** — `warnElevated()` only checked if the foreground window was elevated, not the MCP server itself. If both are elevated (server running as Admin targeting an admin game), `SendInput` keyboard works fine, but the check falsely blocked it. Added `isSelfElevated()` — only blocks keyboard when server is non-elevated AND target is elevated.
