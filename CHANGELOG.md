@@ -14,15 +14,29 @@
 - **Variable substitution** — `{{variable_name}}` in string args is replaced with captured output from earlier steps.
 - **ChainFromJSON** — convenience entry point for programmatic chain execution from JSON string.
 
-## [0.2.2] — *planned*
+## [0.2.3] - 2026-06-28
 
-### Major
+### Fixed
 
-- **SQLite Memory Store** — `memory_set/get/search/list/forget` tools backed by `modernc.org/sqlite` (pure Go, zero CGO). Persists learned facts, sequences, and element templates across sessions.
-- **Layout Validation** — before replaying a stored sequence, validates window position, element coordinates, and OCR signatures haven't drifted. Auto-adjusts or marks stale on mismatch.
-- **Self-growing Template Library** — each discovered UI element stores a 32×32px template crop. Over time, `find_image` locates elements visually instead of relying on stale coordinates.
-- **ONNX ML Backend** (optional v2+) — two-tier Windows UI element detection: YOLO11s (18 MB, 7 classes) + MobileNetV3-small classifier (6 MB, 15 classes). Hierarchical validation chain from O(1) coords → OCR → template → YOLO → classifier.
-- **Prompt Engineering Guide** — documented Learn-Once-Reuse-Forever pattern for AI agents: store sequences + layout facts after every successful interaction, recall and replay next session with zero rediscovery.
+- **`TypeAndSubmit` Enter via `KeyPress`** — appended `\r` used `sendUnicode(0x0D)` which sends the CR character via `KEYEVENTF_UNICODE`, unreliable in Firefox/browser address bars. Replaced with `KeyPress([]string{"ENTER"})` with a 50ms pause, matching the same code path used by the `key_press` handler.
+
+## [0.2.2] - 2026-06-28
+
+### Added
+
+- **`poll` step type** — polls OCR at `every_ms` interval until `ocr_contains` text is found or `timeout_ms` elapses. Syntax: `{"poll": {"every_ms": 1000, "timeout_ms": 30000, "ocr_contains": "Submit"}}`.
+- **`if` step type** — OCR checks for `ocr_contains` text, executes `then` or `else` branch. Syntax: `{"if": {"ocr_contains": "Error", "then": [...], "else": [...]}}`.
+- **`loop` step type** — repeats sub-steps `times` iterations. Syntax: `{"loop": {"times": 5, "steps": [...]}}`.
+- **`StepResult.Steps`** — nested step results for if/loop sub-steps, visible in chain output.
+- **UIA warmup at server startup** — pre-initializes COM and creates/releases a UIA instance, absorbing the one-time 15-42s cold-start cost so handlers respond instantly.
+- **`WarmupUIA()`** — exported function to pre-warm COM/UIA at server startup.
+
+### Fixed
+
+- **StepResult.Index always `0`** — `execWait`/`execTool` created fresh `StepResult` structs discarding the loop index. Index is now set after the switch.
+- **`SelectAllAndType` uses VK codes** — `sendUnicode(0x01)` used `KEYEVENTF_UNICODE` (VK_PACKET) which doesn't trigger select-all in most apps. Replaced with `sendVK(VK_CONTROL)` + `sendVK(VK_A)` for reliable Ctrl+A.
+- **Variable substitution supports dotted paths** — regex `[a-zA-Z0-9_]+` didn't match `{{size.width}}`. Updated to `[a-zA-Z0-9_.]+` with `resolveVarPath()` for nested map lookups.
+- **`SelectAllAndType` elevated warning** — now calls `warnElevated()` before sending input, preventing silent drops on admin windows.
 
 ## [0.1.11] - 2026-06-27
 

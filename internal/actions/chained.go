@@ -57,7 +57,17 @@ func TypeAndSubmit(text string) error {
 	if text == "" {
 		return fmt.Errorf("type_and_submit: empty text")
 	}
-	return TypeText(text + "\r")
+	if err := warnElevated(); err != nil {
+		return err
+	}
+	// Type the text first, then press Enter via KeyPress (more reliable
+	// than appending \r to TypeText, which sends 0x0D via KEYEVENTF_UNICODE)
+	for _, r := range text {
+		sendUnicode(r)
+	}
+	// Small pause so the application can process the typed text before Enter
+	Wait(50)
+	return KeyPress([]string{"ENTER"})
 }
 
 func LaunchAndWait(path, windowTitle string, timeoutMs int32) (uintptr, error) {
@@ -145,7 +155,15 @@ func SelectAllAndType(text string) error {
 	if text == "" {
 		return fmt.Errorf("select_all_and_type: empty text")
 	}
-	sendUnicode(0x01) // Ctrl+A as Unicode control character
+	if err := warnElevated(); err != nil {
+		return err
+	}
+	// Use VK codes for Ctrl+A rather than KEYEVENTF_UNICODE (0x01 via VK_PACKET
+	// doesn't trigger select-all in most applications)
+	sendVK(0x11, true)  // VK_CONTROL down
+	sendVK(0x41, true)  // VK_A down
+	sendVK(0x41, false) // VK_A up
+	sendVK(0x11, false) // VK_CONTROL up
 	Wait(100)
 	return TypeText(text)
 }
