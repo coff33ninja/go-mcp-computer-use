@@ -3,7 +3,7 @@
 > **Built iteratively** across AI-assisted development sessions, with v0.1.x covering 70 bug-fixed Win32/COM tools and v0.2.x adding the chained automation pipeline, SQLite memory store, ONNX ML detection, and the training data pipeline for user-specific model fine-tuning.
 > The AI agent was guided by a curated set of quality-enforcement skills from [coff33ninja/ai-skills](https://github.com/coff33ninja/ai-skills) — anti-hallucination, anti-slop, safe-code-modifications, anti-sycophancy, code-simplification, context-engineering, don't-kill-tokens, os-awareness, anti-tool-sprawl, follow-existing-patterns, no-dead-code-removal, universal-format-lint, self-validate, verify-and-cite, and others.
 >
-> **Status:** v0.2.6 — 89 tools including training pipeline, memory-backed UI element cache, and ONNX detection. All core tools tested and confirmed working. UIA tools pass unit tests — runtime handler dispatch crash under investigation.
+> **Status:** v0.2.6 — 99 tools including training pipeline, memory-backed UI element cache, and ONNX detection. All core tools tested and confirmed working. UIA tools pass unit tests — runtime handler dispatch crash under investigation.
 
 MCP server for Windows desktop computer use. Exposes mouse, keyboard, screenshot, OCR, template matching, window management, system control, and screen recording to AI agents via [Model Context Protocol](https://modelcontextprotocol.io).
 
@@ -97,7 +97,7 @@ Or use the install script:
 | `action_timeout_ms` | `30000` | Max time (ms) for blocking operations |
 | `uia_warmup` | `true` | Warm up UIA at startup (async) to avoid cold-start delay. Set `false` if clients timeout during init. |
 
-## Tools (89) — v0.2.6
+## Tools (99) — v0.2.6
 
 ### Screenshot & Vision (6)
 `screenshot` `get_screen_size` `get_pixel_color` `get_screen_dpi`
