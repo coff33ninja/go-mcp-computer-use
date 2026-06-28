@@ -44,6 +44,10 @@ type KeyEventArgs struct {
 	Key string `json:"key"`
 }
 
+type KeyloggerStartArgs struct{}
+
+type KeyloggerStatusArgs struct{}
+
 type TypeArgs struct {
 	Text string `json:"text"`
 }
@@ -381,6 +385,37 @@ func keyUpHandler(ctx context.Context, req *mcp.CallToolRequest, args KeyEventAr
 	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatGeneral, "key up")
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
+	}, nil, nil
+}
+
+func keyloggerStartHandler(ctx context.Context, req *mcp.CallToolRequest, args KeyloggerStartArgs) (*mcp.CallToolResult, any, error) {
+	if err := actions.StartKeylogger(); err != nil {
+		return nil, nil, fmt.Errorf("keylogger_start failed: %w", err)
+	}
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
+	}, nil, nil
+}
+
+func keyloggerStopHandler(ctx context.Context, req *mcp.CallToolRequest, args KeyloggerStartArgs) (*mcp.CallToolResult, any, error) {
+	steps, err := actions.StopKeylogger()
+	if err != nil {
+		return nil, nil, fmt.Errorf("keylogger_stop failed: %w", err)
+	}
+	jsonBytes, _ := json.MarshalIndent(steps, "", "  ")
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: string(jsonBytes)}},
+	}, nil, nil
+}
+
+func keyloggerStatusHandler(ctx context.Context, req *mcp.CallToolRequest, args KeyloggerStatusArgs) (*mcp.CallToolResult, any, error) {
+	active, count, dur := actions.KeyloggerStatus()
+	status := "inactive"
+	if active {
+		status = fmt.Sprintf("active - %d events in %s", count, dur)
+	}
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: status}},
 	}, nil, nil
 }
 
@@ -1600,6 +1635,21 @@ func New(version string) *mcp.Server {
 		Name:        "key_up",
 		Description: "Release a key that was held down with key_down. Example: \"W\"",
 	}, keyUpHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "keylogger_start",
+		Description: "Start recording keyboard and mouse input for replay",
+	}, keyloggerStartHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "keylogger_stop",
+		Description: "Stop recording and return recorded sequence as chain steps",
+	}, keyloggerStopHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "keylogger_status",
+		Description: "Check if keylogger is active and event count",
+	}, keyloggerStatusHandler)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "type",

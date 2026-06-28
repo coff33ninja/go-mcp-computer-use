@@ -6,6 +6,10 @@
 
 - **`key_down` / `key_up` MCP tools** — separate key hold/release for game-play sequences. Chains can now hold movement keys while dragging camera and pressing abilities, all server-side with no round-trip latency. `KeyDown("W")` holds the key, `KeyUp("W")` releases. Full VK support including modifiers, letters, digits, and special keys.
 
+- **`keylogger_start` / `keylogger_stop` / `keylogger_status` MCP tools** — record real keyboard + mouse input (keys, clicks, drags, moves, scroll) via low-level Windows hooks (`WH_KEYBOARD_LL` + `WH_MOUSE_LL`). Output is a chain-compatible JSON sequence for AI replay. Includes timing-accurate delays between events. Mouse clicks auto-detect drag vs click by distance/time thresholds. Mouse moves throttled to meaningful position changes.
+
+- **`sendVKPress` helper with 50ms inter-key delay** — `KeyPress`, `TypeText`, `sendCharWithVK` now use `sendVKPress(vk)` which inserts a 50ms `time.Sleep` between key down and key up. Fixes game engines and DirectInput applications that miss instant down/up sequences (character switch hotkeys 1-4, ability keys).
+
 ### Fixed
 
 - **`warnElevated` false positive when both server and target are elevated** — `warnElevated()` only checked if the foreground window was elevated, not the MCP server itself. If both are elevated (server running as Admin targeting an admin game), `SendInput` keyboard works fine, but the check falsely blocked it. Added `isSelfElevated()` — only blocks keyboard when server is non-elevated AND target is elevated.

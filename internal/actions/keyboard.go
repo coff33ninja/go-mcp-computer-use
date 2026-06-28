@@ -3,6 +3,7 @@ package actions
 import (
 	"fmt"
 	"strings"
+	"time"
 	"unicode"
 	"unsafe"
 )
@@ -146,6 +147,14 @@ func sendVK(vk uint16, down bool) {
 	sendInput.Call(1, uintptr(unsafe.Pointer(&i)), unsafe.Sizeof(i))
 }
 
+const keyPressDelay = 50 * time.Millisecond
+
+func sendVKPress(vk uint16) {
+	sendVK(vk, true)
+	time.Sleep(keyPressDelay)
+	sendVK(vk, false)
+}
+
 func sendCharWithVK(r rune) {
 	cv, ok := charToVK[r]
 	if !ok {
@@ -154,8 +163,7 @@ func sendCharWithVK(r rune) {
 	if cv.shift {
 		sendVK(0x10, true)
 	}
-	sendVK(cv.vk, true)
-	sendVK(cv.vk, false)
+	sendVKPress(cv.vk)
 	if cv.shift {
 		sendVK(0x10, false)
 	}
@@ -228,8 +236,7 @@ func KeyPress(keys []string) error {
 				}
 				sendVK(0x11, true)
 				pressedMods = append(pressedMods, 0x11)
-				sendVK(vk, true)
-				sendVK(vk, false)
+				sendVKPress(vk)
 				continue
 			}
 		}
@@ -241,14 +248,12 @@ func KeyPress(keys []string) error {
 		}
 		// Special key names (ENTER, BACKSPACE, etc.)
 		if vk, ok := vkSpecialMap[k]; ok {
-			sendVK(vk, true)
-			sendVK(vk, false)
+			sendVKPress(vk)
 			continue
 		}
 		// Single character (letter, digit)
 		if vk, ok := keyNameToVK(k); ok {
-			sendVK(vk, true)
-			sendVK(vk, false)
+			sendVKPress(vk)
 		}
 	}
 	for i := len(pressedMods) - 1; i >= 0; i-- {
@@ -263,13 +268,11 @@ func TypeText(text string) error {
 	}
 	for _, r := range text {
 		if r == '\n' || r == '\r' {
-			sendVK(0x0D, true)
-			sendVK(0x0D, false)
+			sendVKPress(0x0D)
 			continue
 		}
 		if r == '\t' {
-			sendVK(0x09, true)
-			sendVK(0x09, false)
+			sendVKPress(0x09)
 			continue
 		}
 		if unicode.IsPrint(r) {
