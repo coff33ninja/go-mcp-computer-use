@@ -60,10 +60,8 @@ func TypeAndSubmit(text string) error {
 	if err := warnElevated(); err != nil {
 		return err
 	}
-	// Type the text first, then press Enter via KeyPress (more reliable
-	// than appending \r to TypeText, which sends 0x0D via KEYEVENTF_UNICODE)
 	for _, r := range text {
-		sendUnicode(r)
+		sendCharWithVK(r)
 	}
 	// Small pause so the application can process the typed text before Enter
 	Wait(50)

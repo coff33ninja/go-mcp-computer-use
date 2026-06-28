@@ -147,6 +147,20 @@ But `list_displays` only returns DISPLAY1.
 ### ~~B10. `click` may silently fail on elevated windows~~ *(documented)*
 **Note:** `Click` uses `SetCursorPos` + `SendInput` mouse events. Same UIPI restriction applies — no error feedback when targeting admin windows. Unlike keyboard (which always targets foreground window), mouse targets coordinates, making elevation check impractical. Run MCP server elevated to avoid this.
 
+### B11. `KeyPress` modifier key ordering — Ctrl+C sends C before pressing Ctrl
+**Observation:** `KeyPress(["CTRL", "C"])` sends `sendUnicode('C')` first, then presses Ctrl down, then releases Ctrl. The `C` arrives **before** Ctrl is held, so Ctrl+C works as just `c` in most apps/games.
+**Root cause:** `KeyPress` was splitting keys into three phases: Unicode chars → VK downs → VK ups. Modifiers and their target keys were sent in separate batches, not interleaved.
+**Fix applied:** Replaced batch processing with in-order processing. Modifiers are pressed immediately when encountered, then their paired keys are sent while the modifier is held. All pressed modifiers are released in reverse order after the key sequence.
+
+### ~~B12. `KEYEVENTF_UNICODE` may not work in game engines~~ *(fixed v0.2.8)*
+**Observation:** `sendUnicode` injects characters via `KEYEVENTF_UNICODE`, which synthesizes `WM_CHAR` messages. Game engines using raw input or `GetAsyncKeyState` for keyboard polling typically don't see Unicode-injected characters — they check VK codes and scan codes instead. Same issue affects terminals, code editors, and browser input fields in some configurations.
+**Root cause:** All keyboard input used `KEYEVENTF_UNICODE` — letters, digits, TypeText, TypeAndSubmit. Only modifier keys and special keys (arrows, F-keys) used VK codes.
+**Fix:** Removed `KEYEVENTF_UNICODE` entirely. Rewrote keyboard input to use VK codes for everything:
+- Letters A-Z/a-z → `VK_A`–`VK_Z` (0x41–0x5A) with Shift state for case
+- Digits and punctuation → VK codes with Shift mapping for symbols
+- TypeText/TypedAndSubmit → `sendCharWithVK()` handles shift state per character
+- `KeyPress` modifier order fixed: modifiers are pressed before their target keys
+
 ---
 
 ## Prompt Engineering: Learn-Once-Reuse-Forever Pattern

@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.2.8] - 2026-06-29
+
+### Fixed
+
+- **`warnElevated` false positive when both server and target are elevated** — `warnElevated()` only checked if the foreground window was elevated, not the MCP server itself. If both are elevated (server running as Admin targeting an admin game), `SendInput` keyboard works fine, but the check falsely blocked it. Added `isSelfElevated()` — only blocks keyboard when server is non-elevated AND target is elevated.
+
+- **`KeyPress` modifier ordering** — `["CTRL", "C"]` sent `C` via Unicode first, then pressed Ctrl down, then released Ctrl. The key arrived before the modifier was held. Rewrote to process keys in order: modifiers are pressed immediately, target keys are sent while held, all modifiers released in reverse at end.
+
+- **Keyboard input uses VK codes instead of `KEYEVENTF_UNICODE`** — `KEYEVENTF_UNICODE` synthesizes `WM_CHAR` messages, which many applications ignore (game engines, terminals, code editors, browser input fields). Rewrote all keyboard functions to use VK codes:
+  - `TypeText` and `TypeAndSubmit` use `sendCharWithVK()` — maps each character to its VK code + Shift state using `charToVK` table (US keyboard layout). Letters, digits, punctuation all handled.
+  - `KeyPress` sends all keys (letters, digits, special keys) as VK codes. Modifier combos like Ctrl+C now work correctly: Ctrl down → VK_C → Ctrl up.
+
+- **`Drag` incremental movement** — was sending a single jump from start to end (mouseDown → teleport → mouseUp). Games and map UIs ignored this as a teleport. Now sends 5–50 incremental steps with 5ms delays, proportional to distance. Map panning now works correctly.
+
+### Changed
+
+- **`sendUnicode` removed** — no longer used. All keyboard input via VK codes.
+
+### Documentation
+
+- **Elevation & UIPI** section in README — explains admin vs non-admin behavior
+- **Known issues B11, B12** — documented keyboard issues and fixes
+
 ## [0.2.7] - 2026-06-29
 
 ### Added
