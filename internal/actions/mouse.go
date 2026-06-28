@@ -14,6 +14,7 @@ const (
 	mouseEventRightDown = 0x0008
 	mouseEventRightUp   = 0x0010
 	mouseEventWheel     = 0x0800
+	mouseEventAbsolute  = 0x8000
 )
 
 type mouseInput struct {
@@ -119,19 +120,42 @@ func Drag(fromX, fromY, toX, toY int32) error {
 	if err := ValidateClickCoord(toX, toY); err != nil {
 		return err
 	}
-	setCursorPos.Call(uintptr(fromX), uintptr(fromY))
+
+	sw, sh := ScreenSize()
+	norm := func(x, y int32) (int32, int32) {
+		return int32((int(x) * 65535) / int(sw-1)), int32((int(y) * 65535) / int(sh-1))
+	}
+
+	fx, fy := norm(fromX, fromY)
+	tx, ty := norm(toX, toY)
 
 	down := input{
 		inputType: inputMouse,
-		mi: mouseInput{dwFlags: mouseEventLeftDown},
+		mi: mouseInput{
+			dx:      fx,
+			dy:      fy,
+			dwFlags: mouseEventLeftDown | mouseEventAbsolute | mouseEventMove,
+		},
 	}
 	sendInput.Call(1, uintptr(unsafe.Pointer(&down)), unsafe.Sizeof(down))
 
-	setCursorPos.Call(uintptr(toX), uintptr(toY))
+	move := input{
+		inputType: inputMouse,
+		mi: mouseInput{
+			dx:      tx,
+			dy:      ty,
+			dwFlags: mouseEventMove | mouseEventAbsolute,
+		},
+	}
+	sendInput.Call(1, uintptr(unsafe.Pointer(&move)), unsafe.Sizeof(move))
 
 	up := input{
 		inputType: inputMouse,
-		mi: mouseInput{dwFlags: mouseEventLeftUp},
+		mi: mouseInput{
+			dx:      tx,
+			dy:      ty,
+			dwFlags: mouseEventLeftUp | mouseEventAbsolute | mouseEventMove,
+		},
 	}
 	sendInput.Call(1, uintptr(unsafe.Pointer(&up)), unsafe.Sizeof(up))
 
