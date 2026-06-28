@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.2.7] - 2026-06-28
+## [0.2.7] - 2026-06-29
 
 ### Added
 
@@ -21,6 +21,16 @@
 ### Fixed
 
 - **`SendInput` silently dropping mouse clicks** — the `input` struct in `mouse.go` had an orphan `_ [8]byte` padding field, making `unsafe.Sizeof` = 48 bytes. Windows `sizeof(INPUT)` on x64 is 40 bytes. `SendInput` returns 0 when `cbSize` doesn't match, so `SetCursorPos` moved the cursor but the click event never fired. Removed the extra padding — struct is now exactly 40 bytes.
+- **Network struct layout mismatches** — `IP_ADDR_STRING` was missing `_ [4]byte` trailing padding (44→48 bytes). `IP_ADAPTER_INFO` and `FIXED_INFO` used `[260/132]uint16` for `char` arrays (2x Windows size, shifting every subsequent field). Changed to `[260/132]byte` and added alignment padding after `DhcpEnabled`.
+- **All Windows API structs verified** — audited every struct passed to Win32 via `unsafe.Pointer` in `internal/actions/`: `mouseInput` (32B ✓), `input` (40B ✓), `point` (8B ✓), `keyboardInput` (24B ✓), `inputKbd` (40B ✓), `BITMAPINFOHEADER` (40B ✓), `RECT`, `MONITORINFOEXW`, `DEVMODEW`, `MEMORYSTATUSEX`, `SYSTEM_POWER_STATUS`, `PROCESSENTRY32W`, `LASTINPUTINFO`, `VARIANT`, `UiaRect`, `WinRect` — all match Windows x64 sizes.
+
+### Changed
+
+- **`Drag` rewritten for raw input games** — replaced `SetCursorPos` (invisible to DirectInput/raw input) with `SendInput` + `MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE`. Coordinates normalized to 0–65535 range. Game engines using raw input now see the movement between mouse-down and mouse-up.
+
+### Documentation
+
+- **Elevation & UIPI section** added to README — explains admin vs non-admin behavior (keyboard warns, mouse silently fails), how to run elevated, and reassurance that normal apps work fine without elevation.
 
 ## [0.2.6] - 2026-06-28
 
