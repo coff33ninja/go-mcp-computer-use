@@ -18,6 +18,10 @@
 - **`watcher_auto_start` / `watcher_interval_seconds` config** — `watcher_auto_start: true` starts the background watcher on server boot with the configured interval. Default: `false`.
 - **Tool count**: 99 → 103 (added `priors_stats`, `export_yolo_dataset`, `training_cleanup_noise`, `set_config`).
 
+### Fixed
+
+- **`SendInput` silently dropping mouse clicks** — the `input` struct in `mouse.go` had an orphan `_ [8]byte` padding field, making `unsafe.Sizeof` = 48 bytes. Windows `sizeof(INPUT)` on x64 is 40 bytes. `SendInput` returns 0 when `cbSize` doesn't match, so `SetCursorPos` moved the cursor but the click event never fired. Removed the extra padding — struct is now exactly 40 bytes.
+
 ## [0.2.6] - 2026-06-28
 
 ### Added

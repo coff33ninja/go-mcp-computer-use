@@ -28,7 +28,6 @@ type mouseInput struct {
 type input struct {
 	inputType uint32
 	mi        mouseInput
-	_         [8]byte
 }
 
 type point struct {
