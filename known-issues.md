@@ -1,5 +1,18 @@
 # Known Issues
 
+## Untested: v0.2.6 — Training pipeline, memory cache, find_ui_element
+
+The following features are **code-complete but not yet tested** with actual ML training or live multi-session AI interaction:
+
+| Feature | Status | Risk |
+|---------|--------|------|
+| `training_save_sample` / `training_list_samples` / `training_stats` / `training_mark_used` | Code complete, no training run verified | ONNX fine-tuning pipeline not wired; collection works, training loop is future work |
+| `MemoryStoreDetectionElements` (auto-store ONNX results in memory) | Code complete, no session persistence verified | Memory TTL (1h) may be too short for cross-session reuse; `ui:` scope collisions possible across different windows with same class names |
+| `find_ui_element` (memory → ONNX → OCR cascade) | Code complete, no multi-session test | No fallback if ONNX + OCR both miss; cascade order (memory first) means stale coordinates are returned before re-running detection |
+| Auto-save snapshots on every click/type/scroll/etc. | Code complete, no disk usage stress test | No config option to disable; could fill disk if watcher + action snapshots accumulate without cleanup |
+| `signal_level` quality filter | Schema added, no training pipeline uses it yet | Training data has `signal_level >= 2` markers but no automated cleanup of `signal_level = 0` noise |
+| Background watcher training save | Code complete | `watcher/no_elements/` may accumulate rapidly (every 5s on blank/simple screens) — no auto-prune |
+
 ## Test Session: v0.1.2 — 2026-06-27
 
 ### Tools Tested & Working (22)
