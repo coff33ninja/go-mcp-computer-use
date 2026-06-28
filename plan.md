@@ -12,13 +12,13 @@ AI agents (opencode, Claude Code, GitHub Copilot, Cursor, etc.) can control the 
 3. Agent calls the corresponding tool
 4. Repeat
 
-This project implements **70 MCP tools** as an MCP server, using Go's Windows API bindings with zero CGO dependency — including native COM WinRT (OCR, UIA) and Win32 via syscall.
+This project implements **71 MCP tools** as an MCP server, using Go's Windows API bindings with zero CGO dependency — including native COM WinRT (OCR, UIA) and Win32 via syscall.
 
 ## Architecture
 
 ```
 cmd/mcp-server/main.go        — entrypoint, stdio transport
-internal/server/server.go     — MCP tool registration (69 tools + 1 chain)
+internal/server/server.go     — MCP tool registration (70 tools + 1 chain)
 internal/actions/
   ├── user32.go               — shared user32.dll proc loading
   ├── screenshot.go           — GDI BitBlt capture → PNG → base64
@@ -48,7 +48,7 @@ internal/actions/
   └── validate.go             — coordinate bounds validation
 ```
 
-## Tools (70 total)
+## Tools (71 total)
 
 ### Screenshot & Vision (7)
 `screenshot` `get_pixel_color` `get_screen_size` `get_screen_dpi`

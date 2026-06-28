@@ -262,6 +262,25 @@ func uiaInvokeHandler(ctx context.Context, req *mcp.CallToolRequest, args UIAInv
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
 }
 
+type ChainArgs struct {
+	Steps     []actions.ChainStep `json:"steps"`
+	TimeoutMs int                 `json:"timeout_ms,omitempty"`
+	OnError   string              `json:"on_error,omitempty"`
+}
+
+func chainHandler(ctx context.Context, req *mcp.CallToolRequest, args ChainArgs) (*mcp.CallToolResult, any, error) {
+	chainReq := actions.ChainRequest{
+		Steps:     args.Steps,
+		TimeoutMs: args.TimeoutMs,
+		OnError:   args.OnError,
+	}
+	result, err := actions.ExecuteChain(chainReq)
+	if err != nil {
+		return nil, nil, fmt.Errorf("chain: %w", err)
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, result, nil
+}
+
 func screenshotHandler(ctx context.Context, req *mcp.CallToolRequest, args ScreenshotArgs) (*mcp.CallToolResult, any, error) {
 	var b64 string
 	var err error
@@ -1238,6 +1257,11 @@ func New(version string) *mcp.Server {
 		Name:        "record_screen",
 		Description: "Record screen frames at fixed intervals. Returns base64 images. Duration in ms, interval in ms.",
 	}, recordScreenHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "chain",
+		Description: "Execute a sequence of steps sequentially server-side. Steps can call any tool, wait, capture output, and use {{variable}} substitution.",
+	}, chainHandler)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "uia_find",

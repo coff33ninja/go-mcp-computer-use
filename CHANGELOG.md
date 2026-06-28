@@ -6,11 +6,18 @@
 
 - **v0.2.x branch baseline** — cut from v0.1.11 as starting point for v0.2 development. All subsequent changes on this branch increment as `+0.0.1` (v0.2.1, v0.2.2, etc.).
 
-## [0.2.1] — *planned*
+## [0.2.1] - 2026-06-27
+
+### Added
+
+- **`chain` tool** — sequential step executor that runs multiple tools server-side without round trips. Supports `tool` (call any registered tool), `wait` (sleep N ms), and `capture` (save step output as `{{variable}}` for use in subsequent steps). Error modes: `stop` (halt on first error, default) or `skip`. Global timeout. 40+ tools dispatched.
+- **Variable substitution** — `{{variable_name}}` in string args is replaced with captured output from earlier steps.
+- **ChainFromJSON** — convenience entry point for programmatic chain execution from JSON string.
+
+## [0.2.2] — *planned*
 
 ### Major
 
-- **Chained Automation Pipeline** — `chain` tool executes sequential steps server-side (poll, loop, if, capture, variable substitution). No round trips between steps.
 - **SQLite Memory Store** — `memory_set/get/search/list/forget` tools backed by `modernc.org/sqlite` (pure Go, zero CGO). Persists learned facts, sequences, and element templates across sessions.
 - **Layout Validation** — before replaying a stored sequence, validates window position, element coordinates, and OCR signatures haven't drifted. Auto-adjusts or marks stale on mismatch.
 - **Self-growing Template Library** — each discovered UI element stores a 32×32px template crop. Over time, `find_image` locates elements visually instead of relying on stale coordinates.
