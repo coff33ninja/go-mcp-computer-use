@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.2.12] - 2026-06-29
+
+### Fixed
+
+- **Release binaries crash with STATUS_ILLEGAL_INSTRUCTION** — Zig cc on GHA runners defaults to `-march=native`, generating CPU-specific instructions incompatible with older machines (Pentium Gold G5400). Pinned `-mcpu=x86_64_v2` in `CGO_CFLAGS` so binaries run on any x86-64 CPU.
+
+### Changed
+
+- **`scripts/build.ps1`** — added `CGO_CFLAGS` with `-mcpu=x86_64_v2` baseline for portable builds
+- **`.github/workflows/release.yml`** — same CPU baseline pin, plus `-fno-sanitize=all` and `-Wno-error`
+
 ## [0.2.11] - 2026-06-29
 
 ### Added
