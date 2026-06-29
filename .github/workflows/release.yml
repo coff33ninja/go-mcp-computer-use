@@ -45,12 +45,15 @@ jobs:
 
       - name: Build release (CGO + Zig)
         run: |
-          $env:CC = "zig cc"
-          $env:CGO_ENABLED = "1"
           # Pin CPU baseline to x86_64_v2 so binary runs on older CPUs (GHA runner
           # is newer and zig defaults to -march=native, which can generate illegal
           # instructions on older machines like Pentium Gold G5400).
+          # Both CGO_CFLAGS (C compilation) and CGO_LDFLAGS (linking) need the
+          # flag because setup-go pre-sets CGO_LDFLAGS=-O2 -g without our -mcpu.
+          $env:CGO_ENABLED = "1"
+          $env:CC = "zig cc"
           $env:CGO_CFLAGS = "-mcpu=x86_64_v2 -fno-sanitize=all -Wno-error=unused-command-line-argument"
+          $env:CGO_LDFLAGS = "-mcpu=x86_64_v2 -fno-sanitize=all -Wno-error=unused-command-line-argument"
           go build -ldflags="-X main.Version=${{ steps.version.outputs.version }}" -o mcp-server.exe ./cmd/mcp-server/
 
       - name: Extract changelog
