@@ -23,6 +23,7 @@ Desktop.ini
 # Editor
 .vscode/
 dev/
+docs2/
 benchmark.exe
 .idea/
 *.swp

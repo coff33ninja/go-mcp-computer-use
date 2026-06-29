@@ -130,6 +130,11 @@ var categoryForTool = map[string]string{
 	// Data Export (1)
 	"export_yolo_dataset": "Data Export",
 
+	// Data Logging (3)
+	"datalog_query":  "Data Logging",
+	"datalog_export": "Data Logging",
+	"datalog_status": "Data Logging",
+
 	// Runtime Config (1)
 	"set_config": "Runtime Config",
 
@@ -181,6 +186,7 @@ var categoryOrder = []string{
 	"Priors & Statistics",
 	"Training Pipeline",
 	"Data Export",
+	"Data Logging",
 	"Runtime Config",
 	"System",
 	"Process Management",

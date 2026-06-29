@@ -1,0 +1,423 @@
+package actions
+
+import (
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sync"
+	"time"
+
+	_ "modernc.org/sqlite"
+)
+
+var (
+	dlogDB   *sql.DB
+	dlogMu   sync.Mutex
+	dlogOnce sync.Once
+	dlogRoot string
+)
+
+type DataLogConfig struct {
+	LogOCR   bool
+	LogChain bool
+	LogKeys  bool
+}
+
+var DataLog = &DataLogConfig{
+	LogOCR:   false,
+	LogChain: true,
+	LogKeys:  true,
+}
+
+func getDataLogRoot() string {
+	appData := os.Getenv("APPDATA")
+	if appData == "" {
+		return ""
+	}
+	return filepath.Join(appData, "go-mcp-computer-use", "datalog")
+}
+
+func InitDataLog() error {
+	var initErr error
+	dlogOnce.Do(func() {
+		dlogRoot = getDataLogRoot()
+		if dlogRoot == "" {
+			initErr = fmt.Errorf("APPDATA not set")
+			return
+		}
+		if err := os.MkdirAll(dlogRoot, 0755); err != nil {
+			initErr = fmt.Errorf("create datalog dir: %w", err)
+			return
+		}
+		dbPath := filepath.Join(dlogRoot, "datalog.db")
+		db, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL")
+		if err != nil {
+			initErr = fmt.Errorf("open datalog db: %w", err)
+			return
+		}
+		if err := createDataLogTables(db); err != nil {
+			db.Close()
+			initErr = fmt.Errorf("create datalog tables: %w", err)
+			return
+		}
+		dlogDB = db
+	})
+	return initErr
+}
+
+func createDataLogTables(db *sql.DB) error {
+	stmts := []string{
+		`CREATE TABLE IF NOT EXISTS command_log (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			session_id TEXT NOT NULL DEFAULT '',
+			source TEXT NOT NULL DEFAULT 'chain',
+			tool TEXT NOT NULL,
+			args TEXT NOT NULL DEFAULT '{}',
+			success INTEGER NOT NULL DEFAULT 1,
+			error_text TEXT NOT NULL DEFAULT '',
+			window_title TEXT NOT NULL DEFAULT '',
+			duration_ms INTEGER NOT NULL DEFAULT 0,
+			ocr_before TEXT NOT NULL DEFAULT '',
+			ocr_after TEXT NOT NULL DEFAULT '',
+			created_at TEXT NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_cmd_session ON command_log(session_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_cmd_tool ON command_log(tool)`,
+		`CREATE INDEX IF NOT EXISTS idx_cmd_created ON command_log(created_at)`,
+
+		`CREATE TABLE IF NOT EXISTS chain_log (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			session_id TEXT NOT NULL DEFAULT '',
+			source TEXT NOT NULL DEFAULT 'chain',
+			step_count INTEGER NOT NULL DEFAULT 0,
+			success_count INTEGER NOT NULL DEFAULT 0,
+			fail_count INTEGER NOT NULL DEFAULT 0,
+			duration_ms INTEGER NOT NULL DEFAULT 0,
+			chain_json TEXT NOT NULL DEFAULT '',
+			result_json TEXT NOT NULL DEFAULT '',
+			created_at TEXT NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_chain_session ON chain_log(session_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_chain_created ON chain_log(created_at)`,
+
+		`CREATE TABLE IF NOT EXISTS ocr_log (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			session_id TEXT NOT NULL DEFAULT '',
+			source TEXT NOT NULL DEFAULT 'tool',
+			image_path TEXT NOT NULL DEFAULT '',
+			ocr_text TEXT NOT NULL DEFAULT '',
+			ocr_json TEXT NOT NULL DEFAULT '{}',
+			text_length INTEGER NOT NULL DEFAULT 0,
+			word_count INTEGER NOT NULL DEFAULT 0,
+			window_title TEXT NOT NULL DEFAULT '',
+			triggered_by TEXT NOT NULL DEFAULT '',
+			created_at TEXT NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_ocr_session ON ocr_log(session_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_ocr_created ON ocr_log(created_at)`,
+
+		`CREATE TABLE IF NOT EXISTS training_pairs (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			session_id TEXT NOT NULL DEFAULT '',
+			ocr_before_text TEXT NOT NULL DEFAULT '',
+			command_json TEXT NOT NULL DEFAULT '',
+			ocr_after_text TEXT NOT NULL DEFAULT '',
+			window_title TEXT NOT NULL DEFAULT '',
+			success INTEGER NOT NULL DEFAULT 1,
+			created_at TEXT NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_pair_session ON training_pairs(session_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_pair_created ON training_pairs(created_at)`,
+	}
+	for _, s := range stmts {
+		if _, err := db.Exec(s); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func saveScreenshotForDataLog() string {
+	if dlogRoot == "" {
+		return ""
+	}
+	b64, err := CaptureScreen()
+	if err != nil {
+		return ""
+	}
+	ts := time.Now().UnixMilli()
+	imgPath := filepath.Join(dlogRoot, fmt.Sprintf("screen_%d.png", ts))
+	img, err := decodePNGB64(b64)
+	if err != nil {
+		return ""
+	}
+	if err := savePNG(imgPath, img); err != nil {
+		return ""
+	}
+	return imgPath
+}
+
+func LogCommand(tool, args string, success bool, errText, windowTitle string, durationMs int64) {
+	if !DataLog.LogKeys {
+		return
+	}
+	dlogMu.Lock()
+	defer dlogMu.Unlock()
+	if dlogDB == nil {
+		if err := InitDataLog(); err != nil {
+			return
+		}
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	successInt := 0
+	if success {
+		successInt = 1
+	}
+	dlogDB.Exec(`INSERT INTO command_log(session_id, source, tool, args, success, error_text, window_title, duration_ms, created_at)
+		VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		"", "chain", tool, args, successInt, errText, windowTitle, durationMs, now)
+}
+
+func LogChain(sessionID string, steps []ChainStep, result *ChainResult, durationMs int64) {
+	if !DataLog.LogChain {
+		return
+	}
+	dlogMu.Lock()
+	defer dlogMu.Unlock()
+	if dlogDB == nil {
+		if err := InitDataLog(); err != nil {
+			return
+		}
+	}
+	chainJSON, _ := json.Marshal(steps)
+	resultJSON, _ := json.Marshal(result)
+	successCount := 0
+	failCount := 0
+	for _, r := range result.Results {
+		if r.Success {
+			successCount++
+		} else {
+			failCount++
+		}
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	dlogDB.Exec(`INSERT INTO chain_log(session_id, source, step_count, success_count, fail_count, duration_ms, chain_json, result_json, created_at)
+		VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		sessionID, "chain", len(steps), successCount, failCount, durationMs, string(chainJSON), string(resultJSON), now)
+}
+
+func LogOCRSnapshot(source, triggeredBy, windowTitle string, result *OCRResult) {
+	if !DataLog.LogOCR {
+		return
+	}
+	dlogMu.Lock()
+	defer dlogMu.Unlock()
+	if dlogDB == nil {
+		if err := InitDataLog(); err != nil {
+			return
+		}
+	}
+	if result == nil {
+		return
+	}
+	imgPath := saveScreenshotForDataLog()
+	ocrJSON, _ := json.Marshal(result)
+	now := time.Now().UTC().Format(time.RFC3339)
+	dlogDB.Exec(`INSERT INTO ocr_log(session_id, source, image_path, ocr_text, ocr_json, text_length, word_count, window_title, triggered_by, created_at)
+		VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		"", source, imgPath, result.Text, string(ocrJSON), len(result.Text), len(result.Words), windowTitle, triggeredBy, now)
+}
+
+type TrainingPairInput struct {
+	OCRBefore string
+	Command   string
+	OCRAfter  string
+	WindowTitle string
+	Success   bool
+}
+
+func LogTrainingPair(in TrainingPairInput) {
+	dlogMu.Lock()
+	defer dlogMu.Unlock()
+	if dlogDB == nil {
+		if err := InitDataLog(); err != nil {
+			return
+		}
+	}
+	successInt := 0
+	if in.Success {
+		successInt = 1
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	dlogDB.Exec(`INSERT INTO training_pairs(session_id, ocr_before_text, command_json, ocr_after_text, window_title, success, created_at)
+		VALUES(?, ?, ?, ?, ?, ?, ?)`,
+		"", in.OCRBefore, in.Command, in.OCRAfter, in.WindowTitle, successInt, now)
+}
+
+type DataLogQuery struct {
+	Table     string `json:"table"`
+	Source    string `json:"source,omitempty"`
+	Tool      string `json:"tool,omitempty"`
+	Success   *bool  `json:"success,omitempty"`
+	Limit     int    `json:"limit,omitempty"`
+	Offset    int    `json:"offset,omitempty"`
+}
+
+type DataLogRow map[string]any
+
+func QueryDataLog(q DataLogQuery) ([]DataLogRow, error) {
+	dlogMu.Lock()
+	defer dlogMu.Unlock()
+	if dlogDB == nil {
+		if err := InitDataLog(); err != nil {
+			return nil, err
+		}
+	}
+	limit := q.Limit
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	var table string
+	var cols string
+	switch q.Table {
+	case "commands":
+		table = "command_log"
+		cols = "id, session_id, source, tool, args, success, error_text, window_title, duration_ms, created_at"
+	case "chains":
+		table = "chain_log"
+		cols = "id, session_id, source, step_count, success_count, fail_count, duration_ms, created_at"
+	case "ocr":
+		table = "ocr_log"
+		cols = "id, session_id, source, image_path, ocr_text, text_length, word_count, window_title, triggered_by, created_at"
+	case "pairs":
+		table = "training_pairs"
+		cols = "id, session_id, ocr_before_text, command_json, ocr_after_text, window_title, success, created_at"
+	default:
+		table = "command_log"
+		cols = "id, session_id, source, tool, args, success, error_text, window_title, duration_ms, created_at"
+	}
+	var where []string
+	var args []any
+	if q.Source != "" {
+		where = append(where, "source = ?")
+		args = append(args, q.Source)
+	}
+	if q.Tool != "" {
+		where = append(where, "tool = ?")
+		args = append(args, q.Tool)
+	}
+	if q.Success != nil {
+		val := 0
+		if *q.Success {
+			val = 1
+		}
+		where = append(where, "success = ?")
+		args = append(args, val)
+	}
+	query := fmt.Sprintf("SELECT %s FROM %s", cols, table)
+	if len(where) > 0 {
+		query += " WHERE " + joinWhere(where)
+	}
+	query += " ORDER BY id DESC LIMIT ? OFFSET ?"
+	args = append(args, limit, q.Offset)
+	rows, err := dlogDB.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query datalog: %w", err)
+	}
+	defer rows.Close()
+	var results []DataLogRow
+	colNames, _ := rows.Columns()
+	for rows.Next() {
+		vals := make([]any, len(colNames))
+		valPtrs := make([]any, len(colNames))
+		for i := range vals {
+			valPtrs[i] = &vals[i]
+		}
+		if err := rows.Scan(valPtrs...); err != nil {
+			return nil, fmt.Errorf("scan datalog: %w", err)
+		}
+		row := make(DataLogRow)
+		for i, name := range colNames {
+			row[name] = vals[i]
+		}
+		results = append(results, row)
+	}
+	return results, rows.Err()
+}
+
+type ExportTrainingOutput struct {
+	Pairs []TrainingPairExport `json:"pairs"`
+	Count int                  `json:"count"`
+}
+
+type TrainingPairExport struct {
+	OCRBefore   string `json:"ocr_before"`
+	Command     string `json:"command"`
+	OCRAfter    string `json:"ocr_after"`
+	WindowTitle string `json:"window_title"`
+	Success     bool   `json:"success"`
+	CreatedAt   string `json:"created_at"`
+}
+
+func ExportTrainingData(sessionID string, limit int) (*ExportTrainingOutput, error) {
+	dlogMu.Lock()
+	defer dlogMu.Unlock()
+	if dlogDB == nil {
+		if err := InitDataLog(); err != nil {
+			return nil, err
+		}
+	}
+	if limit <= 0 || limit > 1000 {
+		limit = 100
+	}
+	var rows *sql.Rows
+	var err error
+	if sessionID != "" {
+		rows, err = dlogDB.Query(`SELECT ocr_before_text, command_json, ocr_after_text, window_title, success, created_at
+			FROM training_pairs WHERE session_id = ? ORDER BY id DESC LIMIT ?`, sessionID, limit)
+	} else {
+		rows, err = dlogDB.Query(`SELECT ocr_before_text, command_json, ocr_after_text, window_title, success, created_at
+			FROM training_pairs ORDER BY id DESC LIMIT ?`, limit)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("export training data: %w", err)
+	}
+	defer rows.Close()
+	out := &ExportTrainingOutput{}
+	for rows.Next() {
+		var p TrainingPairExport
+		var successInt int
+		if err := rows.Scan(&p.OCRBefore, &p.Command, &p.OCRAfter, &p.WindowTitle, &successInt, &p.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan export: %w", err)
+		}
+		p.Success = successInt == 1
+		out.Pairs = append(out.Pairs, p)
+	}
+	out.Count = len(out.Pairs)
+	return out, rows.Err()
+}
+
+type DataLogStats struct {
+	CommandCount  int `json:"command_count"`
+	ChainCount    int `json:"chain_count"`
+	OCRCount      int `json:"ocr_count"`
+	TrainingPairs int `json:"training_pairs"`
+}
+
+func DataLogStatsReport() (*DataLogStats, error) {
+	dlogMu.Lock()
+	defer dlogMu.Unlock()
+	if dlogDB == nil {
+		if err := InitDataLog(); err != nil {
+			return nil, err
+		}
+	}
+	s := &DataLogStats{}
+	dlogDB.QueryRow("SELECT COUNT(*) FROM command_log").Scan(&s.CommandCount)
+	dlogDB.QueryRow("SELECT COUNT(*) FROM chain_log").Scan(&s.ChainCount)
+	dlogDB.QueryRow("SELECT COUNT(*) FROM ocr_log").Scan(&s.OCRCount)
+	dlogDB.QueryRow("SELECT COUNT(*) FROM training_pairs").Scan(&s.TrainingPairs)
+	return s, nil
+}

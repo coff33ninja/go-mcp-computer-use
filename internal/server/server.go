@@ -1453,9 +1453,50 @@ type SetConfigArgs struct {
 	TrainingEnabled      *bool   `json:"training_enabled,omitempty"`
 	PriorAdjustment      *bool   `json:"prior_adjustment,omitempty"`
 	VerifyBounds         *bool   `json:"verify_bounds,omitempty"`
-	LogLevel             *string `json:"log_level,omitempty"`
+	LogLevel             string  `json:"log_level,omitempty"`
 	WatcherEnabled       *bool   `json:"watcher_enabled,omitempty"`
 	WatcherIntervalSecs  *int    `json:"watcher_interval_seconds,omitempty"`
+}
+
+type DataLogQueryArgs struct {
+	Table   string `json:"table"`
+	Source  string `json:"source,omitempty"`
+	Tool    string `json:"tool,omitempty"`
+	Success *bool  `json:"success,omitempty"`
+	Limit   int    `json:"limit,omitempty"`
+	Offset  int    `json:"offset,omitempty"`
+}
+
+type DataLogExportArgs struct {
+	SessionID string `json:"session_id,omitempty"`
+	Limit     int    `json:"limit,omitempty"`
+}
+
+func datalogQueryHandler(ctx context.Context, req *mcp.CallToolRequest, args DataLogQueryArgs) (*mcp.CallToolResult, any, error) {
+	rows, err := actions.QueryDataLog(actions.DataLogQuery{
+		Table: args.Table, Source: args.Source, Tool: args.Tool,
+		Success: args.Success, Limit: args.Limit, Offset: args.Offset,
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("datalog_query: %w", err)
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, rows, nil
+}
+
+func datalogExportHandler(ctx context.Context, req *mcp.CallToolRequest, args DataLogExportArgs) (*mcp.CallToolResult, any, error) {
+	out, err := actions.ExportTrainingData(args.SessionID, args.Limit)
+	if err != nil {
+		return nil, nil, fmt.Errorf("datalog_export: %w", err)
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, out, nil
+}
+
+func datalogStatusHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
+	stats, err := actions.DataLogStatsReport()
+	if err != nil {
+		return nil, nil, fmt.Errorf("datalog_status: %w", err)
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, stats, nil
 }
 
 func setConfigHandler(ctx context.Context, req *mcp.CallToolRequest, args SetConfigArgs) (*mcp.CallToolResult, any, error) {
@@ -1488,10 +1529,9 @@ func setConfigHandler(ctx context.Context, req *mcp.CallToolRequest, args SetCon
 			changed = true
 		}
 	}
-	if args.LogLevel != nil {
-		val := *args.LogLevel
-		if cfg.LogLevel != val {
-			cfg.LogLevel = val
+	if args.LogLevel != "" {
+		if cfg.LogLevel != args.LogLevel {
+			cfg.LogLevel = args.LogLevel
 			changed = true
 		}
 	}
@@ -1570,7 +1610,7 @@ func New(version string) *mcp.Server {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
 	slog.SetDefault(logger)
 
-	slog.Info("starting go-mcp-computer-use", "version", version, "tools", 108, "tools_doc", "docs/tools.md")
+	slog.Info("starting go-mcp-computer-use", "version", version, "tools", 111, "tools_doc", "docs/tools.md")
 
 	if cfg.UIAWarmup {
 		go func() {
@@ -2153,8 +2193,23 @@ func New(version string) *mcp.Server {
 	}, trainingCleanupNoiseHandler)
 
 	mcp.AddTool(server, &mcp.Tool{
+		Name:        "datalog_query",
+		Description: "Query the action/OCR data log. Table: commands, chains, ocr, or pairs. Filter by source, tool, success. Returns recent rows with all columns.",
+	}, datalogQueryHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "datalog_export",
+		Description: "Export OCR+command training pairs as JSON for ML training. Optionally filter by session_id. Returns pairs with before/after OCR text and command JSON.",
+	}, datalogExportHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "datalog_status",
+		Description: "Get data logging statistics: count of commands, chains, OCR snapshots, and training pairs logged to the datalog database.",
+	}, datalogStatusHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "set_config",
-		Description: "Update runtime configuration. Accepts any subset of: training_enabled (stop/start background screenshot saving), prior_adjustment (enable/disable ML prior confidence tuning), verify_bounds (toggle coordinate bounds checking), log_level (debug/info/warn/error), watcher_enabled (start/stop the background screenshot watcher), watcher_interval_seconds (change polling frequency while running). Changes persist to disk. Use this to disable data collection or control the watcher at runtime.",
+		Description: "Update runtime configuration. Accepts any subset of: training_enabled (stop/start background screenshot saving), prior_adjustment (enable/disable ML prior confidence tuning), verify_bounds (toggle coordinate bounds checking), log_level (debug/info/warn/error), watcher_enabled (start/stop the background screenshot watcher), watcher_interval_seconds (change polling frequency while running). Changes persist to disk. Use this to disable data collection or control the tool at runtime.",
 	}, setConfigHandler)
 
 	return server

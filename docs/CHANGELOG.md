@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.2.15] - 2026-06-29
+
+### Added
+
+- **Data logging database** (`internal/actions/datalog.go`) — new SQLite DB at `%APPDATA%/go-mcp-computer-use/datalog/datalog.db` with four tables:
+  - `command_log` — every chain/tool execution with args, success, duration, error text
+  - `chain_log` — full chain executions with step counts, success/fail breakdown, chain JSON
+  - `ocr_log` — OCR snapshots with full OCR text, word count, linked screenshot image path
+  - `training_pairs` — OCR-before + command + OCR-after triples for ML sequence learning
+
+- **Automatic logging hooks** — chains, individual commands, and OCR calls are logged automatically via goroutines with no performance impact on the main execution path.
+
+- **Three new MCP tools:**
+  - `datalog_query` — query any table (commands, chains, ocr, pairs) with filters (source, tool, success), returns rows as JSON
+  - `datalog_export` — export training pairs as JSON array for downstream ML training pipelines
+  - `datalog_status` — get row counts for all four tables
+
+### Changed
+
+- **VERSION** — bumped 0.2.14 → 0.2.15
+- **Tool count** — 108 → 111
+
 ## [0.2.14] - 2026-06-29
 
 ### Added

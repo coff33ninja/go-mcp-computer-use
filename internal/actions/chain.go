@@ -181,6 +181,8 @@ func ExecuteChain(req ChainRequest) (*ChainResult, error) {
 		Variables: state.variables,
 	}
 
+	startTime := time.Now()
+
 	done := make(chan bool, 1)
 	go func() {
 		results, sc := execSteps(req.Steps, state)
@@ -198,10 +200,13 @@ func ExecuteChain(req ChainRequest) (*ChainResult, error) {
 	for _, r := range result.Results {
 		if !r.Success {
 			result.Success = false
-			return result, nil
+			break
 		}
 	}
-	result.Success = true
+
+	elapsed := time.Since(startTime).Milliseconds()
+	go LogChain("", req.Steps, result, elapsed)
+
 	return result, nil
 }
 
@@ -312,14 +317,20 @@ func execTool(step ChainStep, args map[string]any, _ *chainState) StepResult {
 			Error:   fmt.Sprintf("unknown tool: %s", step.Tool),
 		}
 	}
+	startTime := time.Now()
 	output, err := fn(args)
+	elapsed := time.Since(startTime).Milliseconds()
 	if err != nil {
+		argsJSON, _ := json.Marshal(args)
+		go LogCommand(step.Tool, string(argsJSON), false, err.Error(), "", elapsed)
 		return StepResult{
 			Tool:    step.Tool,
 			Success: false,
 			Error:   err.Error(),
 		}
 	}
+	argsJSON, _ := json.Marshal(args)
+	go LogCommand(step.Tool, string(argsJSON), true, "", "", elapsed)
 	if t, ok := trainingTools[step.Tool]; ok {
 		SaveSnapshotAfterAction(TrainingSourceRaw, t.Category, t.MakePrompt(args))
 	}

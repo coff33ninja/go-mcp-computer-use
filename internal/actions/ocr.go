@@ -108,7 +108,11 @@ func OCRScreen(language string) (*OCRResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("ocr screenshot: %w", err)
 	}
-	return ocrFromBase64(b64, language)
+	result, err := ocrFromBase64(b64, language)
+	if err == nil && result != nil {
+		go LogOCRSnapshot("tool", "ocr_screen", "", result)
+	}
+	return result, err
 }
 
 func OCRRegion(x, y, w, h int32, language string) (*OCRResult, error) {
@@ -116,7 +120,11 @@ func OCRRegion(x, y, w, h int32, language string) (*OCRResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("ocr region shot: %w", err)
 	}
-	return ocrFromBase64(b64, language)
+	result, err := ocrFromBase64(b64, language)
+	if err == nil && result != nil {
+		go LogOCRSnapshot("tool", "ocr_region", "", result)
+	}
+	return result, err
 }
 
 func OCRProportionalWindowRegion(hwnd uintptr, leftFrac, topFrac, rightFrac, bottomFrac float64, language string) (*OCRResult, error) {
