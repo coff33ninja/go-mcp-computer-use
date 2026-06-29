@@ -3,7 +3,7 @@
 > **Built iteratively** across AI-assisted development sessions, with v0.1.x covering 70+ bug-fixed Win32/COM tools and v0.2.x adding the chained automation pipeline, SQLite memory store, ONNX ML detection, and the training data pipeline for user-specific model fine-tuning.
 > The AI agent was guided by a curated set of quality-enforcement skills from [coff33ninja/ai-skills](https://github.com/coff33ninja/ai-skills) — anti-hallucination, anti-slop, safe-code-modifications, anti-sycophancy, code-simplification, context-engineering, don't-kill-tokens, os-awareness, anti-tool-sprawl, follow-existing-patterns, no-dead-code-removal, universal-format-lint, self-validate, verify-and-cite, and others.
 >
-> **Status:** v0.2.9 — tools include statistical prior model, training pipeline, memory-backed UI element cache, ONNX detection, runtime privacy controls, key hold/release, input recording, set_config, and YOLO dataset export. See [`docs/tools.md`](docs/tools.md) for the full listing.
+> **Status:** v0.2.11 — tools include statistical prior model, training pipeline, memory-backed UI element cache, ONNX detection, runtime privacy controls, key hold/release, input recording, set_config, and YOLO dataset export. See [`docs/tools.md`](docs/tools.md) for the full listing.
 
 MCP server for Windows desktop computer use. Exposes mouse, keyboard, screenshot, OCR, template matching, window management, system control, and screen recording to AI agents via [Model Context Protocol](https://modelcontextprotocol.io).
 

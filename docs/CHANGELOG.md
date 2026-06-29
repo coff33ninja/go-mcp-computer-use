@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.2.11] - 2026-06-29
+
+### Added
+
+- **`scripts/gen-tools-doc.go`** — parses `internal/server/server.go` for `mcp.AddTool` calls, generates `docs/tools.md` with categorized 108-tool listing. CI validates freshness on every push/PR.
+- **`scripts/push-and-release.ps1`** — one-shot auto-release: reads VERSION, commits with changelog body, tags, pushes, waits for release workflow, downloads binary, replaces `mcp-server.exe`, restarts OpenCode Desktop as admin.
+- **`docs/tools.md`** — auto-generated tool reference doc (never stale).
+- **`docs/security.md`**, **`docs/configuration.md`**, **`docs/build.md`**, **`docs/architecture.md`**, **`docs/accessibility.md`** — split from monolithic README.
+- **Weekly module maintenance** — `.github/workflows/mod-maintenance.yml` runs `go get -u ./...` + auto-PR every Monday.
+- **CI: `go mod tidy` validation** — fails if `go.mod`/`go.sum` drifts from tidy state.
+
+### Changed
+
+- **README.md** — collapsed 383→92 lines, links to focused docs/ split.
+- **Root docs moved** — `plan.md`, `todo.md`, `backlog.md`, `known-issues.md`, `CHANGELOG.md` relocated to `docs/`.
+- **CGO mandatory** — removed all `-NoCGO` flags, pure-Go fallback paths, and optional-CGO language across 9 files. `release.yml` now produces a single `mcp-server.exe` (CGO+Zig).
+- **Release workflow** — single binary output, no `-cgo` suffix variant.
+- **`scripts/build.ps1`** — removed `-NoCGO` switch, always requires Zig cc.
+
+### Documentation
+
+- **README split** — large sections moved into focused docs for maintainability.
+- **All NoCGO references removed** — across `plan.md`, `adr-002`, `comparison-vs-windows-recall.md`, `ci-cd-pipeline.md`, `build.md`, `README.md`.
+
 ## [0.2.10] - 2026-06-29
 
 ### Documentation
