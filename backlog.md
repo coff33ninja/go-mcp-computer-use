@@ -5,7 +5,7 @@
 
 ## How to Read
 
-- **HAVE** = implemented (65 tools)
+- **HAVE** = implemented (103 tools)
 - **NEXT** = high-impact, feasible additions
 - **FAR** = possible but lower priority or complex
 - Items within a section ordered roughly by priority

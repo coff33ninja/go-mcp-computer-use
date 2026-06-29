@@ -165,7 +165,7 @@ But `list_displays` only returns DISPLAY1.
 
 ## Prompt Engineering: Learn-Once-Reuse-Forever Pattern
 
-The MCP server exposes 70 tools, but an AI agent using them starts **cold** every session — no knowledge of:
+The MCP server exposes 103 tools, but an AI agent using them starts **cold** every session — no knowledge of:
 - What windows exist on this user's desktop and where they're positioned
 - How specific applications render (Firefox tab bar vs URL bar, Outlook email list vs reading pane)
 - What sequences of tool calls successfully completed a task last time
@@ -233,6 +233,72 @@ Without this pattern, the AI wastes time and tokens rediscovering basic facts ea
 
 ### L3. Firefox containers intercept the `+` new tab button
 Firefox Multi-Account Containers changes the new-tab `+` behavior — instead of opening a blank tab immediately, it shows a popup asking which container to use. Click "No Container" (≈x=830, y=105 in this layout) or use `Ctrl+T` which bypasses the popup.
+
+### B14. ONNX YOLO11n model uses unsupported opset 22
+
+**Observation:** `onnx_download` pulls YOLO11n from Ultralytics v8.3.0, which exports to opset 22. `onnxruntime_go` linked against ORT 1.20.x supports only opset 21 max. Detection fails silently when running `onnx_detect`.
+
+**Root cause:** Upstream model format drift — Ultralytics incrementally bumps ONNX opset with releases. ORT 1.20.x predates opset 22 support. The `yalue/onnxruntime_go` v1.13.0 is pinned to ORT 1.20.x API.
+
+**Workaround:** None — MobileNetV3-small still works for UI element classification, but YOLO object detection is offline.
+
+**Planned fix:** Either download an older YOLO11n export (opset 21) from an earlier Ultralytics release, or update ORT to 1.21+ when `onnxruntime_go` releases a compatible version.
+
+---
+
+## Roadmap / Future Possibilities
+
+### R1. Chain interruption — abort mid-sequence
+
+The `chain` tool runs to completion or global timeout with no stop mechanism. For gameplay chains tied to game state (e.g., react to hit-stun, dodge indicator), the AI needs the ability to abort a running chain and switch to a different sequence.
+
+**Approach (not started):**
+- Add `chain_stop` tool that sets an atomic abort flag
+- `ChainExecutor` checks abort flag between every step
+- Poll/loop steps check abort flag before each iteration
+- Returns partial result: `{"status": "aborted", "completed_steps": N, "partial_output": {...}}`
+
+### R2. Database-backed training dataset
+
+AI currently has no long-term memory of what VK sequences worked in previous game sessions. Each session is a cold start.
+
+**Approach (not started):**
+- SQLite schema for gameplay recordings: `recording_id`, `window_title`, `game_state_snapshot` (OCR text), `vk_sequence` (JSON), `timestamp`
+- Combined OCR + VK logging during keylogger recording
+- Queries for replaying sequences that succeeded in similar game states
+
+### R3. Custom ML model for adaptive gameplay timing
+
+Gemini suggested a Seq2Seq/LSTM model that takes "desired abilities" as input and outputs optimal VK code sequences + wait timings based on recorded human play.
+
+**Approach (not started):**
+- Export recorded gameplay sequences as labeled training data
+- Train lightweight model (not LLM-scale) in isolated Docker container
+- Load ONNX-exported model in Go server for real-time combo generation
+- Adaptive timing: model learns per-ability cast times from human latency patterns
+
+### R4. Smart cropping for OCR performance
+
+Current OCR screenshots capture entire window or full screen. For game UI reading (cooldown numbers, health bars, ability tooltips), this wastes tokens and latency.
+
+**Approach (not started):**
+- Define per-application "UI regions" (e.g., NTE: bottom-center for hotbar, top-left for health)
+- Crop screenshot to known UI regions before OCR
+- Store region definitions in memory store for reuse across sessions
+
+### R5. Video frame analysis
+
+Currently all screen analysis is single-frame (OCR or ONNX on still images). Temporal awareness would enable:
+- Detecting game state transitions (loading screen → gameplay, combat → menu)
+- Recognizing animation tells (enemy wind-up → dodge window)
+- Reading dynamic UI elements (damage numbers, cast bars)
+
+**Approach (not started):**
+- Frame buffer: keep last N screenshots in memory for temporal queries
+- Simple state machine: DIFF between consecutive frames to detect large-scale changes
+- Video model API integration for frame series → action prediction (long-term)
+
+---
 
 ## Notes
 

@@ -18,7 +18,7 @@ This project implements **94 MCP tools** as an MCP server, using Go's Windows AP
 
 ```
 cmd/mcp-server/main.go        — entrypoint, stdio transport
-internal/server/server.go     — MCP tool registration (94 tools)
+internal/server/server.go     — MCP tool registration (103 tools)
 internal/actions/
   ├── user32.go               — shared user32.dll proc loading
   ├── screenshot.go           — GDI BitBlt capture → PNG → base64
