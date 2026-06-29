@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
@@ -29,6 +30,12 @@ var DataLog = &DataLogConfig{
 	LogOCR:   true,
 	LogChain: true,
 	LogKeys:  true,
+}
+
+func bridgeBufferSize() int {
+	pairMu.Lock()
+	defer pairMu.Unlock()
+	return len(recentOCR)
 }
 
 func getDataLogRoot() string {
@@ -161,15 +168,44 @@ func saveScreenshotForDataLog() string {
 
 // LogToolCall logs an action function call with its args. Used by action
 // functions (Click, KeyPress, etc.) to log every MCP tool invocation.
+// Bridge logic (OCR before/after pairing) runs synchronously to avoid races
+// with subsequent OCR calls. Only the DB insert is sent to a goroutine.
 func LogToolCall(tool string, argsJSON string, err error) {
 	if !DataLog.LogKeys {
 		return
 	}
-	errText := ""
-	if err != nil {
-		errText = err.Error()
+	errVal := err
+
+	// Bridge: find recent OCR and set pending command synchronously
+	// so the next OCR call will find the pending pair immediately.
+	ocrBefore := findRecentOCRBefore()
+	slog.Warn("LogToolCall bridge", "tool", tool, "found_ocr", ocrBefore != "", "buffer_size", bridgeBufferSize())
+	if ocrBefore != "" {
+		cmdJSON := argsJSON
+		if tool != "" {
+			cmdMap := map[string]any{"tool": tool, "args": argsJSON}
+			if b, jErr := json.Marshal(cmdMap); jErr == nil {
+				cmdJSON = string(b)
+			}
+		}
+		pairMu.Lock()
+		pendingCmd = &TrainingPairInput{
+			OCRBefore: ocrBefore,
+			Command:   cmdJSON,
+			Success:   errVal == nil,
+		}
+		pendingTime = time.Now()
+		slog.Warn("LogToolCall set pending", "ocr_before", ocrBefore[:min(len(ocrBefore), 40)])
+		pairMu.Unlock()
 	}
-	go LogCommand(tool, argsJSON, err == nil, errText, "", 0)
+
+	go func() {
+		errText := ""
+		if errVal != nil {
+			errText = errVal.Error()
+		}
+		LogCommand(tool, argsJSON, errVal == nil, errText, "", 0)
+	}()
 }
 
 type ocrSnap struct {
@@ -184,13 +220,14 @@ var (
 	pairMu       sync.Mutex
 )
 
-const bridgeWindow = 3 * time.Second
+const bridgeWindow = 30 * time.Second
 const maxRecentOCR = 5
 
 func pushRecentOCR(text string) {
 	pairMu.Lock()
 	defer pairMu.Unlock()
 	recentOCR = append(recentOCR, ocrSnap{text: text, timestamp: time.Now()})
+	slog.Warn("pushRecentOCR", "buffer_size", len(recentOCR), "text_preview", text[:min(len(text), 40)])
 	if len(recentOCR) > maxRecentOCR {
 		recentOCR = recentOCR[len(recentOCR)-maxRecentOCR:]
 	}
@@ -201,10 +238,13 @@ func findRecentOCRBefore() string {
 	defer pairMu.Unlock()
 	now := time.Now()
 	for i := len(recentOCR) - 1; i >= 0; i-- {
-		if now.Sub(recentOCR[i].timestamp) <= bridgeWindow {
+		age := now.Sub(recentOCR[i].timestamp)
+		slog.Warn("findRecentOCRBefore check", "index", i, "age_ms", age.Milliseconds(), "bridge_window_ms", bridgeWindow.Milliseconds())
+		if age <= bridgeWindow {
 			return recentOCR[i].text
 		}
 	}
+	slog.Warn("findRecentOCRBefore found nothing", "buffer_size", len(recentOCR))
 	return ""
 }
 
@@ -214,10 +254,14 @@ func tryCompletePair(afterText, windowTitle string) {
 	pt := pendingTime
 	pendingCmd = nil
 	pairMu.Unlock()
+	slog.Warn("tryCompletePair", "has_pending", p != nil)
 	if p == nil {
 		return
 	}
-	if time.Since(pt) > bridgeWindow {
+	age := time.Since(pt)
+	slog.Warn("tryCompletePair pending age", "age_ms", age.Milliseconds())
+	if age > bridgeWindow {
+		slog.Warn("tryCompletePair expired")
 		return
 	}
 	p.OCRAfter = afterText
@@ -225,8 +269,29 @@ func tryCompletePair(afterText, windowTitle string) {
 		p.WindowTitle = windowTitle
 	}
 	if p.OCRBefore != "" && p.Command != "" {
+		slog.Warn("tryCompletePair logging pair", "ocr_before", p.OCRBefore[:min(len(p.OCRBefore), 30)])
 		LogTrainingPair(*p)
 	}
+}
+
+func BridgeDebugInfo() map[string]any {
+	pairMu.Lock()
+	defer pairMu.Unlock()
+	info := map[string]any{
+		"recent_ocr_count": len(recentOCR),
+		"has_pending":      pendingCmd != nil,
+	}
+	if len(recentOCR) > 0 {
+		last := recentOCR[len(recentOCR)-1]
+		info["last_ocr_text"] = last.text[:min(len(last.text), 40)]
+		info["last_ocr_age_ms"] = time.Since(last.timestamp).Milliseconds()
+	}
+	if pendingCmd != nil {
+		info["pending_ocr_before"] = pendingCmd.OCRBefore[:min(len(pendingCmd.OCRBefore), 40)]
+		info["pending_command"] = pendingCmd.Command
+		info["pending_age_ms"] = time.Since(pendingTime).Milliseconds()
+	}
+	return info
 }
 
 func LogCommand(tool, args string, success bool, errText, windowTitle string, durationMs int64) {
@@ -249,27 +314,6 @@ func LogCommand(tool, args string, success bool, errText, windowTitle string, du
 		VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		"", "chain", tool, args, successInt, errText, windowTitle, durationMs, now)
 	dlogMu.Unlock()
-
-	ocrBefore := findRecentOCRBefore()
-	if ocrBefore == "" {
-		return
-	}
-	cmdJSON := args
-	if tool != "" {
-		cmdMap := map[string]any{"tool": tool, "args": args}
-		if b, err := json.Marshal(cmdMap); err == nil {
-			cmdJSON = string(b)
-		}
-	}
-	pairMu.Lock()
-	pendingCmd = &TrainingPairInput{
-		OCRBefore:   ocrBefore,
-		Command:     cmdJSON,
-		WindowTitle: windowTitle,
-		Success:     success,
-	}
-	pendingTime = time.Now()
-	pairMu.Unlock()
 }
 
 func LogChain(sessionID string, steps []ChainStep, result *ChainResult, durationMs int64) {
@@ -307,8 +351,6 @@ func LogOCRSnapshot(source, triggeredBy, windowTitle string, result *OCRResult) 
 	if result == nil {
 		return
 	}
-	pushRecentOCR(result.Text)
-	tryCompletePair(result.Text, windowTitle)
 
 	dlogMu.Lock()
 	defer dlogMu.Unlock()

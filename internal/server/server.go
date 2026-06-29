@@ -1623,6 +1623,13 @@ func agentTrainHandler(ctx context.Context, req *mcp.CallToolRequest, _ AgentTra
 	}, analysis, nil
 }
 
+func bridgeDebugHandler(_ context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
+	info := actions.BridgeDebugInfo()
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
+	}, info, nil
+}
+
 func setConfigHandler(ctx context.Context, req *mcp.CallToolRequest, args SetConfigArgs) (*mcp.CallToolResult, any, error) {
 	cfg := actions.ActiveConfig
 	if cfg == nil {
@@ -2378,6 +2385,11 @@ func New(version string) *mcp.Server {
 		Name:        "agent_train",
 		Description: "Train the adaptive engine from datalog training_pairs. Rebuilds the OCR→command word index and sequence cache. Call after the datalog has accumulated new pairs.",
 	}, agentTrainHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "bridge_debug",
+		Description: "Debug the OCR→command bridge state — shows recent OCR buffer, pending command, and timing info.",
+	}, bridgeDebugHandler)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "set_config",

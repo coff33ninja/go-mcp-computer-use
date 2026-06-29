@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.2.17] - 2026-06-29
+
+### Fixed
+
+- **OCR→Training bridge window** — `bridgeWindow` increased from 3s to 30s. The OCR→AI→MCP→Click round trip regularly exceeded the original 3-second window, preventing training pair creation. Debugged via new `bridgeBufferSize()` and `BridgeDebugInfo()` diagnostic functions exposed through the `bridge_debug` MCP tool.
+
+### Added
+
+- **`bridge_debug` MCP tool** — debug the OCR→command bridge state, showing recent OCR buffer contents, pending command, and timing info.
+
 ## [0.2.16] - 2026-06-29
 
 ### Added
