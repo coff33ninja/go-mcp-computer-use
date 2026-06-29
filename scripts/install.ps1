@@ -23,13 +23,13 @@ if (-not $go) {
 $zig = Get-Command "zig" -ErrorAction SilentlyContinue
 if ($UseZig -and -not $zig) {
     Write-Host "Zig not found. Installing Zig..." -ForegroundColor Yellow
-    $zigUrl = "https://ziglang.org/download/0.16.0/zig-windows-x86_64-0.16.0.zip"
+    $zigUrl = "https://ziglang.org/download/0.16.0/zig-x86_64-windows-0.16.0.zip"
     $zigZip = "$env:TEMP\zig.zip"
     $zigDir = "$env:LOCALAPPDATA\zig"
     try {
         Invoke-WebRequest -Uri $zigUrl -OutFile $zigZip -ErrorAction Stop
         Expand-Archive -Path $zigZip -DestinationPath $zigDir -Force
-        $zigPath = "$zigDir\zig-windows-x86_64-0.16.0\zig.exe"
+        $zigPath = "$zigDir\zig-x86_64-windows-0.16.0\zig.exe"
         if (Test-Path -LiteralPath $zigPath) {
             $env:Path += ";$(Split-Path $zigPath)"
             [Environment]::SetEnvironmentVariable("Path", [Environment]::GetEnvironmentVariable("Path","User") + ";$(Split-Path $zigPath)", "User")

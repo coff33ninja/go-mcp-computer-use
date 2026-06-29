@@ -35,11 +35,11 @@ jobs:
       - name: Install Zig
         shell: pwsh
         run: |
-          $url = "https://ziglang.org/download/0.16.0/zig-windows-x86_64-0.16.0.zip"
+          $url = "https://ziglang.org/download/0.16.0/zig-x86_64-windows-0.16.0.zip"
           $zip = "$env:TEMP\zig.zip"
           Invoke-WebRequest -Uri $url -OutFile $zip
           Expand-Archive -Path $zip -DestinationPath "$env:ProgramFiles" -Force
-          echo "$env:ProgramFiles\zig-windows-x86_64-0.16.0" | Out-File -FilePath $env:GITHUB_PATH -Append
+          echo "$env:ProgramFiles\zig-x86_64-windows-0.16.0" | Out-File -FilePath $env:GITHUB_PATH -Append
 
       - name: Build with Zig cc + CGO
         shell: pwsh
