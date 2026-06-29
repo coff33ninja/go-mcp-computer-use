@@ -1,0 +1,56 @@
+name: Module Maintenance
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # weekly Monday 06:00 UTC
+  workflow_dispatch: # manual trigger
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          cache: true
+
+      - name: Update dependencies
+        shell: pwsh
+        run: |
+          go get -u ./...
+          go mod tidy
+
+      - name: Check for changes
+        id: check
+        shell: pwsh
+        run: |
+          $diff = git diff --name-only
+          if ($diff) {
+            echo "changes=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          } else {
+            echo "changes=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          }
+
+      - name: Create PR
+        if: steps.check.outputs.changes == 'true'
+        shell: pwsh
+        run: |
+          $branch = "chore/weekly-deps-$(Get-Date -Format 'yyyy-MM-dd')"
+          git checkout -b $branch
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add -A
+          git commit -m "chore(deps): weekly go module update"
+          git push origin $branch
+          gh pr create `
+            --title "chore(deps): weekly go module update" `
+            --body "Automated weekly Go module dependency update via \`go get -u ./...\` followed by \`go mod tidy\`." `
+            --base v0.2.x
+        env:
+          GH_TOKEN: ${{ github.token }}

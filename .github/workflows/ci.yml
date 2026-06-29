@@ -21,6 +21,32 @@ jobs:
         shell: pwsh
         run: ./scripts/lint.ps1
 
+      - name: Check tool docs are up to date
+        shell: pwsh
+        run: |
+          go run ./scripts/gen-tools-doc.go
+          $diff = git diff --name-only docs/tools.md
+          if ($diff) {
+            Write-Host "ERROR: docs/tools.md is stale. Run 'go run ./scripts/gen-tools-doc.go' and commit."
+            git diff docs/tools.md
+            exit 1
+          } else {
+            Write-Host "docs/tools.md is up to date"
+          }
+
+      - name: Check go.mod is tidy
+        shell: pwsh
+        run: |
+          go mod tidy
+          $diff = git diff --name-only go.mod go.sum
+          if ($diff) {
+            Write-Host "ERROR: go.mod or go.sum is not tidy. Run 'go mod tidy' and commit."
+            git diff go.mod go.sum
+            exit 1
+          } else {
+            Write-Host "go.mod is tidy"
+          }
+
   build:
     runs-on: windows-latest
     needs: lint

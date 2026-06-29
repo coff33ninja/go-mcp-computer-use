@@ -30,13 +30,13 @@ Architecturally, the system splits into these layers:
 - **ML informs MCP, doesn't replace it** — perception feeds structure, not commands
 - **Feedback loop** — every action is verified by perception before continuing
 
-This project implements **108 MCP tools** using Go's Windows API bindings — Win32 via syscall, native COM/WinRT for OCR + UIA, with CGO required only for ONNX runtime inference (optional via `-NoCGO` build flag, which excludes ONNX tools).
+This project implements **108 MCP tools** (see [docs/tools.md](docs/tools.md) — auto-generated from `internal/server/server.go`) using Go's Windows API bindings — Win32 via syscall, native COM/WinRT for OCR + UIA, with CGO required only for ONNX runtime inference (optional via `-NoCGO` build flag, which excludes ONNX tools).
 
 ## Architecture
 
 ```
 cmd/mcp-server/main.go        — entrypoint, stdio transport
-internal/server/server.go     — MCP tool registration (108 tools)
+internal/server/server.go     — MCP tool registration (108 tools — auto-counted by scripts/gen-tools-doc.go)
 internal/actions/
   ├── user32.go               — shared user32.dll proc loading
   ├── screenshot.go           — GDI BitBlt capture → PNG → base64
@@ -73,9 +73,9 @@ internal/actions/
   └── windowexploreruse.go    — File Explorer automation (focus, open path)
 ```
 
-## Tools (108 total — see [README](README.md#tools-108--v029) for full listing)
+## Tools (108 total — see [docs/tools.md](docs/tools.md) for full listing — auto-generated from `internal/server/server.go`)
 
-Key categories: screenshot/vision (8), mouse (6), keyboard (9 incl. keylogger), window management (13), chained/composite (6), chain automation (1), UI automation (3), browser automation (4), file explorer (2), key logger (5), audio (2), memory & templates (10), ONNX ML (7), priors & stats (1), training pipeline (6), data export (1), runtime config (1), system (26), process management (4).
+Key categories: Screenshot & Vision (8), Mouse (6), Keyboard (9 incl. keylogger), Window Management (13), Chained / Composite (4), Chain Automation (1), UI Automation (3), Browser Automation (4), File Explorer (4), Audio (2), Memory & Templates (10), ONNX ML (7), Priors & Statistics (1), Training Pipeline (6), Data Export (1), Runtime Config (1), System (25), Process Management (3).
 
 ## Design Decisions
 
