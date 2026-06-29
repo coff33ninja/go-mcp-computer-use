@@ -7,7 +7,7 @@ on:
     branches: [main, master, "v0.2.x"]
 
 jobs:
-  build:
+  lint:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,9 +17,33 @@ jobs:
           go-version: "1.26"
           cache: true
 
-      - name: Lint + Build
+      - name: Lint
         shell: pwsh
         run: ./scripts/lint.ps1
+
+  build:
+    runs-on: windows-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          cache: true
+
+      - name: Install Zig
+        shell: pwsh
+        run: |
+          $url = "https://ziglang.org/download/0.16.0/zig-windows-x86_64-0.16.0.zip"
+          $zip = "$env:TEMP\zig.zip"
+          Invoke-WebRequest -Uri $url -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath "$env:ProgramFiles" -Force
+          echo "$env:ProgramFiles\zig-windows-x86_64-0.16.0" | Out-File -FilePath $env:GITHUB_PATH -Append
+
+      - name: Build with Zig cc + CGO
+        shell: pwsh
+        run: ./scripts/build.ps1
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

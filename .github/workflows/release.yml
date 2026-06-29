@@ -34,8 +34,23 @@ jobs:
         shell: pwsh
         run: ./scripts/lint.ps1
 
-      - name: Build release
+      - name: Install Zig
+        shell: pwsh
+        run: |
+          $url = "https://ziglang.org/download/0.16.0/zig-windows-x86_64-0.16.0.zip"
+          $zip = "$env:TEMP\zig.zip"
+          Invoke-WebRequest -Uri $url -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath "$env:ProgramFiles" -Force
+          echo "$env:ProgramFiles\zig-windows-x86_64-0.16.0" | Out-File -FilePath $env:GITHUB_PATH -Append
+
+      - name: Build release (no CGO)
         run: go build -ldflags="-X main.Version=${{ steps.version.outputs.version }}" -o mcp-server.exe ./cmd/mcp-server/
+
+      - name: Build release (CGO + Zig)
+        run: |
+          $env:CC = "zig cc"
+          $env:CGO_ENABLED = "1"
+          go build -ldflags="-X main.Version=${{ steps.version.outputs.version }}" -o mcp-server-cgo.exe ./cmd/mcp-server/
 
       - name: Extract changelog
         id: changelog
@@ -57,6 +72,8 @@ jobs:
         run: |
           $hash = (Get-FileHash -Algorithm SHA256 mcp-server.exe).Hash.ToLower()
           Set-Content -Path "mcp-server.exe.sha256" -Value "$hash  mcp-server.exe"
+          $hashCgo = (Get-FileHash -Algorithm SHA256 mcp-server-cgo.exe).Hash.ToLower()
+          Set-Content -Path "mcp-server-cgo.exe.sha256" -Value "$hashCgo  mcp-server-cgo.exe"
 
       - name: Create release
         uses: softprops/action-gh-release@v2
@@ -66,5 +83,7 @@ jobs:
           files: |
             mcp-server.exe
             mcp-server.exe.sha256
-          fail_on_unmatched_files: true
+            mcp-server-cgo.exe
+            mcp-server-cgo.exe.sha256
+          fail_on_unmatched_files: false
           generate_release_notes: false
