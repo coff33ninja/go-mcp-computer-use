@@ -174,7 +174,7 @@ func klRecord(ev recordedEvent) {
 
 func kbdHookProc(nCode int, wParam uintptr, lParam uintptr) uintptr {
 	if nCode == 0 {
-		kbd := (*kbdLLHookStruct)(unsafe.Pointer(lParam))
+		kbd := (*kbdLLHookStruct)(*(*unsafe.Pointer)(unsafe.Pointer(&lParam)))
 		isUp := (kbd.flags & llkhfUp) != 0
 		down := (wParam == wmKeyDown || wParam == wmSysKeyDown) && !isUp
 
@@ -208,7 +208,7 @@ func kbdHookProc(nCode int, wParam uintptr, lParam uintptr) uintptr {
 
 func mouseHookProc(nCode int, wParam uintptr, lParam uintptr) uintptr {
 	if nCode == 0 {
-		ms := (*msLLHookStruct)(unsafe.Pointer(lParam))
+		ms := (*msLLHookStruct)(*(*unsafe.Pointer)(unsafe.Pointer(&lParam)))
 
 		switch wParam {
 		case wmMouseMove:
