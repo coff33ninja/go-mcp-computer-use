@@ -96,7 +96,20 @@ do {
 } while ($LASTEXITCODE -and $dlAttempt -lt 6)
 if ($LASTEXITCODE) { throw "Failed to download mcp-server.exe after 6 attempts" }
 
-# ---- Step 7: Replace exe in project root ----
+# ---- Step 7: Kill processes that hold mcp-server.exe lock ----
+Write-Host "Stopping MCP server processes..."
+Get-Process -Name "mcp-server" -ErrorAction SilentlyContinue | ForEach-Object {
+    Write-Host "  killing PID $($_.Id)"
+    Stop-Process -Id $_.Id -Force
+}
+Write-Host "Closing OpenCode Desktop..."
+Get-Process -Name "OpenCode" -ErrorAction SilentlyContinue | ForEach-Object {
+    Write-Host "  killing PID $($_.Id)"
+    Stop-Process -Id $_.Id -Force
+}
+Start-Sleep -Seconds 3
+
+# ---- Step 8: Replace exe in project root ----
 Write-Host "Replacing mcp-server.exe..."
 $src = "$dlDir\mcp-server.exe"
 if (-not (Test-Path $src)) { throw "Downloaded file not found at $src" }
@@ -105,15 +118,7 @@ Copy-Item -Path $src -Destination "$PWD\mcp-server.exe" -Force
 # Cleanup
 Remove-Item $dlDir -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item $msgFile -Force -ErrorAction SilentlyContinue
-Write-Host "$localExe updated from release $tag"
-
-# ---- Step 8: Kill OpenCode Desktop processes ----
-Write-Host "Closing OpenCode Desktop..."
-Get-Process -Name "OpenCode" -ErrorAction SilentlyContinue | ForEach-Object {
-    Write-Host "  killing PID $($_.Id)"
-    Stop-Process -Id $_.Id -Force
-}
-Start-Sleep -Seconds 3
+Write-Host "mcp-server.exe updated from release $tag"
 
 # ---- Step 9: Relaunch as Admin ----
 Write-Host "Launching OpenCode Desktop as Administrator..."
