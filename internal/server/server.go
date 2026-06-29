@@ -1480,7 +1480,10 @@ func datalogQueryHandler(ctx context.Context, req *mcp.CallToolRequest, args Dat
 	if err != nil {
 		return nil, nil, fmt.Errorf("datalog_query: %w", err)
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, rows, nil
+	rowsJSON, _ := json.Marshal(rows)
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: string(rowsJSON)}},
+	}, map[string]any{"count": len(rows), "rows": rows}, nil
 }
 
 func datalogExportHandler(ctx context.Context, req *mcp.CallToolRequest, args DataLogExportArgs) (*mcp.CallToolResult, any, error) {
@@ -1488,7 +1491,10 @@ func datalogExportHandler(ctx context.Context, req *mcp.CallToolRequest, args Da
 	if err != nil {
 		return nil, nil, fmt.Errorf("datalog_export: %w", err)
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, out, nil
+	pairsJSON, _ := json.Marshal(out.Pairs)
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: string(pairsJSON)}},
+	}, out, nil
 }
 
 func datalogStatusHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
@@ -1497,6 +1503,124 @@ func datalogStatusHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) 
 		return nil, nil, fmt.Errorf("datalog_status: %w", err)
 	}
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, stats, nil
+}
+
+func datalogStatsResource(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+	stats, err := actions.DataLogStatsReport()
+	if err != nil {
+		return nil, err
+	}
+	b, _ := json.MarshalIndent(stats, "", "  ")
+	return &mcp.ReadResourceResult{
+		Contents: []*mcp.ResourceContents{{
+			URI:      "datalog://stats",
+			MIMEType: "application/json",
+			Text:     string(b),
+		}},
+	}, nil
+}
+
+func datalogCommandsResource(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+	rows, err := actions.QueryDataLog(actions.DataLogQuery{Table: "commands", Limit: 20})
+	if err != nil {
+		return nil, err
+	}
+	b, _ := json.MarshalIndent(rows, "", "  ")
+	return &mcp.ReadResourceResult{
+		Contents: []*mcp.ResourceContents{{
+			URI:      "datalog://commands",
+			MIMEType: "application/json",
+			Text:     string(b),
+		}},
+	}, nil
+}
+
+func datalogOCRResource(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+	rows, err := actions.QueryDataLog(actions.DataLogQuery{Table: "ocr", Limit: 10})
+	if err != nil {
+		return nil, err
+	}
+	b, _ := json.MarshalIndent(rows, "", "  ")
+	return &mcp.ReadResourceResult{
+		Contents: []*mcp.ResourceContents{{
+			URI:      "datalog://ocr",
+			MIMEType: "application/json",
+			Text:     string(b),
+		}},
+	}, nil
+}
+
+func datalogPairsResource(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+	rows, err := actions.QueryDataLog(actions.DataLogQuery{Table: "pairs", Limit: 20})
+	if err != nil {
+		return nil, err
+	}
+	b, _ := json.MarshalIndent(rows, "", "  ")
+	return &mcp.ReadResourceResult{
+		Contents: []*mcp.ResourceContents{{
+			URI:      "datalog://pairs",
+			MIMEType: "application/json",
+			Text:     string(b),
+		}},
+	}, nil
+}
+
+func adaptiveAnalysisResource(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+	analysis := actions.Adaptive.Analyze()
+	b, _ := json.MarshalIndent(analysis, "", "  ")
+	return &mcp.ReadResourceResult{
+		Contents: []*mcp.ResourceContents{{
+			URI:      "adaptive://analysis",
+			MIMEType: "application/json",
+			Text:     string(b),
+		}},
+	}, nil
+}
+
+type AgentAnalyzeArgs struct{}
+type AgentSuggestArgs struct {
+	OCRText string `json:"ocr_text"`
+	Limit   int    `json:"limit,omitempty"`
+}
+type AgentTrainArgs struct{}
+
+func agentAnalyzeHandler(ctx context.Context, req *mcp.CallToolRequest, _ AgentAnalyzeArgs) (*mcp.CallToolResult, any, error) {
+	analysis := actions.Adaptive.Analyze()
+	b, _ := json.MarshalIndent(analysis, "", "  ")
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: string(b)}},
+	}, analysis, nil
+}
+
+func agentSuggestHandler(ctx context.Context, req *mcp.CallToolRequest, args AgentSuggestArgs) (*mcp.CallToolResult, any, error) {
+	if args.OCRText == "" {
+		return nil, nil, fmt.Errorf("ocr_text is required")
+	}
+	limit := args.Limit
+	if limit <= 0 {
+		limit = 5
+	}
+	predictions := actions.Adaptive.PredictActions(args.OCRText, limit)
+	if predictions == nil {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: "no predictions available - try training the model first with agent_train"}},
+		}, map[string]any{"predictions": []any{}}, nil
+	}
+	b, _ := json.MarshalIndent(predictions, "", "  ")
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: string(b)}},
+	}, map[string]any{"predictions": predictions}, nil
+}
+
+func agentTrainHandler(ctx context.Context, req *mcp.CallToolRequest, _ AgentTrainArgs) (*mcp.CallToolResult, any, error) {
+	if err := actions.Adaptive.TrainFromDatalog(); err != nil {
+		return nil, nil, fmt.Errorf("agent_train: %w", err)
+	}
+	analysis := actions.Adaptive.Analyze()
+	b, _ := json.MarshalIndent(analysis, "", "  ")
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: string(b)}},
+	}, analysis, nil
 }
 
 func setConfigHandler(ctx context.Context, req *mcp.CallToolRequest, args SetConfigArgs) (*mcp.CallToolResult, any, error) {
@@ -1644,6 +1768,39 @@ func New(version string) *mcp.Server {
 		Name:    "go-mcp-computer-use",
 		Version: version,
 	}, nil)
+
+	actions.EnsureAdaptive()
+
+	server.AddResource(&mcp.Resource{
+		URI:         "datalog://stats",
+		Name:        "datalog-stats",
+		Description: "Current datalog row counts",
+		MIMEType:    "application/json",
+	}, datalogStatsResource)
+	server.AddResource(&mcp.Resource{
+		URI:         "datalog://commands",
+		Name:        "datalog-commands",
+		Description: "Recent command log entries",
+		MIMEType:    "application/json",
+	}, datalogCommandsResource)
+	server.AddResource(&mcp.Resource{
+		URI:         "datalog://ocr",
+		Name:        "datalog-ocr",
+		Description: "Recent OCR snapshot entries",
+		MIMEType:    "application/json",
+	}, datalogOCRResource)
+	server.AddResource(&mcp.Resource{
+		URI:         "datalog://pairs",
+		Name:        "datalog-pairs",
+		Description: "Recent training pair entries",
+		MIMEType:    "application/json",
+	}, datalogPairsResource)
+	server.AddResource(&mcp.Resource{
+		URI:         "adaptive://analysis",
+		Name:        "adaptive-analysis",
+		Description: "Adaptive engine analysis with timing stats, success rates, and learned sequences",
+		MIMEType:    "application/json",
+	}, adaptiveAnalysisResource)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "screenshot",
@@ -2206,6 +2363,21 @@ func New(version string) *mcp.Server {
 		Name:        "datalog_status",
 		Description: "Get data logging statistics: count of commands, chains, OCR snapshots, and training pairs logged to the datalog database.",
 	}, datalogStatusHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "agent_analyze",
+		Description: "Analyze the adaptive engine state — timing stats, success rates per tool, and learned OCR→command sequences. Returns a full report for AI decision-making.",
+	}, agentAnalyzeHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "agent_suggest",
+		Description: "Given OCR screen text, predict the best next command based on past successful sequences. Returns ranked predictions with confidence scores.",
+	}, agentSuggestHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "agent_train",
+		Description: "Train the adaptive engine from datalog training_pairs. Rebuilds the OCR→command word index and sequence cache. Call after the datalog has accumulated new pairs.",
+	}, agentTrainHandler)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "set_config",

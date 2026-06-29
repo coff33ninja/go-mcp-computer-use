@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -215,7 +216,11 @@ func KeyUp(key string) error {
 	return nil
 }
 
-func KeyPress(keys []string) error {
+func KeyPress(keys []string) (err error) {
+	defer func() {
+		b, _ := json.Marshal(map[string][]string{"keys": keys})
+		LogToolCall("key_press", string(b), err)
+	}()
 	if err := warnElevated(); err != nil {
 		return err
 	}
@@ -262,7 +267,11 @@ func KeyPress(keys []string) error {
 	return nil
 }
 
-func TypeText(text string) error {
+func TypeText(text string) (err error) {
+	defer func() {
+		b, _ := json.Marshal(map[string]string{"text": text})
+		LogToolCall("type", string(b), err)
+	}()
 	if err := warnElevated(); err != nil {
 		return err
 	}

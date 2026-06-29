@@ -1,5 +1,49 @@
 # Changelog
 
+## [0.2.16] - 2026-06-29
+
+### Added
+
+- **Adaptive Engine** (`internal/actions/adaptive.go`) — pure Go statistical ML system with three components:
+  - **TimingTracker** — rolling-window (N=100) per-tool statistics: mean, stddev, min, max. Auto-suggests adaptive delays based on historical execution time plus success-rate multiplier (1.5× by default, 3× when success rate < 50%).
+  - **SuccessTracker** — per-tool success/failure ratios. Queried on every `SuggestDelay()` call to adjust timeouts.
+  - **SequencePredictor** — TF-IDF-style word index from `training_pairs`. Given OCR text, tokenizes and scores each word→command mapping by historical success frequency. Returns ranked predictions with confidence (0.0–1.0) and sample size.
+
+- **MCP Resources (5)** — auto-exposed to the AI client, read on every session context:
+  - `datalog://stats` — current row counts for all four datalog tables
+  - `datalog://commands` — 20 most recent command log entries
+  - `datalog://ocr` — 10 most recent OCR snapshots
+  - `datalog://pairs` — 20 most recent training pairs
+  - `adaptive://analysis` — full adaptive engine analysis (timing stats, success rates, learned sequences)
+
+- **Agent MCP Tools (3)** — AI-queryable loop for context-aware decisions:
+  - `agent_analyze` — returns full timing stats, success rates, and top learned sequences for AI decision-making
+  - `agent_suggest` — given OCR screen text, predicts the best next command ranked by confidence
+  - `agent_train` — rebuilds the word→command index from current `training_pairs` table
+
+- **Auto training pair generation** — passive OCR bridge creates triple (ocr_before, command, ocr_after) without slowing commands:
+  - Ring buffer of last 5 OCR snapshots with timestamps
+  - Every command auto-pairs with most recent OCR (within 3s window) as `ocr_before`
+  - Next OCR snapshot completes as `ocr_after`
+  - Command stored as `{"tool":"name","args":"..."}` JSON for robust parsing
+
+### Fixed
+
+- **`datalog_query` table name mismatch** — switch-case expected short names (`"commands"`, `"ocr"`, `"chains"`, `"pairs"`) but the handler passed raw table names. Now accepts both forms as aliases.
+- **`TrainFromDatalog` JSON parsing** — robust `extractToolFromJSON` helper handles both JSON `{"tool":"..."}` and plain string command values.
+
+### Changed
+
+- **Tool count** — 111 → 114
+- **VERSION** — bumped 0.2.15 → 0.2.16
+- **gen-tools-doc.go** — added "Adaptive Agent" category
+- **LogCommand** — now releases SQLite lock before OCR bridge to avoid deadlock with LogOCRSnapshot (no cross-lock ordering)
+- **LogTrainingPair** — `Command` field stores structured `{"tool":"name","args":"..."}` JSON instead of raw args string
+
+### Documentation
+
+- **docs/tools.md** — regenerated with 114 tools across categories including "Adaptive Agent"
+
 ## [0.2.15] - 2026-06-29
 
 ### Added

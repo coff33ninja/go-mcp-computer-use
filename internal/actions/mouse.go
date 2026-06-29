@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"encoding/json"
 	"math"
 	"syscall"
 	"time"
@@ -43,13 +44,18 @@ type ClickInput struct {
 	Clicks int
 }
 
-func Click(args ClickInput) error {
+func Click(args ClickInput) (err error) {
 	if args.Button == "" {
 		args.Button = "left"
 	}
 	if args.Clicks == 0 {
 		args.Clicks = 1
 	}
+
+	defer func() {
+		b, _ := json.Marshal(args)
+		LogToolCall("click", string(b), err)
+	}()
 
 	if err := ValidateClickCoord(args.X, args.Y); err != nil {
 		return err
@@ -103,7 +109,11 @@ func GetCursorPosition() (int32, int32, error) {
 	return pt.X, pt.Y, nil
 }
 
-func Scroll(clicks int32) error {
+func Scroll(clicks int32) (err error) {
+	defer func() {
+		b, _ := json.Marshal(map[string]int32{"clicks": clicks})
+		LogToolCall("scroll", string(b), err)
+	}()
 	i := input{
 		inputType: inputMouse,
 		mi: mouseInput{
@@ -115,7 +125,11 @@ func Scroll(clicks int32) error {
 	return nil
 }
 
-func Drag(fromX, fromY, toX, toY int32) error {
+func Drag(fromX, fromY, toX, toY int32) (err error) {
+	defer func() {
+		b, _ := json.Marshal(map[string]int32{"from_x": fromX, "from_y": fromY, "to_x": toX, "to_y": toY})
+		LogToolCall("drag", string(b), err)
+	}()
 	if err := ValidateClickCoord(fromX, fromY); err != nil {
 		return err
 	}

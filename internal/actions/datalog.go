@@ -26,7 +26,7 @@ type DataLogConfig struct {
 }
 
 var DataLog = &DataLogConfig{
-	LogOCR:   false,
+	LogOCR:   true,
 	LogChain: true,
 	LogKeys:  true,
 }
@@ -159,14 +159,84 @@ func saveScreenshotForDataLog() string {
 	return imgPath
 }
 
+// LogToolCall logs an action function call with its args. Used by action
+// functions (Click, KeyPress, etc.) to log every MCP tool invocation.
+func LogToolCall(tool string, argsJSON string, err error) {
+	if !DataLog.LogKeys {
+		return
+	}
+	errText := ""
+	if err != nil {
+		errText = err.Error()
+	}
+	go LogCommand(tool, argsJSON, err == nil, errText, "", 0)
+}
+
+type ocrSnap struct {
+	text      string
+	timestamp time.Time
+}
+
+var (
+	recentOCR    []ocrSnap
+	pendingCmd   *TrainingPairInput
+	pendingTime  time.Time
+	pairMu       sync.Mutex
+)
+
+const bridgeWindow = 3 * time.Second
+const maxRecentOCR = 5
+
+func pushRecentOCR(text string) {
+	pairMu.Lock()
+	defer pairMu.Unlock()
+	recentOCR = append(recentOCR, ocrSnap{text: text, timestamp: time.Now()})
+	if len(recentOCR) > maxRecentOCR {
+		recentOCR = recentOCR[len(recentOCR)-maxRecentOCR:]
+	}
+}
+
+func findRecentOCRBefore() string {
+	pairMu.Lock()
+	defer pairMu.Unlock()
+	now := time.Now()
+	for i := len(recentOCR) - 1; i >= 0; i-- {
+		if now.Sub(recentOCR[i].timestamp) <= bridgeWindow {
+			return recentOCR[i].text
+		}
+	}
+	return ""
+}
+
+func tryCompletePair(afterText, windowTitle string) {
+	pairMu.Lock()
+	p := pendingCmd
+	pt := pendingTime
+	pendingCmd = nil
+	pairMu.Unlock()
+	if p == nil {
+		return
+	}
+	if time.Since(pt) > bridgeWindow {
+		return
+	}
+	p.OCRAfter = afterText
+	if p.WindowTitle == "" {
+		p.WindowTitle = windowTitle
+	}
+	if p.OCRBefore != "" && p.Command != "" {
+		LogTrainingPair(*p)
+	}
+}
+
 func LogCommand(tool, args string, success bool, errText, windowTitle string, durationMs int64) {
 	if !DataLog.LogKeys {
 		return
 	}
 	dlogMu.Lock()
-	defer dlogMu.Unlock()
 	if dlogDB == nil {
 		if err := InitDataLog(); err != nil {
+			dlogMu.Unlock()
 			return
 		}
 	}
@@ -178,6 +248,28 @@ func LogCommand(tool, args string, success bool, errText, windowTitle string, du
 	dlogDB.Exec(`INSERT INTO command_log(session_id, source, tool, args, success, error_text, window_title, duration_ms, created_at)
 		VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		"", "chain", tool, args, successInt, errText, windowTitle, durationMs, now)
+	dlogMu.Unlock()
+
+	ocrBefore := findRecentOCRBefore()
+	if ocrBefore == "" {
+		return
+	}
+	cmdJSON := args
+	if tool != "" {
+		cmdMap := map[string]any{"tool": tool, "args": args}
+		if b, err := json.Marshal(cmdMap); err == nil {
+			cmdJSON = string(b)
+		}
+	}
+	pairMu.Lock()
+	pendingCmd = &TrainingPairInput{
+		OCRBefore:   ocrBefore,
+		Command:     cmdJSON,
+		WindowTitle: windowTitle,
+		Success:     success,
+	}
+	pendingTime = time.Now()
+	pairMu.Unlock()
 }
 
 func LogChain(sessionID string, steps []ChainStep, result *ChainResult, durationMs int64) {
@@ -212,15 +304,18 @@ func LogOCRSnapshot(source, triggeredBy, windowTitle string, result *OCRResult) 
 	if !DataLog.LogOCR {
 		return
 	}
+	if result == nil {
+		return
+	}
+	pushRecentOCR(result.Text)
+	tryCompletePair(result.Text, windowTitle)
+
 	dlogMu.Lock()
 	defer dlogMu.Unlock()
 	if dlogDB == nil {
 		if err := InitDataLog(); err != nil {
 			return
 		}
-	}
-	if result == nil {
-		return
 	}
 	imgPath := saveScreenshotForDataLog()
 	ocrJSON, _ := json.Marshal(result)
@@ -282,16 +377,16 @@ func QueryDataLog(q DataLogQuery) ([]DataLogRow, error) {
 	var table string
 	var cols string
 	switch q.Table {
-	case "commands":
+	case "commands", "command_log":
 		table = "command_log"
 		cols = "id, session_id, source, tool, args, success, error_text, window_title, duration_ms, created_at"
-	case "chains":
+	case "chains", "chain_log":
 		table = "chain_log"
 		cols = "id, session_id, source, step_count, success_count, fail_count, duration_ms, created_at"
-	case "ocr":
+	case "ocr", "ocr_log":
 		table = "ocr_log"
 		cols = "id, session_id, source, image_path, ocr_text, text_length, word_count, window_title, triggered_by, created_at"
-	case "pairs":
+	case "pairs", "training_pairs":
 		table = "training_pairs"
 		cols = "id, session_id, ocr_before_text, command_json, ocr_after_text, window_title, success, created_at"
 	default:

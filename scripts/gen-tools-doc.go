@@ -135,6 +135,11 @@ var categoryForTool = map[string]string{
 	"datalog_export": "Data Logging",
 	"datalog_status": "Data Logging",
 
+	// Adaptive Agent (3)
+	"agent_analyze": "Adaptive Agent",
+	"agent_suggest": "Adaptive Agent",
+	"agent_train":   "Adaptive Agent",
+
 	// Runtime Config (1)
 	"set_config": "Runtime Config",
 
@@ -187,6 +192,7 @@ var categoryOrder = []string{
 	"Training Pipeline",
 	"Data Export",
 	"Data Logging",
+	"Adaptive Agent",
 	"Runtime Config",
 	"System",
 	"Process Management",
