@@ -234,7 +234,19 @@ Without this pattern, the AI wastes time and tokens rediscovering basic facts ea
 ### L3. Firefox containers intercept the `+` new tab button
 Firefox Multi-Account Containers changes the new-tab `+` behavior — instead of opening a blank tab immediately, it shows a popup asking which container to use. Click "No Container" (≈x=830, y=105 in this layout) or use `Ctrl+T` which bypasses the popup.
 
-### B14. ONNX YOLO11n model uses unsupported opset 22
+### B13. ONNX tools require CGO (disabled in default CGO_ENABLED=0 build)
+
+**Observation:** `go build ./...` fails with `build constraints exclude all Go files` for `github.com/yalue/onnxruntime_go` when `CGO_ENABLED=0`. The onnxruntime_go library uses cgo for native shared library bindings.
+
+**Impact:** ONNX ML tools (`onnx_detect`, `onnx_status`, `onnx_download`) are excluded from CGO-free builds. All other tools work.
+
+**Workaround:** Build with `CGO_ENABLED=1` and a C compiler:
+- **Zig cc:** `CC="zig cc" CGO_ENABLED=1 go build -o mcp-server.exe .\cmd\mcp-server\`
+- **GCC (Mingw-w64):** `CGO_ENABLED=1 go build -o mcp-server.exe .\cmd\mcp-server\`
+
+**Status:** Documented in v0.2.x. Not a bug — by design.
+
+## B14. ONNX YOLO11n model uses unsupported opset 22
 
 **Observation:** `onnx_download` pulls YOLO11n from Ultralytics v8.3.0, which exports to opset 22. `onnxruntime_go` linked against ORT 1.20.x supports only opset 21 max. Detection fails silently when running `onnx_detect`.
 

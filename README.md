@@ -74,14 +74,16 @@ This is an area of active exploration. Contributions, ideas, and real-world acce
 
 - Windows 10 or 11
 - Go 1.26+ (to build from source)
-- No CGO, no external dependencies, no Windows SDK required
+- **Zig** 0.16+ (for CGO — `winget install zig`)
+
+The project uses Zig `cc` as the C cross-compiler for CGO (needed by the `onnxruntime_go` dependency for ONNX ML inference). Install Zig once, then any `go build` with `CC="zig cc" CGO_ENABLED=1` works.
 
 ## Quick Start
 
 ```powershell
 git clone https://github.com/coff33ninja/go-mcp-computer-use.git
 cd go-mcp-computer-use
-go build -o mcp-server.exe .\cmd\mcp-server\
+.\scripts\build.ps1
 .\mcp-server.exe
 ```
 
@@ -89,7 +91,6 @@ Or use the install script:
 
 ```powershell
 .\scripts\install.ps1
-.\scripts\install.ps1 -UseZig              # with Zig cc for CGO
 ```
 
 ## Elevation & UIPI (Admin vs Non-Admin)
@@ -293,16 +294,11 @@ internal/config/config.go     — JSON config file
 ## Build
 
 ```powershell
-go build -o mcp-server.exe .\cmd\mcp-server\
+.\scripts\build.ps1              # with Zig cc + CGO (default)
+.\scripts\build.ps1 -NoCGO       # limited build, no ONNX tools
 ```
 
-Cross-compile from Linux/macOS (no CGO):
-
-```bash
-GOOS=windows GOARCH=amd64 go build -o mcp-server.exe ./cmd/mcp-server/
-```
-
-Cross-compile with CGO via Zig:
+Cross-compile from Linux/macOS:
 
 ```bash
 CC="zig cc" CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -o mcp-server.exe ./cmd/mcp-server/
