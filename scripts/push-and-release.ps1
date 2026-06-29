@@ -96,34 +96,26 @@ do {
 } while ($LASTEXITCODE -and $dlAttempt -lt 6)
 if ($LASTEXITCODE) { throw "Failed to download mcp-server.exe after 6 attempts" }
 
-# ---- Step 7: Kill processes that hold mcp-server.exe lock ----
-Write-Host "Stopping MCP server processes..."
-Get-Process -Name "mcp-server" -ErrorAction SilentlyContinue | ForEach-Object {
-    Write-Host "  killing PID $($_.Id)"
-    Stop-Process -Id $_.Id -Force
-}
-Write-Host "Closing OpenCode Desktop..."
-Get-Process -Name "OpenCode" -ErrorAction SilentlyContinue | ForEach-Object {
-    Write-Host "  killing PID $($_.Id)"
-    Stop-Process -Id $_.Id -Force
-}
-Start-Sleep -Seconds 3
-
-# ---- Step 8: Replace exe in project root ----
-Write-Host "Replacing mcp-server.exe..."
+# ---- Step 7-9: Spawn background cleanup + replace + relaunch ----
+# Spawn as detached process so killing OpenCode doesn't kill us mid-flight
+Write-Host "Scheduling cleanup, replacement, and relaunch (background)..."
 $src = "$dlDir\mcp-server.exe"
 if (-not (Test-Path $src)) { throw "Downloaded file not found at $src" }
-Copy-Item -Path $src -Destination "$PWD\mcp-server.exe" -Force
 
-# Cleanup
-Remove-Item $dlDir -Recurse -Force -ErrorAction SilentlyContinue
-Remove-Item $msgFile -Force -ErrorAction SilentlyContinue
-Write-Host "mcp-server.exe updated from release $tag"
-
-# ---- Step 9: Relaunch as Admin ----
-Write-Host "Launching OpenCode Desktop as Administrator..."
-Start-Process -FilePath $OpenCodeDesktop -Verb RunAs
+$postScript = @"
+Start-Sleep -Seconds 3
+Get-Process -Name 'mcp-server' -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id `$_.Id -Force }
+Get-Process -Name 'OpenCode' -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id `$_.Id -Force }
+Start-Sleep -Seconds 3
+Copy-Item '$src' '$PWD\mcp-server.exe' -Force
+Remove-Item '$dlDir' -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item '$msgFile' -Force -ErrorAction SilentlyContinue
+Start-Process -FilePath '$OpenCodeDesktop' -Verb RunAs
+"@
+$postScriptPath = "$env:TEMP\mcp-post-cleanup-$(Get-Random).ps1"
+$postScript | Set-Content -Path $postScriptPath -Encoding UTF8
+Start-Process -FilePath "powershell" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$postScriptPath`"" -WindowStyle Hidden
 
 Write-Host "=== Done ==="
-Write-Host "OpenCode Desktop is restarting as admin."
-Write-Host "MCP server v$version is updated and ready."
+Write-Host "OpenCode Desktop will restart as admin in a few seconds."
+Write-Host "MCP server v$version is updated and queued for replacement."
