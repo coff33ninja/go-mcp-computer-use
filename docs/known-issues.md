@@ -256,6 +256,47 @@ Firefox Multi-Account Containers changes the new-tab `+` behavior — instead of
 
 **Planned fix:** Either download an older YOLO11n export (opset 21) from an earlier Ultralytics release, or update ORT to 1.21+ when `onnxruntime_go` releases a compatible version.
 
+## B15. No action verification — tools return "ok" for API call success, not for real-world effect
+
+**Severity:** High — this is the #1 reason the server feels "hit or miss" to an AI agent.
+
+Every action tool (`click`, `type`, `key_press`, `scroll`, `drag`, etc.) uses fire-and-forget Win32 APIs (`SendInput`, `SetCursorPos`, `keybd_event`). They return success if the API call didn't crash — not if the action had any visible effect on screen. There is no built-in verification loop between executing an action and confirming it achieved its goal.
+
+**What tools actually return:**
+- `click(x=100, y=200)` → `"ok"` means `SetCursorPos` + `SendInput` returned non-zero. It does **not** mean the click hit an interactive element, changed UI state, or reached the intended window.
+- `type("hello")` → `"ok"` means key events were queued. It does **not** mean text appeared in an input field.
+- `key_press(["Enter"])` → `"ok"` means the key was sent. It does **not** mean anything happened on screen.
+- `screenshot` / `ocr` → Returns actual pixel/text data, but the AI has no way to confirm it matches what *should* be on screen.
+
+**The AI's blind spots:**
+1. **No "did the click land?"** — Was the intended window in focus? Was the target element at those coordinates? Did the button respond?
+2. **No "did the text appear?"** — Was the right input field focused? Did the text render? Did it go to the right app?
+3. **No "did the shortcut work?"** — Was the target window elevated (UIPI block)? Did the key combo reach the intended app?
+4. **No "did I actually see what I think I saw?"** — OCR returns text, but if a window overlaps between capture and processing, the result is stale by the time it's returned.
+
+**Why it compounds in chain automation:**
+- A chain step `click` returns `success: true` even on empty desktop
+- The next step assumes the prior action worked and compounds the error
+- Chain has no built-in "verify after action" step type — poll steps must be authored manually
+
+**What partially helps (but doesn't solve):**
+- `find_text_and_click` — OCRs first, then clicks. But doesn't verify the click had an effect.
+- `layout_validate` — checks stored element positions for drift. Only works on pre-registered layouts.
+- Chain `poll` step — can wait for text to appear. Requires explicit authoring and knowing *what* to wait for.
+- `uia_invoke` — UI Automation has better success reporting. But only works with UIA-compliant apps.
+- `wait_for_text` — single-tool version of poll.
+
+**The core problem:**
+Verification is left entirely to the AI (call `ocr()` after `click()` to check). Most AI agents skip this because they trust the `"ok"` response, don't know what to verify against, and can't afford doubling token cost per action. Chain has no auto-verify primitive.
+
+**Planned fix path:**
+1. Add `auto_verify` parameter to action tools (`click`, `type`, `key_press`, `type_and_submit`, `scroll`, `drag`) — when enabled, the tool captures OCR/screenshot context before and after the action and returns a diff/verdict
+2. Return `before` and `after` OCR text + screenshot region in verified action results
+3. Add `verify` step type to chain — wraps any tool call with automatic before/after capture
+4. Add `expected` parameter to action tools — AI specifies what it expects to see after the action (e.g., `click(x=100, y=200, expected_text="Submit")`)
+
+**Related:** L2 — "Tools return 'ok' even when the action had no visible effect"
+
 ---
 
 ## Roadmap / Future Possibilities
