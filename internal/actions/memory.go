@@ -701,16 +701,47 @@ func TemplateList(in TemplateListInput) ([]TemplateInfo, error) {
 }
 
 func MemoryStoreDetectionElements(elements []DetectedElement, windowTitle string) {
+	if len(elements) == 0 {
+		return
+	}
+	if len(elements) > 200 {
+		elements = elements[:200]
+	}
+	memMu.Lock()
+	defer memMu.Unlock()
+
+	if memDB == nil {
+		if err := InitMemoryStore(); err != nil {
+			return
+		}
+	}
+
+	tx, err := memDB.Begin()
+	if err != nil {
+		return
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.Prepare(`INSERT INTO facts(key, value, scope, tags, created_at, updated_at, ttl)
+		VALUES(?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(key, scope) DO UPDATE SET
+			value = excluded.value,
+			tags = excluded.tags,
+			updated_at = excluded.updated_at,
+			ttl = excluded.ttl`)
+	if err != nil {
+		return
+	}
+	defer stmt.Close()
+
+	now := time.Now().UTC().Format(time.RFC3339)
 	for _, el := range elements {
 		key := fmt.Sprintf("ui:%s:%s", windowTitle, el.Class)
-		MemorySet(MemorySetInput{
-			Key:   key,
-			Value: el,
-			Scope: "ui",
-			Tags:  fmt.Sprintf("ui,element,%s", el.Class),
-			TTL:   3600,
-		})
+		valueJSON, _ := json.Marshal(el)
+		tags := fmt.Sprintf("ui,element,%s", el.Class)
+		stmt.Exec(key, string(valueJSON), "ui", tags, now, now, 3600)
 	}
+	tx.Commit()
 }
 
 func TemplateForget(elementKey, scope string) (int64, error) {

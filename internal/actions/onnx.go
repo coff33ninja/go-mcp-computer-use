@@ -42,7 +42,7 @@ const (
 	yoloModelFile      = "yolo11n.onnx"
 	mobilenetModelURL  = "https://huggingface.co/diogoneno/gui-element-classifier/resolve/main/mobilenetv3_small.onnx"
 	mobilenetModelFile = "mobilenetv3_small.onnx"
-	onnxDLLURL         = "https://github.com/microsoft/onnxruntime/releases/download/v1.20.1/onnxruntime-win-x64-1.20.1.zip"
+	onnxDLLURL         = "https://github.com/microsoft/onnxruntime/releases/download/v1.26.0/onnxruntime-win-x64-1.26.0.zip"
 	onnxDLLFile        = "onnxruntime.dll"
 )
 
@@ -237,18 +237,18 @@ func ONNXDetect(in DetectionInput) (*DetectionOutput, error) {
 	}
 
 	outputData := outputTensor.GetData()
-	boxes := parseYOLOOutput(outputData, yoloInputSize, img.Bounds().Dx(), img.Bounds().Dy())
 
-	thresh := in.Threshold
+	thresh := float32(in.Threshold)
 	if thresh <= 0 {
 		thresh = yoloConfThresh
 	}
-	iouThresh := in.IOUThreshold
+	iouThresh := float32(in.IOUThreshold)
 	if iouThresh <= 0 {
 		iouThresh = yoloNMSThresh
 	}
 
-	filtered := nms(filterBoxes(boxes, float32(thresh)), float32(iouThresh))
+	boxes := parseYOLOOutput(outputData, yoloInputSize, img.Bounds().Dx(), img.Bounds().Dy(), thresh)
+	filtered := nms(boxes, iouThresh)
 
 	elements := make([]DetectedElement, 0, len(filtered))
 	winTitle := ""
@@ -271,7 +271,7 @@ func ONNXDetect(in DetectionInput) (*DetectionOutput, error) {
 	}
 
 	// Store detections in memory for AI reuse
-	if winTitle != "" {
+	if winTitle != "" && len(elements) > 0 {
 		MemoryStoreDetectionElements(elements, winTitle)
 	}
 
@@ -314,13 +314,13 @@ func preprocessYOLO(img image.Image, targetSize int) []float32 {
 	return blob
 }
 
-func parseYOLOOutput(data []float32, inputSize, imgW, imgH int) []yoloBox {
+func parseYOLOOutput(data []float32, inputSize, imgW, imgH int, confThresh float32) []yoloBox {
 	numDetections := 8400
 	rowStride := 4 + yoloNumClasses
 	scaleX := float32(imgW) / float32(inputSize)
 	scaleY := float32(imgH) / float32(inputSize)
 
-	boxes := make([]yoloBox, 0, numDetections)
+	boxes := make([]yoloBox, 0, 256)
 	for i := 0; i < numDetections; i++ {
 		offset := i * rowStride
 		cx := data[offset] * scaleX
@@ -330,15 +330,17 @@ func parseYOLOOutput(data []float32, inputSize, imgW, imgH int) []yoloBox {
 
 		bestClass := 0
 		bestConf := float32(0)
-		for c := 0; c < yoloNumClasses; c++ {
-			conf := sigmoid(data[offset+4+c])
+		off := offset + 4
+		offEnd := off + yoloNumClasses
+		for c := off; c < offEnd; c++ {
+			conf := sigmoid(data[c])
 			if conf > bestConf {
 				bestConf = conf
-				bestClass = c
+				bestClass = c - off
 			}
 		}
 
-		if bestConf > 0 {
+		if bestConf >= confThresh {
 			boxes = append(boxes, yoloBox{
 				classID:    bestClass,
 				confidence: bestConf,
@@ -354,16 +356,6 @@ func parseYOLOOutput(data []float32, inputSize, imgW, imgH int) []yoloBox {
 
 func sigmoid(x float32) float32 {
 	return 1.0 / (1.0 + float32(math.Exp(float64(-x))))
-}
-
-func filterBoxes(boxes []yoloBox, threshold float32) []yoloBox {
-	filtered := make([]yoloBox, 0, len(boxes))
-	for _, b := range boxes {
-		if b.confidence >= threshold {
-			filtered = append(filtered, b)
-		}
-	}
-	return filtered
 }
 
 func nms(boxes []yoloBox, iouThreshold float32) []yoloBox {

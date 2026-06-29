@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.2.13] - 2026-06-29
+
+### Fixed
+
+- **ONNX detection timeout (65s → 599ms)** — root cause was not DLL incompatibility but performance:
+  - `parseYOLOOutput` passed all 8400 raw detections through NMS at O(n²) = ~15M iterations
+  - `MemoryStoreDetectionElements` called `MemorySet` 5507 times — each a separate SQLite INSERT with global mutex lock
+  - Fixed: `parseYOLOOutput` now applies confidence threshold early (0.25), pre-filtering to ~50 boxes before NMS
+  - Fixed: `MemoryStoreDetectionElements` rewritten with batched SQLite inserts in a single transaction, capped at 200 elements
+
+### Changed
+
+- **ONNX Runtime DLL updated** — v1.20.1 → v1.26.0 to support opset 22 (required by yolo11n.onnx). Limited opset support warning is non-fatal.
+
 ## [0.2.12] - 2026-06-29
 
 ### Fixed
