@@ -19,7 +19,10 @@ if (-not $zig) {
 }
 $env:CC = "zig cc"
 $env:CGO_ENABLED = "1"
+# Pin CPU baseline to x86_64_v2 so binary runs on older CPUs
+$env:CGO_CFLAGS = "-mcpu=x86_64_v2 -fno-sanitize=all -Wno-error=unused-command-line-argument"
 Write-Host "C compiler: Zig cc ($(zig version))" -ForegroundColor Cyan
+Write-Host "CGO_CFLAGS: $env:CGO_CFLAGS" -ForegroundColor Gray
 
 $ldflags = "-s -w -X main.Version=$ver"
 if (-not $Release) {
