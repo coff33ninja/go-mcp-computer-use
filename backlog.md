@@ -5,7 +5,7 @@
 
 ## How to Read
 
-- **HAVE** = implemented (103 tools)
+- **HAVE** = implemented (108 tools)
 - **NEXT** = high-impact, feasible additions
 - **FAR** = possible but lower priority or complex
 - Items within a section ordered roughly by priority
@@ -674,17 +674,17 @@
 
 | Domain | HAVE | NEXT | FAR | Total Possible |
 |--------|------|------|-----|---------------|
-| Vision | 7 | 5 | 7 | 19 |
+| Vision | 8 | 5 | 7 | 20 |
 | Mouse | 6 | 6 | 5 | 17 |
-| Keyboard | 5 | 5 | 6 | 16 |
-| Windows | 11 | 9 | 6 | 26 |
+| Keyboard | 10 | 5 | 6 | 21 |
+| Windows | 13 | 9 | 6 | 28 |
 | Virtual Desktops | 0 | 6 | 2 | 8 |
-| Processes | 3 | 7 | 5 | 15 |
+| Processes | 4 | 7 | 5 | 16 |
 | File System | 3 | 9 | 6 | 18 |
 | Clipboard | 2 | 4 | 3 | 9 |
 | Audio | 4 | 5 | 6 | 15 |
 | TTS / STT | 0 | 4 | 4 | 8 |
-| Power & System | 8 | 8 | 6 | 22 |
+| Power & System | 11 | 8 | 6 | 25 |
 | Network | 2 | 8 | 5 | 15 |
 | Registry | 0 | 2 | 2 | 4 |
 | Environment | 0 | 3 | 2 | 5 |
@@ -696,16 +696,17 @@
 | Accessibility | 0 | 3 | 2 | 5 |
 | Remote Session | 0 | 2 | 2 | 4 |
 | Security & Identity | 0 | 4 | 4 | 8 |
-| Screen (HW) | 5 | 2 | 3 | 10 |
+| Screen (HW) | 6 | 2 | 3 | 11 |
 | Windows Shell | 3 | 5 | 3 | 11 |
-| Chained | 8 | 11 | 5 | 24 |
+| Chained | 10 | 11 | 5 | 26 |
 | Debugging | 0 | 3 | 2 | 5 |
-| **TOTAL** | **69** | **117** | **101** | **287** |
+| Memory & ML | 10 | 5 | 5 | 20 |
+| **TOTAL** | **108** | **117** | **101** | **326** |
 
 ## Strategy
 
-1. **Build out NEXT items** — these are straightforward and high value (another ~120 tools)
-2. **Add prompt engineering docs** — guide agents on which subset of tools to load for different tasks
-3. **Profile for performance** — screenshot speed, OCR latency, template matching bottlenecks
-4. **UI Automation layer** — highest impact for reliable element targeting (replaces fragile OCR+click)
-5. **User-configurable tool subsets** — allow users to load only the tool groups they need per agent
+1. **Build out NEXT items** — these are straightforward and high value (another ~117 tools)
+2. **Error wrapping audit** — remaining Slice 4 item for consistent error feedback across all tools
+3. **Cross-platform interface** — Linux/macOS stubs for portable task definitions
+4. **User-configurable tool subsets** — allow users to load only the tool groups they need per agent
+5. **ML model improvement** — fix YOLO11n opset 22 incompatibility, explore UI-specific fine-tuning

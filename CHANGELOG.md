@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.10] - 2026-06-29
+
+### Documentation
+
+- **Systematic doc audit** — fixed 90 stale statements across 12 docs: tool counts (103→108 restored from actual registrations), version refs, CGO/dependency claims, category counts, missing tool listings, completed Slice 4 checkboxes, stale future-tool lists
+- **Architecture guide** — added Part 6 to computer-use-guide: layered agent stack (LLM→MCP→Controller→Perception→Memory→World), ML vision + spatial memory, division of responsibilities, convergence of LLM+MCP+ML
+- **Source fix** — server.go tool count hardcode corrected 103→108 to match actual registrations
+- **Config auto-start** — watcher_auto_start config created on dev machine
+
+### Changed
+
+- **VERSION** — bumped 0.2.9 → 0.2.10
+
 ## [0.2.9] - 2026-06-29
 
 ### Added
@@ -12,6 +25,7 @@
 
 - **README.md** — documented CGO requirements for ONNX tools with Zig cc build instructions
 - **known-issues.md** — B13: ONNX tools require CGO (documented workaround)
+- **Tool count docs updated** — all docs updated to 108 tools, stale CGO claims corrected
 
 ## [0.2.8] - 2026-06-29
 
@@ -38,6 +52,7 @@
 ### Changed
 
 - **`sendUnicode` removed** — no longer used. All keyboard input via VK codes.
+- **Tool count**: 103 → 108 (added `key_down`, `key_up`, `keylogger_start`, `keylogger_stop`, `keylogger_status`).
 
 ### Documentation
 

@@ -3,7 +3,7 @@
 > **Built iteratively** across AI-assisted development sessions, with v0.1.x covering 70+ bug-fixed Win32/COM tools and v0.2.x adding the chained automation pipeline, SQLite memory store, ONNX ML detection, and the training data pipeline for user-specific model fine-tuning.
 > The AI agent was guided by a curated set of quality-enforcement skills from [coff33ninja/ai-skills](https://github.com/coff33ninja/ai-skills) — anti-hallucination, anti-slop, safe-code-modifications, anti-sycophancy, code-simplification, context-engineering, don't-kill-tokens, os-awareness, anti-tool-sprawl, follow-existing-patterns, no-dead-code-removal, universal-format-lint, self-validate, verify-and-cite, and others.
 >
-> **Status:** v0.2.8 — 103 tools including statistical prior model, training pipeline, memory-backed UI element cache, ONNX detection, runtime privacy controls, key hold/release, and input recording. All core tools tested and confirmed working.
+> **Status:** v0.2.9 — 108 tools including statistical prior model, training pipeline, memory-backed UI element cache, ONNX detection, runtime privacy controls, key hold/release, input recording, set_config, and YOLO dataset export.
 
 MCP server for Windows desktop computer use. Exposes mouse, keyboard, screenshot, OCR, template matching, window management, system control, and screen recording to AI agents via [Model Context Protocol](https://modelcontextprotocol.io).
 
@@ -31,7 +31,7 @@ MCP server for Windows desktop computer use. Exposes mouse, keyboard, screenshot
 - **Training data pipeline** — persistent screenshot collection with categorized folders (`raw/click/`, `raw/type/`, `raw/navigate/`, `watcher/elements_found/`, etc.) and SQLite metadata. Auto-saves on every UI action for model fine-tuning.
 - **Memory-backed UI element cache** — ONNX detections auto-stored as memory facts (`ui:{window}:{class}`) with TTL. AI reuses cached coordinates across sessions.
 - **`find_ui_element` tool** — cascading lookup: memory → ONNX → OCR. Self-learning: saves findings to memory + training store.
-- **103 MCP tools** (v0.2.7)
+- **108 MCP tools** (v0.2.9)
 
 ## ⚠️ SECURITY WARNING — DANGEROUS CAPABILITIES
 
@@ -162,29 +162,30 @@ The `set_config` tool can be called by the AI agent or directly by the user via 
 
 **For maximum privacy:** set `training_enabled: false` in config before starting the server.
 
-## Tools (103) — v0.2.7
+## Tools (108) — v0.2.9
 
-### Screenshot & Vision (6)
+### Screenshot & Vision (8)
 `screenshot` `get_screen_size` `get_pixel_color` `get_screen_dpi`
 `get_display_modes` `ocr` `find_image` `record_screen`
 
-### Mouse (7)
+### Mouse (6)
 `click` `move_mouse` `scroll` `drag` `hover` `get_cursor_position`
 
-### Keyboard (5)
+### Keyboard (4)
 `type` `key_press` `type_and_submit` `select_all_and_type`
 
-### Window Management (11)
+### Window Management (13)
 `list_windows` `focus_window` `find_window` `wait_for_window`
 `move_window` `minimize_window` `maximize_window` `restore_window`
 `close_window` `get_window_state` `screenshot_element`
+`focus_window_by_title` `get_active_window`
 
 ### Chained / Composite (6)
 `find_text_and_click` `wait_for_text` `click_menu_item`
 `launch_and_wait` `type_and_submit` `select_all_and_type`
 
 ### Chain Automation (1)
-`chain` — sequential step executor with tool dispatch, wait, poll, if/else, loop, variable capture, and 40+ tool dispatch
+`chain` — sequential step executor with tool dispatch, wait, poll, if/else, loop, variable capture, and 108 tool dispatch
 
 ### UI Automation (3)
 `uia_find` `uia_get_text` `uia_invoke`
@@ -195,6 +196,10 @@ The `set_config` tool can be called by the AI agent or directly by the user via 
 ### File Explorer (2)
 `explorer_focus` `explorer_open_path`
 
+### Key Logger (5)
+`keylogger_start` `keylogger_stop` `keylogger_status`
+`key_down` `key_up`
+
 ### Audio (2)
 `list_audio_devices` `set_default_audio_device`
 
@@ -203,15 +208,24 @@ The `set_config` tool can be called by the AI agent or directly by the user via 
 `template_store` `template_find` `template_list` `template_forget`
 `layout_validate`
 
-### ONNX ML (4)
+### ONNX ML (7)
 `onnx_detect` `onnx_status` `onnx_download` `onnx_watch_start` `onnx_watch_stop`
 `onnx_watch_status` `onnx_watch_cache`
 
-### Training Pipeline (5)
-`training_save_sample` `training_list_samples` `training_stats` `training_mark_used`
-`find_ui_element`
+### Priors & Statistics (1)
+`priors_stats`
 
-### System (23)
+### Training Pipeline (6)
+`training_save_sample` `training_list_samples` `training_stats` `training_mark_used`
+`find_ui_element` `training_cleanup_noise`
+
+### Data Export (1)
+`export_yolo_dataset`
+
+### Runtime Config (1)
+`set_config`
+
+### System (26)
 `get_volume` `set_volume` `set_mute`
 `get_clipboard` `set_clipboard`
 `get_brightness` `set_brightness`
@@ -231,10 +245,10 @@ The `set_config` tool can be called by the AI agent or directly by the user via 
 - [`docs/mcp-client-configs.md`](docs/mcp-client-configs.md) — MCP client configuration for 19 agents (Claude, Cursor, Windsurf, Cline, Continue, OpenCode, Gemini CLI, Roo Code, Android Studio, Zed, JetBrains, Obsidian, Emacs, Sourcegraph Cody, and more) with CLI setup commands and troubleshooting
 - [`docs/agent-guides.md`](docs/agent-guides.md) — tool subsets per task type, prompt patterns, and agent-specific workflows
 - [`docs/adr-001-mcp-sdk-selection.md`](docs/adr-001-mcp-sdk-selection.md) — why `modelcontextprotocol/go-sdk` was chosen
-- [`docs/adr-002-windows-automation-strategy.md`](docs/adr-002-windows-automation-strategy.md) — Windows automation approach (Win32 API + native COM/WinRT, no CGO)
+- [`docs/adr-002-windows-automation-strategy.md`](docs/adr-002-windows-automation-strategy.md) — Windows automation approach (Win32 API + native COM/WinRT, CGO only for ONNX)
 - [`plan.md`](plan.md) — project plan and scope
 - [`todo.md`](todo.md) — completed and in-progress task tracking
-- [`backlog.md`](backlog.md) — 287-tool roadmap covering every desktop ability a human has on Windows
+- [`backlog.md`](backlog.md) — 326-tool roadmap covering every desktop ability a human has on Windows
 
 ## Agent Configuration
 
@@ -252,9 +266,40 @@ See [`docs/mcp-client-configs.md`](docs/mcp-client-configs.md) for per-agent con
 
 ## Architecture
 
+The server implements the execution and perception layers of a closed-loop embodied agent:
+
+```
+┌────────────────────────────────────────────────────┐
+│  AGENT STACK (runs in the AI client, not the MCP)   │
+│                                                    │
+│  LLM ────── Cognitive Layer (reasoning + planning)  │
+│   ↓                                                │
+│  MCP ────── Orchestration Layer (skill dispatch)    │
+│   ↓                                                │
+│  ─── MCP protocol boundary ───                     │
+│   ↓                                                │
+│  go-mcp-computer-use (this server)                  │
+│                                                    │
+│  Controller ── Physical Layer (mouse, keyboard,     │
+│  │              window system, clipboard)           │
+│  Perception ── Vision Layer (screenshot, OCR,       │
+│  │              ONNX ML detection, screen capture)  │
+│  Memory ────── State Layer (SQLite facts, element   │
+│                 templates, UI position cache)       │
+│  Training ──── Data pipeline (screenshot store,     │
+│                 YOLO export, sample management)     │
+│                                                    │
+│  World ─────── Desktop / Browser / Applications     │
+└────────────────────────────────────────────────────┘
+```
+
+Each layer has a distinct responsibility — no overlap. The server handles execution, perception, memory, and training. The AI client handles reasoning and orchestration via MCP.
+
+### Code Map
+
 ```
 cmd/mcp-server/main.go        — entrypoint, DPI awareness, signals
-internal/server/server.go     — MCP tool registrations (103 tools)
+internal/server/server.go     — MCP tool registrations (108 tools)
 internal/actions/
   ├── user32.go               — shared user32.dll proc loading
   ├── screenshot.go           — GDI BitBlt capture → PNG → base64

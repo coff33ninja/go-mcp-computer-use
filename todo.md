@@ -112,16 +112,42 @@
 ### Chain Tool
 - [x] `chain` — sequential step executor with poll/loop/if/capture
 
+### Key Logger
+- [x] `keylogger_start/stop/status` — input recording and replay
+- [x] `key_down/key_up` — separate hold/release
+
+### Training & Priors
+- [x] `priors_stats` — statistical prior model (element frequency + position)
+- [x] `training_cleanup_noise` — purge low-quality training samples
+- [x] `export_yolo_dataset` — dump unused samples as YOLO-format dataset
+- [x] `set_config` — runtime privacy/training/behavior toggles
+
+### Audio
+- [x] `list_audio_devices` / `set_default_audio_device`
+- [x] `get_display_modes` — available resolutions and refresh rates
+- [x] `get_keyboard_layout` / `set_keyboard_layout`
+
+### UI Automation (COM)
+- [x] `uia_find` — find elements by name/automation_id/control_type
+- [x] `uia_get_text` — read text from a UI element
+- [x] `uia_invoke` — click/invoke buttons via UIA
+
+### Misc
+- [x] `find_image` — template matching (NCC)
+- [x] `record_screen` — frame polling at interval
+- [x] `get_active_window` / `focus_window_by_title`
+- [x] `per-monitor DPI` awareness (`get_screen_dpi`)
+
 ## Next Up
 
-### Slice 4 — Robustness
-- [ ] Coordinate bounds validation (screen dimensions)
-- [ ] Permission detection with clear error messages
-- [ ] Action timeout mechanism
-- [ ] JSON config file (~/.config/go-mcp-computer-use/config.json)
-- [ ] Structured logging
+### Slice 4 — Robustness (completed)
+- [x] Coordinate bounds validation (screen dimensions)
+- [x] Permission detection with clear error messages
+- [x] Action timeout mechanism
+- [x] JSON config file (~/.config/go-mcp-computer-use/config.json)
+- [x] Structured logging
 - [ ] Error wrapping audit for consistency
-- [ ] Graceful shutdown (handle stdin EOF)
+- [x] Graceful shutdown (handle stdin EOF)
 
 ### Slice 5 — Cross-platform
 - [ ] Define platform interface
@@ -130,17 +156,14 @@
 - [ ] macOS stub (Accessibility API)
 
 ### Docs
-- [ ] README.md with setup and usage
-- [ ] Agent config examples (opencode.json, claude_code.json, copilot.json)
-- [ ] Install script (Windows PowerShell)
-- [ ] Update plan.md with current tool list
+- [x] README.md with setup and usage
+- [x] Agent config examples (opencode.json, claude_code.json, copilot.json)
+- [x] Install script (Windows PowerShell)
+- [x] Computer-use guide for AI agents
+- [x] Update plan.md with current tool list
 
 ### Potential Future Tools
-- Template/image matching (find image on screen)
-- Screen recording / frame streaming
-- Per-monitor DPI awareness
 - Clipboard formats beyond text (images, files)
 - Mouse gesture recognition
-- Audio device management (list, set default)
 - WebAuthn/security key API
 - Remote desktop / RDP support

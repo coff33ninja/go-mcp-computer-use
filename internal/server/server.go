@@ -1570,7 +1570,7 @@ func New(version string) *mcp.Server {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
 	slog.SetDefault(logger)
 
-	slog.Info("starting go-mcp-computer-use", "version", version, "tools", 103)
+	slog.Info("starting go-mcp-computer-use", "version", version, "tools", 108)
 
 	if cfg.UIAWarmup {
 		go func() {

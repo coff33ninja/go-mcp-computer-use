@@ -2,23 +2,41 @@
 
 ## Goal
 
-An MCP server in Go that exposes desktop computer use tools (screenshot, mouse, keyboard, window management, OCR, system control) to AI coding agents via the Model Context Protocol.
+A closed-loop embodied agent for Windows — an MCP server in Go that exposes desktop computer use tools (screenshot, mouse, keyboard, window management, OCR, ONNX ML detection, memory store) to AI agents via the Model Context Protocol. The system implements the execution, perception, memory, and training layers of a layered agent architecture with separated cognition, perception, and action.
 
 ## Background
 
-AI agents (opencode, Claude Code, GitHub Copilot, Cursor, etc.) can control the desktop through a screenshot-act-repeat loop:
-1. Agent calls `screenshot()` to see what's on screen
-2. Agent decides what to do (click, type, drag)
-3. Agent calls the corresponding tool
-4. Repeat
+AI agents (opencode, Claude Code, GitHub Copilot, Cursor, etc.) control the desktop through a perceive-reason-act loop:
 
-This project implements **94 MCP tools** as an MCP server, using Go's Windows API bindings with zero CGO dependency — including native COM WinRT (OCR, UIA) and Win32 via syscall.
+```
+Perception → State Building → Reasoning → Planning → Execution → Feedback
+   (ML+OCR)     (Memory)        (LLM)       (MCP)     (Server)   (Vision)
+```
+
+This project implements the **execution, perception, memory, and training layers** — everything from mouse/keyboard control and window management to ONNX-based UI element detection, SQLite-backed element position memory, and a training data pipeline for model fine-tuning. The AI client handles reasoning and orchestration via MCP.
+
+Architecturally, the system splits into these layers:
+
+| Layer | Role | Responsibility |
+|-------|------|---------------|
+| **LLM** (in AI client) | Cognitive | Intent + strategy + reasoning |
+| **MCP** (in AI client) | Orchestration | Skill decomposition + execution logic |
+| **This server** | Physical + Vision + Memory | Mouse/keyboard/window, screenshot/OCR/ONNX, SQLite facts/templates |
+
+### Design Principles
+
+- **No overlap in responsibility** — each layer does one job well
+- **Stateless → stateful** — element memory replaces blind re-discovery
+- **ML informs MCP, doesn't replace it** — perception feeds structure, not commands
+- **Feedback loop** — every action is verified by perception before continuing
+
+This project implements **108 MCP tools** using Go's Windows API bindings — Win32 via syscall, native COM/WinRT for OCR + UIA, with CGO required only for ONNX runtime inference (optional via `-NoCGO` build flag, which excludes ONNX tools).
 
 ## Architecture
 
 ```
 cmd/mcp-server/main.go        — entrypoint, stdio transport
-internal/server/server.go     — MCP tool registration (103 tools)
+internal/server/server.go     — MCP tool registration (108 tools)
 internal/actions/
   ├── user32.go               — shared user32.dll proc loading
   ├── screenshot.go           — GDI BitBlt capture → PNG → base64
@@ -55,69 +73,15 @@ internal/actions/
   └── windowexploreruse.go    — File Explorer automation (focus, open path)
 ```
 
-## Tools (94 total)
+## Tools (108 total — see [README](README.md#tools-108--v029) for full listing)
 
-### Screenshot & Vision (7)
-`screenshot` `get_pixel_color` `get_screen_size` `get_screen_dpi`
-`ocr` `find_image` `record_screen`
-
-### Mouse (6)
-`click` `move_mouse` `scroll` `drag` `hover` `get_cursor_position`
-
-### Keyboard (5)
-`type` `key_press` `type_and_submit` `select_all_and_type`
-
-### Window Management (13)
-`list_windows` `focus_window` `find_window` `wait_for_window`
-`move_window` `minimize_window` `maximize_window` `restore_window`
-`close_window` `get_window_state` `screenshot_element`
-`focus_window_by_title` `get_active_window`
-
-### UI Automation (3)
-`uia_find` `uia_get_text` `uia_invoke`
-
-### Chained / Composite (8)
-`find_text_and_click` `wait_for_text` `click_menu_item`
-`launch_and_wait` `hover` `type_and_submit` `select_all_and_type`
-
-### System (22)
-`get_system_info` `get_uptime` `get_idle_time`
-`get_volume` `set_volume` `set_mute` `list_audio_devices` `set_default_audio_device`
-`get_clipboard` `set_clipboard`
-`get_brightness` `set_brightness`
-`get_battery` `get_disk_usage`
-`get_keyboard_layout` `set_keyboard_layout`
-`get_network_info` `ping`
-`list_displays` `get_display_modes`
-`open_url` `open_file_explorer` `open_file_location`
-`show_notification` `lock_workstation` `wait`
-`shutdown` `restart` `sleep` `hibernate`
-
-### Process Management (4)
-`launch_app` `launch_and_wait` `kill_process` `list_processes`
-
-### Memory Store (5)
-`memory_set` `memory_get` `memory_search` `memory_list` `memory_forget`
-
-### Layout & Templates (5)
-`layout_validate` `template_store` `template_find` `template_list` `template_forget`
-
-### ONNX ML (8)
-`onnx_status` `onnx_download` `onnx_detect`
-`onnx_watch_start` `onnx_watch_stop` `onnx_watch_status` `onnx_watch_cache`
-
-### Browser & Explorer (6)
-`browser_focus_url_bar` `browser_new_tab` `browser_navigate` `browser_search`
-`explorer_focus` `explorer_open_path`
-
-### Automation Pipeline (2)
-`chain` — executes a sequence of steps with polling, waiting, and branching
-`layout_validate` — layout drift + OCR verification
+Key categories: screenshot/vision (8), mouse (6), keyboard (9 incl. keylogger), window management (13), chained/composite (6), chain automation (1), UI automation (3), browser automation (4), file explorer (2), key logger (5), audio (2), memory & templates (10), ONNX ML (7), priors & stats (1), training pipeline (6), data export (1), runtime config (1), system (26), process management (4).
 
 ## Design Decisions
 
 **ADR-001** — MCP SDK: `modelcontextprotocol/go-sdk` v1.6.1 (official, Google-maintained).
-**ADR-002** — Win32 via `syscall.NewLazyDLL` + `golang.org/x/sys/windows`. No CGO. COM/WinRT via raw uintptr vtbl dispatch (`vtblMethod()`). WinRT uses `RO_INIT_MULTITHREADED` to match UIA's COM apartment model.
+**ADR-002** — Win32 via `syscall.NewLazyDLL` + `golang.org/x/sys/windows`. COM/WinRT via raw uintptr vtbl dispatch (`vtblMethod()`). WinRT uses `RO_INIT_MULTITHREADED` to match UIA's COM apartment model.
+**Note:** ONNX runtime (`onnxruntime_go`) requires CGO. The default build uses Zig `cc`; pass `-NoCGO` to exclude ONNX tools and get a pure-Go binary.
 
 ## Versioning
 
@@ -139,8 +103,8 @@ v<major>.<minor>.<patch>
 - MCP spec 2025-11-25
 - stdio transport only
 - 64-bit binary
-- No CGO
-- No external dependencies beyond MCP SDK + `golang.org/x/sys`
+- CGO only for ONNX runtime (optional: `-NoCGO` excludes ONNX tools)
+- External deps: `modernc.org/sqlite` (pure Go), `github.com/yalue/onnxruntime_go` (CGO), `golang.org/x/sys`
 
 ## Chained Automation Pipeline
 
@@ -218,11 +182,11 @@ Chain execution maintains state:
 ### Slice 4 — Robustness (done)
 - Coordinate bounds validation (`validate.go`) ✅
 - Permission detection / UIPI warnings (`uipi.go`) ✅
-- Action timeout mechanism 🔲
-- JSON config file 🔲
-- Structured logging 🔲
+- Action timeout mechanism (`timeout.go`) ✅
+- JSON config file (`internal/config/config.go`) ✅
+- Structured logging (`server.go` with `slog`) ✅
 - Error wrapping audit 🔲
-- Graceful shutdown 🔲
+- Graceful shutdown (`main.go` signal handling) ✅
 
 ### Slice 5 — Automation Pipeline
 - `chain` tool — sequential step executor 🔲

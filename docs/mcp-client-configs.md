@@ -636,7 +636,7 @@ $psi.RedirectStandardOutput = $true
 $psi.UseShellExecute = $false
 $p = [System.Diagnostics.Process]::Start($psi)
 Start-Sleep -Milliseconds 300
-$p.StandardInput.WriteLine('{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-05","capabilities":{},"clientInfo":{"name":"test","version":"0.1.0"}}}')
+$p.StandardInput.WriteLine('{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"0.1.0"}}}')
 Start-Sleep -Milliseconds 100
 $p.StandardInput.WriteLine('{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}')
 Start-Sleep -Milliseconds 800

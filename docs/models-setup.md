@@ -9,6 +9,8 @@ Run `onnx_download` tool to auto-pull all models to `%APPDATA%\go-mcp-computer-u
 
 No Python or PyTorch required — all models are pre-exported ONNX.
 
+> **Known incompatibility:** YOLO11n from Ultralytics v8.3.0 uses ONNX opset 22, which requires ONNX Runtime 1.21+. The bundled ORT 1.20.x only supports opsets up to 21. If YOLO detection fails, manually export YOLO11n with `opset=21` or upgrade ORT. MobileNetV3-small works with 1.20.x.
+
 ## ONNX Runtime DLL
 
 `onnx_download` also pulls a compatible `onnxruntime.dll` from

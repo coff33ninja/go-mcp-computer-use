@@ -22,7 +22,7 @@ Windows-only Go project. CI builds + vets on every push/PR. Release workflow cut
 | Push to `main`, `v0.2.x` | Build + vet + upload artifact |
 | PR to `main`, `v0.2.x` | Build + vet |
 
-Artifact name: `mcp-server-windows-<version>`
+Artifact name: `mcp-server-windows-<sha>` (uses `${{ github.sha }}` in CI workflow)
 
 ### Release (`.github/workflows/release.yml`)
 

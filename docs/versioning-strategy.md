@@ -28,7 +28,7 @@ v<major>.<minor>.<patch>
 | `+0.1.0` (minor) | New tools, new capabilities, architecture changes, dependency adds | Adding native COM OCR, adding UIA layer, adding `chain` tool, introducing SQLite memory store |
 | `+1.0.0` (major) | Stable release with proven architecture, all planned slices complete, field-tested | Full automation pipeline working, memory store battle-tested, ONNX integration verified |
 
-**Current trajectory:** v0.1.x (bug-fix cycle on initial tools) → v0.2.0 (automation pipeline + memory + ML) → v0.3.x (iterative improvements) → v1.0.0 (stable release)
+**Current trajectory:** v0.1.x (bug-fix cycle on initial tools) → v0.2.x (automation pipeline + memory + ML + priors + keylogger) → v0.3.x (iterative improvements) → v1.0.0 (stable release)
 
 Breaking changes at 0.x require a minor bump (not major), per SemVer spec §4.
 
