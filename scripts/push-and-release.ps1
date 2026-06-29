@@ -56,10 +56,10 @@ Write-Host "Waiting for release workflow to finish..."
 $runId = $null
 $maxWait = 900
 $elapsed = 0
-$since = (Get-Date).AddSeconds(-30).ToString("o")
+$since = (Get-Date).ToUniversalTime().AddSeconds(-30)
 while ($elapsed -lt $maxWait) {
     $runsJson = gh run list --workflow=Release --limit 5 --json databaseId,status,headBranch,conclusion,createdAt 2>$null
-    $run = ($runsJson | ConvertFrom-Json) | Where-Object { $_.headBranch -eq $tag -and $_.createdAt -ge $since } | Sort-Object createdAt -Descending | Select-Object -First 1
+    $run = ($runsJson | ConvertFrom-Json) | Where-Object { $_.headBranch -eq $tag -and [DateTime]$_.createdAt -ge $since } | Sort-Object createdAt -Descending | Select-Object -First 1
     if ($run) {
         if ($run.status -eq "completed") {
             $runId = $run.databaseId
