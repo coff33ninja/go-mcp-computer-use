@@ -119,6 +119,15 @@ func OCRRegion(x, y, w, h int32, language string) (*OCRResult, error) {
 	return ocrFromBase64(b64, language)
 }
 
+func OCRProportionalWindowRegion(hwnd uintptr, leftFrac, topFrac, rightFrac, bottomFrac float64, language string) (*OCRResult, error) {
+	wn, err := NewWindowNormalizer(hwnd)
+	if err != nil {
+		return nil, fmt.Errorf("ocr proportional region: %w", err)
+	}
+	x, y, w, h := wn.ProportionalRegion(leftFrac, topFrac, rightFrac, bottomFrac)
+	return OCRRegion(x, y, w, h, language)
+}
+
 func ocrFromBase64(b64, language string) (*OCRResult, error) {
 	if b64 == "" {
 		return &OCRResult{}, nil

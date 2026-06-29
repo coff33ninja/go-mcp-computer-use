@@ -1144,7 +1144,7 @@ func onnxWatchStatusHandler(ctx context.Context, req *mcp.CallToolRequest, _ any
 }
 
 func onnxWatchCacheHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, actions.GetCachedDetections(), nil
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, map[string]any{"detections": actions.GetCachedDetections()}, nil
 }
 
 type TemplateStoreArgs struct {

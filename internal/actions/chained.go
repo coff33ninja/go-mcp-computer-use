@@ -27,13 +27,24 @@ func FindTextAndClick(opts FindTextOpts) error {
 		y := int32(0)
 		if opts.RegionX != nil { x = *opts.RegionX }
 		if opts.RegionY != nil { y = *opts.RegionY }
-		result, err = OCRRegion(x, y, *opts.RegionW, *opts.RegionH, opts.Language)
+		w, h := *opts.RegionW, *opts.RegionH
+		// Auto-expand tiny OCR crops to a generous proportion of the active window
+		if w < 300 || h < 300 {
+			if info, cerr := GetActiveWindowInfo(); cerr == nil && info.Handle != 0 {
+				result, err = OCRProportionalWindowRegion(info.Handle, 0.05, 0.05, 0.95, 0.95, opts.Language)
+				if err == nil {
+					goto search
+				}
+			}
+		}
+		result, err = OCRRegion(x, y, w, h, opts.Language)
 	} else {
 		result, err = OCRScreen(opts.Language)
 	}
 	if err != nil {
 		return fmt.Errorf("find_text_and_click ocr: %w", err)
 	}
+search:
 
 	lowerText := strings.ToLower(opts.Text)
 	for _, word := range result.Words {

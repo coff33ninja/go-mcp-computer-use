@@ -170,10 +170,12 @@ type DetectedElement struct {
 }
 
 type DetectionOutput struct {
-	Elements    []DetectedElement `json:"elements"`
-	TotalMs     int64             `json:"total_ms"`
-	ModelInput  string            `json:"model_input,omitempty"`
-	SavedRef    string            `json:"saved_ref,omitempty"`
+	Elements    []DetectedElement  `json:"elements"`
+	TotalMs     int64              `json:"total_ms"`
+	ModelInput  string             `json:"model_input,omitempty"`
+	SavedRef    string             `json:"saved_ref,omitempty"`
+	WindowTitle string             `json:"window_title,omitempty"`
+	Normalized  []NormalizedElement `json:"normalized,omitempty"`
 }
 
 func ONNXDetect(in DetectionInput) (*DetectionOutput, error) {
@@ -252,8 +254,10 @@ func ONNXDetect(in DetectionInput) (*DetectionOutput, error) {
 
 	elements := make([]DetectedElement, 0, len(filtered))
 	winTitle := ""
+	var winHandle uintptr
 	if info, err := GetActiveWindowInfo(); err == nil && info != nil {
 		winTitle = info.Title
+		winHandle = info.Handle
 	}
 	for _, b := range filtered {
 		el := DetectedElement{
@@ -270,14 +274,23 @@ func ONNXDetect(in DetectionInput) (*DetectionOutput, error) {
 		elements = append(elements, el)
 	}
 
-	// Store detections in memory for AI reuse
-	if winTitle != "" && len(elements) > 0 {
+	var normalized []NormalizedElement
+	if winHandle != 0 && len(elements) > 0 {
+		if wn, err := NewWindowNormalizer(winHandle); err == nil {
+			normalized = make([]NormalizedElement, len(elements))
+			for i, el := range elements {
+				normalized[i] = wn.NormalizeElement(el)
+			}
+		}
+		// Store detections in memory for AI reuse
 		MemoryStoreDetectionElements(elements, winTitle)
 	}
 
 	return &DetectionOutput{
-		Elements:   elements,
-		TotalMs:    time.Since(start).Milliseconds(),
+		Elements:    elements,
+		TotalMs:     time.Since(start).Milliseconds(),
+		WindowTitle: winTitle,
+		Normalized:  normalized,
 	}, nil
 }
 

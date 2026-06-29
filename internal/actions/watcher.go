@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"encoding/json"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -15,11 +16,12 @@ const (
 )
 
 type CachedDetection struct {
-	Timestamp   int64             `json:"ts"`
-	WindowTitle string            `json:"window_title,omitempty"`
-	Elements    []DetectedElement `json:"elements"`
-	SavedRef    string            `json:"saved_ref,omitempty"`
-	TotalMs     int64             `json:"total_ms"`
+	Timestamp   int64               `json:"ts"`
+	WindowTitle string              `json:"window_title,omitempty"`
+	Elements    []DetectedElement   `json:"elements"`
+	Normalized  []NormalizedElement `json:"normalized,omitempty"`
+	SavedRef    string              `json:"saved_ref,omitempty"`
+	TotalMs     int64               `json:"total_ms"`
 }
 
 type WatcherStatus struct {
@@ -121,7 +123,10 @@ func (w *watcher) runOnce() {
 		return
 	}
 
-	title := getActiveWindowTitle()
+	title := result.WindowTitle
+	if title == "" {
+		title = getActiveWindowTitle()
+	}
 
 	cat := TrainingCatNoElements
 	if len(result.Elements) > 0 {
@@ -132,14 +137,23 @@ func (w *watcher) runOnce() {
 		Timestamp:   start.UnixMilli(),
 		WindowTitle: title,
 		Elements:    result.Elements,
+		Normalized:  result.Normalized,
 		TotalMs:     result.TotalMs,
+	}
+
+	windowRect := ""
+	if info, err := GetActiveWindowInfo(); err == nil && info != nil && info.Handle != 0 {
+		if rect, err := GetWindowRectByHandle(info.Handle); err == nil {
+			b, _ := json.Marshal(rect)
+			windowRect = string(b)
+		}
 	}
 
 	if ActiveConfig == nil || ActiveConfig.TrainingEnabled {
 		if sample, err := saveTrainingSampleDirect(
 			TrainingSourceWatcher, cat,
 			fmt.Sprintf("find UI elements in window: %s", title),
-			b64, title, "", result.Elements,
+			b64, title, "", result.Elements, result.Normalized, windowRect,
 		); err == nil && sample != nil {
 			det.SavedRef = sample.ImagePath
 		}

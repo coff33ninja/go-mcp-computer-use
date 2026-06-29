@@ -107,25 +107,29 @@ func createTrainingTables(db *sql.DB) error {
 			return err
 		}
 	}
-	// Migration: add signal_level column to existing databases
+	// Migrations for existing databases
 	db.Exec("ALTER TABLE training_samples ADD COLUMN signal_level INTEGER NOT NULL DEFAULT 0")
+	db.Exec("ALTER TABLE training_samples ADD COLUMN window_rect TEXT NOT NULL DEFAULT ''")
+	db.Exec("ALTER TABLE training_samples ADD COLUMN normalized_coords TEXT NOT NULL DEFAULT '[]'")
 	_ = createPriorsTable(db)
 	return nil
 }
 
 type TrainingSample struct {
-	ID              int64             `json:"id"`
-	Source          string            `json:"source"`
-	Category        string            `json:"category"`
-	ImagePath       string            `json:"image_path"`
-	TaskPrompt      string            `json:"task_prompt,omitempty"`
-	WindowTitle     string            `json:"window_title,omitempty"`
-	OCRText         string            `json:"ocr_text,omitempty"`
-	ONNXDetections  []DetectedElement `json:"onnx_detections,omitempty"`
-	ElementsCount   int               `json:"elements_count"`
-	SignalLevel     int               `json:"signal_level"`
-	CreatedAt       string            `json:"created_at"`
-	UsedForTraining bool              `json:"used_for_training"`
+	ID                int64               `json:"id"`
+	Source            string              `json:"source"`
+	Category          string              `json:"category"`
+	ImagePath         string              `json:"image_path"`
+	TaskPrompt        string              `json:"task_prompt,omitempty"`
+	WindowTitle       string              `json:"window_title,omitempty"`
+	WindowRect        string              `json:"window_rect,omitempty"`
+	OCRText           string              `json:"ocr_text,omitempty"`
+	ONNXDetections    []DetectedElement   `json:"onnx_detections,omitempty"`
+	NormalizedCoords  []NormalizedElement `json:"normalized_coords,omitempty"`
+	ElementsCount     int                 `json:"elements_count"`
+	SignalLevel       int                 `json:"signal_level"`
+	CreatedAt         string              `json:"created_at"`
+	UsedForTraining   bool                `json:"used_for_training"`
 }
 
 type SaveTrainingSampleInput struct {
@@ -146,7 +150,7 @@ func imageBaseDir(source string) string {
 	}
 }
 
-func saveTrainingSampleDirect(source, category, taskPrompt, imageB64, windowTitle, ocrText string, detections []DetectedElement) (*TrainingSample, error) {
+func saveTrainingSampleDirect(source, category, taskPrompt, imageB64, windowTitle, ocrText string, detections []DetectedElement, normalized []NormalizedElement, windowRect string) (*TrainingSample, error) {
 	trainMu.Lock()
 	defer trainMu.Unlock()
 
@@ -184,14 +188,20 @@ func saveTrainingSampleDirect(source, category, taskPrompt, imageB64, windowTitl
 
 	signalLevel := computeSignalLevel(detCount, category, taskPrompt)
 
+	normJSON := "[]"
+	if len(normalized) > 0 {
+		b, _ := json.Marshal(normalized)
+		normJSON = string(b)
+	}
+
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	_, err = trainDB.Exec(`INSERT INTO training_samples(
-		source, category, image_path, task_prompt, window_title, ocr_text,
-		onnx_detections, elements_count, signal_level, created_at, used_for_training
-	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
-		source, category, imagePath, taskPrompt, windowTitle,
-		ocrText, detJSON, detCount, signalLevel, now)
+		source, category, image_path, task_prompt, window_title, window_rect, ocr_text,
+		onnx_detections, normalized_coords, elements_count, signal_level, created_at, used_for_training
+	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+		source, category, imagePath, taskPrompt, windowTitle, windowRect,
+		ocrText, detJSON, normJSON, detCount, signalLevel, now)
 	if err != nil {
 		return nil, fmt.Errorf("insert training sample: %w", err)
 	}
@@ -208,7 +218,9 @@ func saveTrainingSampleDirect(source, category, taskPrompt, imageB64, windowTitl
 		Category:        category,
 		TaskPrompt:      taskPrompt,
 		WindowTitle:     windowTitle,
+		WindowRect:      windowRect,
 		OCRText:         ocrText,
+		NormalizedCoords: normalized,
 		CreatedAt:       now,
 		UsedForTraining: false,
 		ElementsCount:   detCount,
@@ -217,11 +229,20 @@ func saveTrainingSampleDirect(source, category, taskPrompt, imageB64, windowTitl
 }
 
 func SaveTrainingSample(in SaveTrainingSampleInput) (*TrainingSample, error) {
-	detections := []DetectedElement{}
+	var detections []DetectedElement
+	var normalized []NormalizedElement
+	windowRect := ""
 	if detResult, err := ONNXDetect(DetectionInput{ImageB64: in.ImageB64}); err == nil {
 		detections = detResult.Elements
+		normalized = detResult.Normalized
+		if info, err := GetActiveWindowInfo(); err == nil && info != nil && info.Handle != 0 {
+			if rect, err := GetWindowRectByHandle(info.Handle); err == nil {
+				b, _ := json.Marshal(rect)
+				windowRect = string(b)
+			}
+		}
 	}
-	return saveTrainingSampleDirect(in.Source, in.Category, in.TaskPrompt, in.ImageB64, in.WindowTitle, in.OCRText, detections)
+	return saveTrainingSampleDirect(in.Source, in.Category, in.TaskPrompt, in.ImageB64, in.WindowTitle, in.OCRText, detections, normalized, windowRect)
 }
 
 func SaveScreenshotTrainingSample(source, category, taskPrompt, windowTitle, ocrText string) (*TrainingSample, error) {
@@ -296,8 +317,8 @@ func TrainingSampleList(in TrainingListInput) ([]TrainingSample, error) {
 		where = append(where, "used_for_training = 0")
 	}
 
-	query := `SELECT id, source, category, image_path, task_prompt, window_title,
-		ocr_text, onnx_detections, elements_count, signal_level, created_at, used_for_training
+	query := `SELECT id, source, category, image_path, task_prompt, window_title, window_rect,
+		ocr_text, onnx_detections, normalized_coords, elements_count, signal_level, created_at, used_for_training
 		FROM training_samples`
 	if len(where) > 0 {
 		query += " WHERE " + joinWhere(where)
@@ -314,13 +335,15 @@ func TrainingSampleList(in TrainingListInput) ([]TrainingSample, error) {
 	var samples []TrainingSample
 	for rows.Next() {
 		var s TrainingSample
-		var detJSON string
+		var detJSON, normJSON string
 		if err := rows.Scan(&s.ID, &s.Source, &s.Category, &s.ImagePath,
-			&s.TaskPrompt, &s.WindowTitle, &s.OCRText, &detJSON,
+			&s.TaskPrompt, &s.WindowTitle, &s.WindowRect, &s.OCRText,
+			&detJSON, &normJSON,
 			&s.ElementsCount, &s.SignalLevel, &s.CreatedAt, &s.UsedForTraining); err != nil {
 			return nil, fmt.Errorf("scan sample: %w", err)
 		}
 		json.Unmarshal([]byte(detJSON), &s.ONNXDetections)
+		json.Unmarshal([]byte(normJSON), &s.NormalizedCoords)
 		samples = append(samples, s)
 	}
 	return samples, rows.Err()

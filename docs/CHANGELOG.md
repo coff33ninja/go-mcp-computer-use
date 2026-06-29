@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.2.14] - 2026-06-29
+
+### Added
+
+- **`NormalizedElement` coordinate system** — element positions stored as window-relative 0.0–1.0 fractions via `WindowNormalizer` in `internal/actions/dpi.go`. Layout-independent across screen resolutions and multi-monitor. Includes `GetDPIScaleForWindow`, `Normalize`/`Denormalize` helpers, and `ProportionalRegion` for computing screen-absolute OCR crops as a percentage of the active window.
+
+- **`OCRProportionalWindowRegion`** — new OCR function in `ocr.go` that takes a window handle + proportional fractions, eliminating hardcoded pixel crops.
+
+- **Auto-expand tiny OCR regions** — `FindTextAndClick` now detects crops <300px in any dimension and falls back to a generous 5%–95% of the active window. Prevents "Desktop not found" failures on small fixed-pixel regions.
+
+- **Window context in ONNX detection** — `DetectionOutput` carries `WindowTitle` and `Normalized []NormalizedElement` alongside absolute coordinates. Computed per-active-window during inference.
+
+- **Training schema migration** — `training_samples` table gains `window_rect TEXT` and `normalized_coords TEXT` columns. `saveTrainingSampleDirect` accepts and persists both normalized coords and window rect JSON.
+
+### Fixed
+
+- **`NormalizeElement` missing Class/Confidence copy** — `WindowNormalizer.NormalizeElement` returned a `NormalizedElement` with zeroed `Class` and `Confidence` fields. Exposed by round-trip test (`TestNormalizeElementRoundTrip`). Now copies both fields before returning.
+
+### Changed
+
+- **Watcher cache** — `CachedDetection` includes `Normalized` elements alongside absolute `Elements`. Training samples from watcher snaps now carry window rect context.
+- **VERSION** — bumped 0.2.13 → 0.2.14
+
+### Tests
+
+- **Coordinate system tests** — `dpi_test.go` with 6 tests covering: normalize/denormalize round-trip, coordinate bounds (corners, center, size), proportional region math, `NormalizeElement` class/confidence round-trip, and zero-size window edge case.
+
 ## [0.2.13] - 2026-06-29
 
 ### Fixed
