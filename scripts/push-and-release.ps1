@@ -1,5 +1,4 @@
 param(
-    [switch]$NoCGO,
     [string]$OpenCodeDesktop = "$env:LOCALAPPDATA\Programs\@opencode-aidesktop\OpenCode.exe"
 )
 
@@ -81,30 +80,27 @@ if (-not $runId) {
 Write-Host "Release workflow completed successfully."
 
 # ---- Step 6: Download release asset ----
-$exeName = if ($NoCGO) { "mcp-server.exe" } else { "mcp-server-cgo.exe" }
-$localExe = "mcp-server.exe"
-
-Write-Host "Downloading $exeName from release $tag..."
+Write-Host "Downloading mcp-server.exe from release $tag..."
 $dlDir = "$env:TEMP\mcp-release"
 Remove-Item $dlDir -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Path $dlDir -Force | Out-Null
 
 $dlAttempt = 0
 do {
-    gh release download $tag --pattern $exeName --dir $dlDir 2>$null
+    gh release download $tag --pattern "mcp-server.exe" --dir $dlDir 2>$null
     if ($LASTEXITCODE -and $dlAttempt -lt 6) {
         Write-Host "  release not ready yet, retrying in 10s... (attempt $($dlAttempt+1))"
         Start-Sleep -Seconds 10
         $dlAttempt++
     }
 } while ($LASTEXITCODE -and $dlAttempt -lt 6)
-if ($LASTEXITCODE) { throw "Failed to download $exeName after 6 attempts" }
+if ($LASTEXITCODE) { throw "Failed to download mcp-server.exe after 6 attempts" }
 
 # ---- Step 7: Replace exe in project root ----
-Write-Host "Replacing $localExe..."
-$src = "$dlDir\$exeName"
+Write-Host "Replacing mcp-server.exe..."
+$src = "$dlDir\mcp-server.exe"
 if (-not (Test-Path $src)) { throw "Downloaded file not found at $src" }
-Copy-Item -Path $src -Destination "$PWD\$localExe" -Force
+Copy-Item -Path $src -Destination "$PWD\mcp-server.exe" -Force
 
 # Cleanup
 Remove-Item $dlDir -Recurse -Force -ErrorAction SilentlyContinue

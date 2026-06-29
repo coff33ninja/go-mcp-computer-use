@@ -30,7 +30,7 @@ Architecturally, the system splits into these layers:
 - **ML informs MCP, doesn't replace it** — perception feeds structure, not commands
 - **Feedback loop** — every action is verified by perception before continuing
 
-This project implements **108 MCP tools** (see [docs/tools.md](docs/tools.md) — auto-generated from `internal/server/server.go`) using Go's Windows API bindings — Win32 via syscall, native COM/WinRT for OCR + UIA, with CGO required only for ONNX runtime inference (optional via `-NoCGO` build flag, which excludes ONNX tools).
+This project implements **108 MCP tools** (see [docs/tools.md](docs/tools.md) — auto-generated from `internal/server/server.go`) using Go's Windows API bindings — Win32 via syscall, native COM/WinRT for OCR + UIA, with CGO required for ONNX runtime inference via Zig cc.
 
 ## Architecture
 
@@ -81,7 +81,7 @@ Key categories: Screenshot & Vision (8), Mouse (6), Keyboard (9 incl. keylogger)
 
 **ADR-001** — MCP SDK: `modelcontextprotocol/go-sdk` v1.6.1 (official, Google-maintained).
 **ADR-002** — Win32 via `syscall.NewLazyDLL` + `golang.org/x/sys/windows`. COM/WinRT via raw uintptr vtbl dispatch (`vtblMethod()`). WinRT uses `RO_INIT_MULTITHREADED` to match UIA's COM apartment model.
-**Note:** ONNX runtime (`onnxruntime_go`) requires CGO. The default build uses Zig `cc`; pass `-NoCGO` to exclude ONNX tools and get a pure-Go binary.
+**Note:** ONNX runtime (`onnxruntime_go`) requires CGO. The build uses Zig `cc` as the C cross-compiler.
 
 ## Versioning
 
@@ -103,8 +103,8 @@ v<major>.<minor>.<patch>
 - MCP spec 2025-11-25
 - stdio transport only
 - 64-bit binary
-- CGO only for ONNX runtime (optional: `-NoCGO` excludes ONNX tools)
-- External deps: `modernc.org/sqlite` (pure Go), `github.com/yalue/onnxruntime_go` (CGO), `golang.org/x/sys`
+- CGO required for ONNX runtime (Zig cc as C cross-compiler)
+- External deps: `modernc.org/sqlite` (pure Go), `github.com/yalue/onnxruntime_go` (CGO via Zig cc), `golang.org/x/sys`
 
 ## Chained Automation Pipeline
 

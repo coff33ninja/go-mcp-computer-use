@@ -43,14 +43,11 @@ jobs:
           Expand-Archive -Path $zip -DestinationPath "$env:ProgramFiles" -Force
           echo "$env:ProgramFiles\zig-x86_64-windows-0.16.0" | Out-File -FilePath $env:GITHUB_PATH -Append
 
-      - name: Build release (no CGO)
-        run: go build -ldflags="-X main.Version=${{ steps.version.outputs.version }}" -o mcp-server.exe ./cmd/mcp-server/
-
       - name: Build release (CGO + Zig)
         run: |
           $env:CC = "zig cc"
           $env:CGO_ENABLED = "1"
-          go build -ldflags="-X main.Version=${{ steps.version.outputs.version }}" -o mcp-server-cgo.exe ./cmd/mcp-server/
+          go build -ldflags="-X main.Version=${{ steps.version.outputs.version }}" -o mcp-server.exe ./cmd/mcp-server/
 
       - name: Extract changelog
         id: changelog
@@ -64,7 +61,7 @@ jobs:
             Write-Host "Changelog extracted for v$ver"
           } else {
             Write-Warning "No changelog entry found for v$ver"
-            "See CHANGELOG.md for details." | Set-Content -Path changelog-release.md
+            "See docs/CHANGELOG.md for details." | Set-Content -Path changelog-release.md
           }
 
       - name: Checksum
@@ -72,8 +69,6 @@ jobs:
         run: |
           $hash = (Get-FileHash -Algorithm SHA256 mcp-server.exe).Hash.ToLower()
           Set-Content -Path "mcp-server.exe.sha256" -Value "$hash  mcp-server.exe"
-          $hashCgo = (Get-FileHash -Algorithm SHA256 mcp-server-cgo.exe).Hash.ToLower()
-          Set-Content -Path "mcp-server-cgo.exe.sha256" -Value "$hashCgo  mcp-server-cgo.exe"
 
       - name: Create release
         uses: softprops/action-gh-release@v2
@@ -83,7 +78,5 @@ jobs:
           files: |
             mcp-server.exe
             mcp-server.exe.sha256
-            mcp-server-cgo.exe
-            mcp-server-cgo.exe.sha256
           fail_on_unmatched_files: false
           generate_release_notes: false

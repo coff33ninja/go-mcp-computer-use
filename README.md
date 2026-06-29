@@ -56,7 +56,7 @@ See [`docs/accessibility.md`](docs/accessibility.md) for assistive technology us
 See [`docs/build.md`](docs/build.md) for:
 - Requirements (Windows 10+, Go 1.26+, Zig 0.16+)
 - Quick start & installation
-- Build commands (default CGO, -NoCGO)
+- Build commands (CGO via Zig cc — always ONNX-enabled)
 - Performance benchmarks
 
 ## Configuration

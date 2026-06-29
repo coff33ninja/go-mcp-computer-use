@@ -19,7 +19,7 @@ Key requirements:
 - Keyboard input (SendInput)
 - Window enumeration (EnumWindows)
 - Reliability and speed (sub-second actions)
-- No CGO dependency for core tools (ONNX ML inference is the exception — uses CGO via Zig cc; optional `-NoCGO` build flag excludes ONNX tools)
+- CGO via Zig cc for ONNX ML inference (mandatory — all builds include ONNX tools)
 
 ## Decision
 
@@ -32,11 +32,11 @@ Use **Go + syscall/windows** with direct Win32 API calls, plus **native COM** wh
 - **UI Automation**: Native COM calls to `UIAutomationCore.dll` (IUIAutomation, IUIAutomationElement) via raw vtable dispatch — no CGO, no go-ole
 - **OCR**: Native WinRT COM via `combase.dll` (RoGetActivationFactory, WindowsCreateString, IAsyncOperation polling) — HSTRING management, activation factories, async result extraction, all via raw syscall
 
-Avoid CGO for core tools to keep builds simple and cross-compilable. ONNX ML inference requires CGO (Zig cc) — excluded via `-NoCGO` build flag for pure-Go builds.
+CGO is required for ONNX ML inference via Zig cc. All builds include the full toolset.
 
 ## Consequences
 
-- Easier: pure Go for core tools, no CGO toolchain needed (ONNX is optional CGO via Zig cc)
+- Easier: Zig cc handles CGO, single build command, no pure-Go fallback needed
 - Easier: cross-compilation works out of the box
 - Easier: direct COM vtable dispatch via syscall — no CGO, no go-ole dependency
 - Faster: OCR 2-8x faster, UIA no longer shells out to PowerShell

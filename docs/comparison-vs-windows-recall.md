@@ -172,7 +172,7 @@ Recall is designed to **survive a compromised OS** (VBS Enclave isolates from ke
 | **Launched** | April 2025 (GA), re-architected after June 2024 privacy backlash | June 2026 (active development, v0.2.9) |
 | **Hardware required** | Copilot+ PC (Qualcomm Snapdragon X / AMD Ryzen AI / Intel Core Ultra with NPU) | Any Windows 10/11 x64 |
 | **AI chip required** | NPU + CPU + GPU | CPU only |
-| **Software dependencies** | Windows 11 24H2+, Copilot Runtime | Go binary (CGO for ONNX via Zig cc; `-NoCGO` build available) |
+| **Software dependencies** | Windows 11 24H2+, Copilot Runtime | Go binary (CGO for ONNX via Zig cc) |
 | **Binary size** | Part of Windows, ~hundreds of MB of AI models | ~16 MB (Go binary + Zig C runtime) + ~11 MB (YOLO model) |
 | **Purpose** | Memory augmentation for humans | Remote control for AI agents |
 | **Data sensitivity** | FULL RECORD of everything you do | Screenshots of AI actions + detected objects |

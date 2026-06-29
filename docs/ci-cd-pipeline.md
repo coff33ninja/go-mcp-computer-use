@@ -30,7 +30,7 @@ Artifact name: `mcp-server-windows-<sha>` (uses `${{ github.sha }}` in CI workfl
 |---------|--------|
 | Push tag `v*` | Build + SHA256 + GitHub Release |
 
-Validates tag matches VERSION file. Extracts the corresponding section from `docs/CHANGELOG.md` as release body. Uploads `mcp-server.exe` + `mcp-server.exe.sha256`.
+Validates tag matches VERSION file. Builds with Zig cc + CGO. Extracts the corresponding section from `docs/CHANGELOG.md` as release body. Uploads `mcp-server.exe` + `mcp-server.exe.sha256`.
 
 ## Branching Strategy
 

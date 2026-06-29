@@ -6,7 +6,7 @@
 - Go 1.26+ (to build from source)
 - **Zig** 0.16+ (for CGO — `winget install zig`)
 
-The project uses Zig `cc` as the C cross-compiler for CGO (needed by the `onnxruntime_go` dependency for ONNX ML inference). Install Zig once, then any `go build` with `CC="zig cc" CGO_ENABLED=1` works.
+CGO is mandatory — ONNX runtime requires it, and Zig `cc` serves as the C cross-compiler. Install Zig once, then any `go build` with `CC="zig cc" CGO_ENABLED=1` works.
 
 ## Quick Start
 
@@ -26,8 +26,7 @@ Or use the install script:
 ## Build
 
 ```powershell
-.\scripts\build.ps1              # with Zig cc + CGO (default)
-.\scripts\build.ps1 -NoCGO       # limited build, no ONNX tools
+.\scripts\build.ps1              # requires Zig cc + CGO (ONNX-enabled)
 ```
 
 Cross-compile from Linux/macOS:
@@ -35,6 +34,8 @@ Cross-compile from Linux/macOS:
 ```bash
 CC="zig cc" CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -o mcp-server.exe ./cmd/mcp-server/
 ```
+
+CGO is mandatory — ONNX runtime requires it, and Zig cc handles the cross-compilation. Install Zig 0.16+ via `winget install zig`.
 
 ## Performance
 
