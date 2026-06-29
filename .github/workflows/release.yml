@@ -57,7 +57,7 @@ jobs:
         shell: pwsh
         run: |
           $ver = "${{ steps.version.outputs.version }}"
-          $content = Get-Content CHANGELOG.md -Raw
+          $content = Get-Content docs/CHANGELOG.md -Raw
           $pattern = "(?ms)## \[$ver\].*?(?=\n## \[|\z)"
           if ($content -match $pattern) {
             $Matches[0].Trim() | Set-Content -Path changelog-release.md

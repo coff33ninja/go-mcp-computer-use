@@ -74,9 +74,11 @@ See [`docs/architecture.md`](docs/architecture.md) for the agent stack diagram a
 - [`docs/adr-001-mcp-sdk-selection.md`](docs/adr-001-mcp-sdk-selection.md) — why `modelcontextprotocol/go-sdk` was chosen
 - [`docs/adr-002-windows-automation-strategy.md`](docs/adr-002-windows-automation-strategy.md) — Windows automation approach (Win32 API + native COM/WinRT, CGO only for ONNX)
 - [`docs/computer-use-guide-for-ai-agents.md`](docs/computer-use-guide-for-ai-agents.md) — full layered agent architecture guide
-- [`plan.md`](plan.md) — project plan and scope
-- [`todo.md`](todo.md) — completed and in-progress task tracking
-- [`backlog.md`](backlog.md) — 326-tool roadmap covering every desktop ability a human has on Windows
+- [`docs/plan.md`](docs/plan.md) — project plan and scope
+- [`docs/todo.md`](docs/todo.md) — completed and in-progress task tracking
+- [`docs/backlog.md`](docs/backlog.md) — 326-tool roadmap covering every desktop ability a human has on Windows
+- [`docs/known-issues.md`](docs/known-issues.md) — known issues and workarounds
+- [`docs/CHANGELOG.md`](docs/CHANGELOG.md) — release history
 - [`docs/ci-cd-pipeline.md`](docs/ci-cd-pipeline.md) — CI/CD workflow documentation
 
 ---

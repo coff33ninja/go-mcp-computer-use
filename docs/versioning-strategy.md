@@ -45,7 +45,7 @@ Tags are immutable once pushed. If a release is faulty, bump the patch and re-ta
 
 ## Changelog Convention
 
-CHANGELOG.md follows [Keep a Changelog](https://keepachangelog.com) with sections:
+`docs/CHANGELOG.md` follows [Keep a Changelog](https://keepachangelog.com) with sections:
 
 - `### Added` — new tools, new capabilities
 - `### Changed` — modifications to existing tools or behavior
@@ -61,7 +61,7 @@ A changelog entry is required for every release. Entries are written in present-
 ```
 [1] Code complete — all changes for the release are merged
 [2] Bump version in VERSION file
-[3] Update CHANGELOG.md with the new version heading
+[3] Update `docs/CHANGELOG.md` with the new version heading
 [4] Run pre-release gates:
       - go build ./cmd/mcp-server/     (compiles)
       - go vet ./...                   (static analysis)
@@ -89,7 +89,7 @@ Use squash-merges into `master`/`main` — each release is a single commit on th
 
 ```bash
 # Edit VERSION: "0.1.0" → "0.1.1"
-# Edit CHANGELOG.md: add ## [0.1.1] section
+# Edit docs/CHANGELOG.md: add ## [0.1.1] section
 $ver = (Get-Content VERSION -Raw).Trim()
 go build -ldflags="-X main.Version=$ver" ./cmd/mcp-server/ && go vet ./...
 go run ./cmd/benchmark/
@@ -100,7 +100,7 @@ git push && git push origin v0.1.1  # triggers release workflow
 
 ## Cross-References
 
-- `CHANGELOG.md` — release history
+- `docs/CHANGELOG.md` — release history
 - `VERSION` — canonical version source (replaces hardcoded string in server.go)
 - `docs/adr-001-mcp-sdk-selection.md` — SDK choice that defines the version field location
 - `docs/ci-cd-pipeline.md` — CI/CD workflows for automated build + release

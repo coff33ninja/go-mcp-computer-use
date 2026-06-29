@@ -3,7 +3,7 @@
 ## Completed
 
 ### Core
-- [x] Project spec (plan.md) and ADRs (001, 002)
+- [x] Project spec (docs/plan.md) and ADRs (001, 002)
 - [x] Go 1.26.4 installed, module initialized
 - [x] modelcontextprotocol/go-sdk v1.6.1 dependency
 - [x] Stdio transport entrypoint

@@ -11,7 +11,7 @@ Windows-only Go project. CI builds + vets on every push/PR. Release workflow cut
 - `go build -ldflags="-X main.Version=$(cat VERSION)"` injects it into the binary
 - CI reads it for artifact naming
 - Release workflow validates the git tag matches `VERSION` before building
-- CHANGELOG.md headings must match
+- `docs/CHANGELOG.md` headings must match
 
 ## Workflows
 
@@ -30,7 +30,7 @@ Artifact name: `mcp-server-windows-<sha>` (uses `${{ github.sha }}` in CI workfl
 |---------|--------|
 | Push tag `v*` | Build + SHA256 + GitHub Release |
 
-Validates tag matches VERSION file. Extracts the corresponding section from CHANGELOG.md as release body. Uploads `mcp-server.exe` + `mcp-server.exe.sha256`.
+Validates tag matches VERSION file. Extracts the corresponding section from `docs/CHANGELOG.md` as release body. Uploads `mcp-server.exe` + `mcp-server.exe.sha256`.
 
 ## Branching Strategy
 
@@ -52,7 +52,7 @@ v0.2.0-alpha ──●──●──●──●──●──●──●─�
 ```
 [1] Feature work on alpha branch
 [2] Bump VERSION (e.g. 0.1.10 -> 0.2.0)
-[3] Update CHANGELOG.md with release notes
+[3] Update `docs/CHANGELOG.md` with release notes
 [4] Open PR: alpha -> main
 [5] CI runs on PR — must pass build + vet
 [6] Squash-merge to main
@@ -80,7 +80,7 @@ go run ./cmd/benchmark/
 ## Cross-References
 
 - `VERSION` — canonical version source
-- `CHANGELOG.md` — release notes per version
+- `docs/CHANGELOG.md` — release notes per version
 - `.govetallow` — vet allowance conventions for COM/WinRT interop
 - `scripts/lint.ps1` — local CI runner (vet + build)
 - `.github/workflows/ci.yml` — CI workflow
