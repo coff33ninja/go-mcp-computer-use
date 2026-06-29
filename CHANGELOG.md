@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.9] - 2026-06-29
+
+### Added
+
+- **`scripts/build.ps1`** — unified build script with `-UseZig` flag for CGO-enabled builds
+- **CI/CD: CGO + Zig cc build pipeline** — CI now runs two jobs: no-CGO lint+build and CGO+Zig build. Release workflow produces both `mcp-server.exe` (no CGO) and `mcp-server-cgo.exe` (with ONNX support).
+- **Zig 0.16.0 support** — `scripts/install.ps1` updated to download Zig 0.16.0
+
+### Documentation
+
+- **README.md** — documented CGO requirements for ONNX tools with Zig cc build instructions
+- **known-issues.md** — B13: ONNX tools require CGO (documented workaround)
+
 ## [0.2.8] - 2026-06-29
 
 ### Added
