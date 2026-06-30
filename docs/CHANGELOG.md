@@ -10,6 +10,8 @@
 
 - **CI lint failure — stale tools.md & uncategorized tools** — `scripts/gen-tools-doc.go` was missing category entries for 4 tools (`bridge_debug`, `introspection_analyze`, `task_begin`, `task_end`), causing them to fall under "Uncategorized" and `docs/tools.md` to show 114 instead of 118 tools. The lint check (regenerate + diff) then failed, skipping the build job. Added `"Introspection & Debugging"` category, removed stale `docs2/` staging output from the script, and regenerated `docs/tools.md`.
 
+- **`yolo_dataset` location inconsistency** — removed stale `yolo_dataset/` from repo root (empty train/val dirs). `export_yolo_dataset` now defaults to `%APPDATA%\go-mcp-computer-use\yolo_dataset\` when `output_dir` is omitted. Added `yolo_dataset/` to `.gitignore` to prevent future repo root drift.
+
 ## [0.2.18] - 2026-06-29
 
 ### Added

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/user/go-mcp-computer-use/internal/actions"
@@ -1426,10 +1427,15 @@ type ExportYoloDatasetArgs struct {
 }
 
 func exportYoloDatasetHandler(ctx context.Context, req *mcp.CallToolRequest, args ExportYoloDatasetArgs) (*mcp.CallToolResult, any, error) {
-	if args.OutputDir == "" {
-		return nil, nil, fmt.Errorf("output_dir is required")
+	outDir := args.OutputDir
+	if outDir == "" {
+		appData := os.Getenv("APPDATA")
+		if appData == "" {
+			return nil, nil, fmt.Errorf("output_dir is required and APPDATA is not set")
+		}
+		outDir = filepath.Join(appData, "go-mcp-computer-use", "yolo_dataset")
 	}
-	stats, err := actions.ExportYoloDataset(args.OutputDir, args.MinSignal)
+	stats, err := actions.ExportYoloDataset(outDir, args.MinSignal)
 	if err != nil {
 		return nil, nil, fmt.Errorf("export_yolo_dataset: %w", err)
 	}

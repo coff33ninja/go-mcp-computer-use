@@ -31,5 +31,8 @@ benchmark.exe
 *~
 
 
-#Ignore vscode AI rules
+# Ignore vscode AI rules
 .github\instructions\codacy.instructions.md
+
+# Generated ML datasets (stored in APPDATA, not repo)
+yolo_dataset/
