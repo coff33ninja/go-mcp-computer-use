@@ -193,9 +193,11 @@ func keyNameToVK(name string) (uint16, bool) {
 }
 
 func KeyDown(key string) (err error) {
+	start := time.Now()
 	defer func() {
 		b, _ := json.Marshal(map[string]string{"key": key})
 		LogToolCall("key_down", string(b), err)
+		Adaptive.RecordResult("key_down", float64(time.Since(start).Milliseconds()), err == nil)
 	}()
 	if err = warnElevated(); err != nil {
 		return
@@ -209,9 +211,11 @@ func KeyDown(key string) (err error) {
 }
 
 func KeyUp(key string) (err error) {
+	start := time.Now()
 	defer func() {
 		b, _ := json.Marshal(map[string]string{"key": key})
 		LogToolCall("key_up", string(b), err)
+		Adaptive.RecordResult("key_up", float64(time.Since(start).Milliseconds()), err == nil)
 	}()
 	if err = warnElevated(); err != nil {
 		return
@@ -225,9 +229,11 @@ func KeyUp(key string) (err error) {
 }
 
 func KeyPress(keys []string) (err error) {
+	start := time.Now()
 	defer func() {
 		b, _ := json.Marshal(map[string][]string{"keys": keys})
 		LogToolCall("key_press", string(b), err)
+		Adaptive.RecordResult("key_press", float64(time.Since(start).Milliseconds()), err == nil)
 	}()
 	if err := warnElevated(); err != nil {
 		return err
@@ -276,9 +282,11 @@ func KeyPress(keys []string) (err error) {
 }
 
 func TypeText(text string) (err error) {
+	start := time.Now()
 	defer func() {
 		b, _ := json.Marshal(map[string]string{"text": text})
 		LogToolCall("type", string(b), err)
+		Adaptive.RecordResult("type", float64(time.Since(start).Milliseconds()), err == nil)
 	}()
 	if err := warnElevated(); err != nil {
 		return err

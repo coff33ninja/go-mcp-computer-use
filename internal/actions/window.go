@@ -3,6 +3,7 @@ package actions
 import (
 	"encoding/json"
 	"syscall"
+	"time"
 	"unsafe"
 )
 
@@ -93,9 +94,11 @@ func ListWindows() ([]WindowInfo, error) {
 }
 
 func FocusWindow(handle uintptr) (err error) {
+	start := time.Now()
 	defer func() {
 		b, _ := json.Marshal(map[string]uintptr{"handle": handle})
 		LogToolCall("focus_window", string(b), err)
+		Adaptive.RecordResult("focus_window", float64(time.Since(start).Milliseconds()), err == nil)
 	}()
 	setForegroundWindow.Call(handle)
 	showWindow.Call(handle, SW_RESTORE)

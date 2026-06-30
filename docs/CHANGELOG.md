@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.2.22] - 2026-06-30
+
+### Changed
+
+- **Adaptive engine: real timing_stats and success_rates** — `RecordResult` is now called from every action tool's defer with a captured start time, so `timing_stats` (mean, stddev, count, min, max) and `success_rates` per tool populate correctly. Previously `RecordCommand` was defined but never called, leaving both maps permanently empty.
+
+### Changed files
+
+- `internal/actions/datalog.go` — removed `Adaptive.RecordResult(tool, 0, ...)` from `LogToolCall` (moved to per-action defer with real timing)
+- `internal/actions/chained.go` — added `start` capture + `RecordResult` to `LaunchAndWait` and `Hover`
+- `internal/actions/keyboard.go` — added `start` capture + `RecordResult` to `KeyDown`, `KeyUp`, `KeyPress`, `TypeText`
+- `internal/actions/mouse.go` — added `start` capture + `RecordResult` to `Click`, `MoveMouse`, `Scroll`, `Drag`
+- `internal/actions/window.go` — added `time` import + `start` capture + `RecordResult` to `FocusWindow`
+
 ## [0.2.21] - 2026-06-30
 
 ### Changed
