@@ -230,7 +230,8 @@ recording (unless capturing demo)
 > what went wrong — slowest tools, most failed, repeat patterns. Read `agent_analyze` periodically
 > to adapt timing: if `type` has low success rate, try `uia_invoke` or add a focus step first.
 > Use `agent_suggest(ocr_text)` when unsure what to do next — it predicts the best command
-> based on past successful sequences in similar screen contexts.
+> and can return `coord` (x, y, samples) for click/hover/move_mouse, based on past
+> successful sequences in similar screen contexts.
 
 ---
 

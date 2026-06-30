@@ -54,9 +54,9 @@ Post-Task Introspection — NEXT SLICE
 - **Feedback loop** — every action is verified by perception before continuing
 - **Stable planner/executor interface** — high-level skills decoupled from tool layer so vision models, LLMs, or backends can be swapped
 
-## Current State: v0.2.17 — 115 tools
+## Current State: v0.2.25 — 120+ tools
 
-All tools registered in `internal/server/server.go`, auto-documented in `docs/tools.md`.
+All tools registered in `internal/server/server.go`, auto-documented in `docs/tools.md`. Adaptive engine now includes timing stats, success rates, coordinate prediction, and full OCR-bridge training pair coverage across all 11 action tools.
 
 ### Screenshot & Vision (8)
 - `screenshot` / `screenshot_element` — GDI BitBlt, full screen or window
@@ -150,6 +150,26 @@ All tools registered in `internal/server/server.go`, auto-documented in `docs/to
 - **`bridge_debug` MCP tool** — inspect bridge state for debugging
 - **First training pair created and indexed** via `agent_train`
 
+### v0.2.20 — OCR Bridge Auto-Complete
+- **`LogToolCall`** now synchronously captures OCR after setting a pending training pair.
+- Every action produces a complete `(ocr_before, tool, ocr_after)` triple. Previously all training pairs clustered under "click".
+- Added `LogToolCall` to `Hover` and `MoveMouse`.
+
+### v0.2.21 — Full Action Coverage
+- Added `LogToolCall` to `key_down`, `key_up`, `focus_window`, `launch_and_wait`.
+- All 11 MCP action tools now produce training pairs.
+
+### v0.2.22 — Real Timing Stats
+- `RecordResult` called from every action tool's defer with real captured start time.
+- `timing_stats` (mean, stddev, min, max, count) and `success_rates` now populate correctly.
+
+### v0.2.23–24 — Coordinate Prediction
+- **Coordinate learning** — `LearnFromCommand` stores per-tool coordinate aggregates. `TrainFromDatalog` persists and rebuilds the `__learned__` aggregate on restart.
+- **`predictCoord`** — `agent_suggest` returns `coord: {x, y, confidence, samples}` for `click`/`hover`/`move_mouse` from aggregate training data.
+
+### v0.2.25 — Case-Insensitive Coordinate Match
+- `getIntArg` uses `strings.EqualFold` fallback when exact key match fails, fixing click coordinate extraction (Go struct marshaling produces capitalized `X`/`Y`).
+
 ---
 
 ## Next Up — Prioritized
@@ -214,7 +234,7 @@ v<major>.<minor>.<patch>
 ## Key Decisions
 
 - `sendVKPress` with 50ms delay — UE5 games require minimum key hold duration
-- Keylogger uses `WH_KEYBOARD_LL` + `WH_MOUSE_LL` hooks — planned rewrite to polling
+- Keylogger uses `GetAsyncKeyState` polling loop (50ms ticker) — avoids system-wide input lag from low-level hooks
 - CGO mandatory for ONNX — Zig cc with x86_64_v2 CPU baseline
 - Adaptive engine: pure Go (rolling averages, TF-IDF) — no Python/external ML
 - Bridge window: 30s — OCR→AI→MCP→Command round trip ceiling

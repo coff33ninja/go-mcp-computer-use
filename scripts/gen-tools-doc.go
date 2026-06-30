@@ -64,7 +64,7 @@ var categoryForTool = map[string]string{
 	"screenshot_element":  "Window Management",
 	"get_active_window": "Window Management",
 
-	// Chained / Composite (5) — note: type_and_submit, select_all_and_type,
+	// Chained / Composite (4) — note: type_and_submit, select_all_and_type,
 	// and launch_and_wait are dual-listed in Keyboard / Process Management
 	"find_text_and_click": "Chained / Composite",
 	"wait_for_text":       "Chained / Composite",
@@ -149,7 +149,7 @@ var categoryForTool = map[string]string{
 	// Runtime Config (1)
 	"set_config": "Runtime Config",
 
-	// System (26)
+	// System (25)
 	"get_volume":         "System",
 	"set_volume":         "System",
 	"set_mute":           "System",

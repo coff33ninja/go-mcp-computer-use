@@ -2423,7 +2423,7 @@ func New(version string) *mcp.Server {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "agent_suggest",
-		Description: "Given OCR screen text, predict the best next command based on past successful sequences. Returns ranked predictions with confidence scores.",
+		Description: "Given OCR screen text, predict the best next command based on past successful sequences. Returns ranked predictions with confidence scores and optional coord (x, y, confidence, samples) for click/hover/move_mouse.",
 	}, agentSuggestHandler)
 
 	mcp.AddTool(server, &mcp.Tool{
