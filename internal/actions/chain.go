@@ -686,7 +686,13 @@ func chainScroll(args map[string]any) (any, error) {
 	if !ok {
 		return nil, fmt.Errorf("scroll: clicks required")
 	}
-	return nil, Scroll(int32(clicks))
+	horizontal := false
+	if h, ok := args["horizontal"]; ok {
+		if hb, ok := h.(bool); ok {
+			horizontal = hb
+		}
+	}
+	return nil, Scroll(int32(clicks), horizontal)
 }
 
 func chainDrag(args map[string]any) (any, error) {

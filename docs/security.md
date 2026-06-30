@@ -65,4 +65,4 @@ The `set_config` tool can be called by the AI agent or directly by the user via 
 }
 ```
 
-See [`mcp-client-configs.md`](mcp-client-configs.md) for per-agent config examples.
+See [`reference/mcp-client-configs.md`](reference/mcp-client-configs.md) for per-agent config examples.

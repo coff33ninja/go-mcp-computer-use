@@ -16,19 +16,7 @@ Both projects capture screenshots, run local AI, and store data on disk — but 
 
 This is the most important distinction. Recall is a **read-only archival tool for humans**. go-mcp-computer-use is a **read-write remote control for AI**. One logs what happened; the other makes things happen.
 
-### Accessibility & Human Potential
-
-Because go-mcp-computer-use gives AI agents **complete control over the Windows desktop**, it can serve as an **assistive technology platform** for people with physical limitations. An AI agent connected to this MCP server can translate natural-language commands into mouse clicks, keystrokes, and system actions — effectively giving someone who cannot use a keyboard or mouse the ability to operate any Windows application.
-
-Use cases include:
-- **Hands-free computer operation** — voice-controlled browsing, email, document editing
-- **Motor disability support** — users with limited mobility, paralysis, tremors, or RSI can control their PC through text or speech
-- **ALS and neurodegenerative conditions** — maintain ability to work and communicate as physical capabilities change
-- **Custom assistive agents** — AI trained on individual workflow patterns, adapted to specific accessibility needs
-
-**Dual-use reality:** The same action capability that enables assistive technology also enables abuse — remote control by malicious actors, surveillance, unauthorized system access, or automated harm. Unlike Recall (read-only archival), go-mcp-computer-use is a **full read-write remote control** that can click, type, launch processes, and change system state. This makes it more powerful as an assistive tool and more dangerous in the wrong hands. The project's security warning and access controls exist precisely because of this dual-use nature.
-
-This is a fundamental difference from Recall: Recall watches; go-mcp-computer-use acts. That action capability is what makes it a potential assistive technology and a potential weapon — not just a logging tool. The project treats **accessibility as a first-class use case** alongside automation and development, with the understanding that the same code can serve both positive and negative purposes depending on who controls the MCP client.
+See [`guides/accessibility.md`](guides/accessibility.md) for the assistive technology context and dual-use considerations.
 
 ---
 

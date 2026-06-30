@@ -109,7 +109,7 @@ func buildCondition(au *uiaAuto, opts UIAFindOpts) (*uiaCondition, error) {
 		return &uiaCondition{p: conds[0]}, nil
 	default:
 		var andC unsafe.Pointer
-		r, _, _ := syscall.SyscallN(vtblMethod(au.p, 25), uintptr(au.p), uintptr(conds[0]), uintptr(conds[1]),
+		r, _, _ := syscall.SyscallN(vtblMethod(au.p, 25), uintptr(au.p), uintptr(conds[0]), uintptr(conds[1]), // 25 = CreateAndCondition
 			uintptr(unsafe.Pointer(&andC)))
 		if r != S_OK {
 			return nil, fmt.Errorf("CreateAndCondition: 0x%X", r)

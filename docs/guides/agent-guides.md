@@ -1,7 +1,7 @@
 # Agent Prompt Engineering Guide
 
 > How to configure AI agents with the right tool subset for different tasks.
-> The full 118-tool set (v0.2.19) is powerful but bloated for simple tasks. Load only what you need.
+> The full 120-tool set (v0.2.27) is powerful but bloated for simple tasks. Load only what you need.
 
 ---
 
@@ -29,7 +29,7 @@ all window management (unless switching tabs)
 process management
 power/shutdown
 audio, recording
-template matching (slow, OCR is better for web)
+template matching (falls through to ONNX + OCR if NCC fails)
 ```
 
 **System prompt hint:**
@@ -297,6 +297,8 @@ Copilot picks tools based on your prompt. Prefix your instruction with the task 
 ```
 
 ---
+
+For a detailed walkthrough of the Perceive-Reason-Act loop and agent architecture concepts, see [`computer-use-guide-for-ai-agents.md`](computer-use-guide-for-ai-agents.md).
 
 ## Prompt Patterns That Work
 

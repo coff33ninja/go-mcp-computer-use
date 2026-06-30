@@ -19,7 +19,7 @@ $tag = "v$version"
 Write-Host "=== Release: $tag ==="
 
 # ---- Step 2: Read changelog section for commit body ----
-$changelog = Get-Content docs/CHANGELOG.md -Raw
+$changelog = Get-Content docs/meta/CHANGELOG.md -Raw
 $pattern = "(?ms)## \[$version\].*?(?=\n## \[|\z)"
 $commitBody = ""
 if ($changelog -match $pattern) {

@@ -5,7 +5,7 @@
 
 ## How to Read
 
-- **HAVE** = implemented (108 tools)
+- **HAVE** = implemented (120 tools)
 - **NEXT** = high-impact, feasible additions
 - **FAR** = possible but lower priority or complex
 - Items within a section ordered roughly by priority
@@ -20,14 +20,14 @@
 - `get_screen_size` — virtual screen dimensions
 - `get_screen_dpi` — per-monitor DPI + scale %
 - `ocr` — extract text via Windows.Media.Ocr (any language)
-- `find_image` — NCC template matching, returns (x,y,score)
+- `find_image` — NCC template matching with ONNX + OCR fallback
+- `find_all_images` — NCC template matching with ONNX + OCR fallback, returns all matches
+- `ocr_languages` — list installed OCR languages (so agent knows what's available)
 - `record_screen` — frame polling at interval → base64 frame array
 
 ### NEXT
 | Tool | Why |
 |------|-----|
-| `ocr_languages` | list installed OCR languages (so agent knows what's available) |
-| `find_all_image` | return ALL matches, not just the best one |
 | `image_diff` | pixel-level diff between two screenshots (detect changes) |
 | `image_histogram` | color histogram analysis (detect dark/bright screens) |
 | `match_template_multi` | multi-pass NCC at different scales (handle DPI variation) |
@@ -48,9 +48,9 @@
 ## 2. MOUSE — Point and Click
 
 ### HAVE
-- `click` — left/right, single/double at x,y
+- `click` — left/right/middle, single/double at x,y
 - `move_mouse` — move cursor to x,y
-- `scroll` — wheel up/down (clicks)
+- `scroll` — wheel up/down/left/right (clicks + horizontal)
 - `drag` — click-hold from→to
 - `hover` — move + wait 300ms (for tooltips)
 - `get_cursor_position` — current x,y
@@ -58,7 +58,6 @@
 ### NEXT
 | Tool | Why |
 |------|-----|
-| `middle_click` — middle button click | open links in new tab, close tabs |
 | `click_hold` / `release` — separate hold/release | complex drag-and-drop, slider manipulation |
 | `scroll_smooth` — pixel-based scrolling | precise scroll in lists/canvases |
 | `scroll_horizontal` — horizontal wheel/tilt | horizontal scrolling in wide content |
@@ -113,7 +112,7 @@
 - `move_window` — set x,y,w,h
 - `minimize_window` / `maximize_window` / `restore_window`
 - `close_window`
-- `get_window_state` — visible, minimized, maximized, position
+- `get_window_state` — visible, minimized, maximized, fullscreen, position
 - `screenshot_element` — screenshot a specific window
 
 ### NEXT
@@ -674,7 +673,7 @@
 
 | Domain | HAVE | NEXT | FAR | Total Possible |
 |--------|------|------|-----|---------------|
-| Vision | 8 | 5 | 7 | 20 |
+| Vision | 10 | 5 | 7 | 20 |
 | Mouse | 6 | 6 | 5 | 17 |
 | Keyboard | 10 | 5 | 6 | 21 |
 | Windows | 13 | 9 | 6 | 28 |
@@ -701,7 +700,7 @@
 | Chained | 10 | 11 | 5 | 26 |
 | Debugging | 0 | 3 | 2 | 5 |
 | Memory & ML | 10 | 5 | 5 | 20 |
-| **TOTAL** | **108** | **117** | **101** | **326** |
+| **TOTAL** | **110** | **117** | **101** | **328** |
 
 ## Strategy
 

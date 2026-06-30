@@ -11,7 +11,7 @@ Windows-only Go project. CI builds + vets on every push/PR. Release workflow cut
 - `go build -ldflags="-X main.Version=$(cat VERSION)"` injects it into the binary
 - CI reads it for artifact naming
 - Release workflow validates the git tag matches `VERSION` before building
-- `docs/CHANGELOG.md` headings must match
+- `meta/CHANGELOG.md` headings must match
 
 ## Workflows
 
@@ -22,6 +22,10 @@ Windows-only Go project. CI builds + vets on every push/PR. Release workflow cut
 | Push to `main`, `v0.2.x` | Build + vet + upload artifact |
 | PR to `main`, `v0.2.x` | Build + vet |
 
+### Vtable verification
+
+Vtable smoke tests are planned for CI integration. See [`docs/reference/vtable-verification.md`](reference/vtable-verification.md) for the proposed test suite and integration steps.
+
 Artifact name: `mcp-server-windows-<sha>` (uses `${{ github.sha }}` in CI workflow)
 
 ### Release (`.github/workflows/release.yml`)
@@ -30,7 +34,7 @@ Artifact name: `mcp-server-windows-<sha>` (uses `${{ github.sha }}` in CI workfl
 |---------|--------|
 | Push tag `v*` | Build + SHA256 + GitHub Release |
 
-Validates tag matches VERSION file. Builds with Zig cc + CGO. Extracts the corresponding section from `docs/CHANGELOG.md` as release body. Uploads `mcp-server.exe` + `mcp-server.exe.sha256`.
+Validates tag matches VERSION file. Builds with Zig cc + CGO. Extracts the corresponding section from `meta/CHANGELOG.md` as release body. Uploads `mcp-server.exe` + `mcp-server.exe.sha256`.
 
 ## Branching Strategy
 
@@ -49,16 +53,7 @@ v0.2.0-alpha ──●──●──●──●──●──●──●─�
 
 ### Release Cycle
 
-```
-[1] Feature work on alpha branch
-[2] Bump VERSION (e.g. 0.1.10 -> 0.2.0)
-[3] Update `docs/CHANGELOG.md` with release notes
-[4] Open PR: alpha -> main
-[5] CI runs on PR — must pass build + vet
-[6] Squash-merge to main
-[7] Tag the merge commit: git tag v0.2.0 && git push origin v0.2.0
-[8] Release workflow auto-builds + publishes GitHub Release
-```
+See [`reference/versioning-strategy.md`](reference/versioning-strategy.md) for the full release process including version bump, changelog update, pre-release gates, tagging, and pushing. The CI workflow triggers on tag push and handles the automated build + publish.
 
 ## Running CI Locally
 
@@ -80,9 +75,9 @@ go run ./cmd/benchmark/
 ## Cross-References
 
 - `VERSION` — canonical version source
-- `docs/CHANGELOG.md` — release notes per version
+- `meta/CHANGELOG.md` — release notes per version
 - `.govetallow` — vet allowance conventions for COM/WinRT interop
 - `scripts/lint.ps1` — local CI runner (vet + build)
 - `.github/workflows/ci.yml` — CI workflow
 - `.github/workflows/release.yml` — release workflow
-- `docs/versioning-strategy.md` — version bump rules
+- `reference/versioning-strategy.md` — version bump rules

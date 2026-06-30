@@ -54,86 +54,11 @@ Post-Task Introspection — NEXT SLICE
 - **Feedback loop** — every action is verified by perception before continuing
 - **Stable planner/executor interface** — high-level skills decoupled from tool layer so vision models, LLMs, or backends can be swapped
 
-## Current State: v0.2.25 — 120+ tools
+## Current State: v0.2.27 — 120+ tools
 
-All tools registered in `internal/server/server.go`, auto-documented in `docs/tools.md`. Adaptive engine now includes timing stats, success rates, coordinate prediction, and full OCR-bridge training pair coverage across all 11 action tools.
+All tools registered in `internal/server/server.go`, auto-documented in [`docs/reference/tools.md`](../reference/tools.md). Adaptive engine now includes timing stats, success rates, coordinate prediction, and full OCR-bridge training pair coverage across all 11 action tools.
 
-### Screenshot & Vision (8)
-- `screenshot` / `screenshot_element` — GDI BitBlt, full screen or window
-- `ocr` — Windows.Media.Ocr via PowerShell (full screen or region)
-- `find_image` — NCC template matching (base64 template)
-- `get_pixel_color` — hex color at coordinates
-- `record_screen` — frame polling at interval
-
-### Mouse (6)
-- `click` / `move_mouse` / `scroll` / `drag` / `hover` — SendInput
-- `get_cursor_position`
-
-### Keyboard (9)
-- `type` — SendInput KEYBDINPUT UTF-16
-- `key_press` / `key_down` / `key_up` — VK code hold/release
-- `type_and_submit` / `select_all_and_type`
-- `keylogger_start/stop/status` — LL hook input recording
-- `get_keyboard_layout` / `set_keyboard_layout`
-
-### Window Management (7)
-- `list_windows` / `find_window` / `get_active_window`
-- `focus_window` / `focus_window_by_title`
-- `move_window` / `minimize` / `maximize` / `restore` / `close` / `get_window_state`
-- `wait_for_window`
-
-### Chained / Composite (9)
-- `find_text_and_click` / `type_and_submit` / `launch_and_wait`
-- `screenshot_element` / `hover` / `wait_for_text`
-- `select_all_and_type` / `click_menu_item`
-- `chain` — sequential multi-step executor (poll/loop/if/capture)
-
-### Browser Automation (4)
-- `browser_focus_url_bar` / `browser_navigate` / `browser_new_tab` / `browser_search`
-
-### File Explorer (2)
-- `explorer_focus` / `explorer_open_path`
-
-### UI Automation (3)
-- `uia_find` / `uia_get_text` / `uia_invoke` — COM UI Automation
-
-### System (23)
-- `get_system_info` / `get_volume` / `set_volume` / `set_mute`
-- `get_clipboard` / `set_clipboard` / `get_screen_size` / `get_screen_dpi`
-- `get_cursor_position` / `get_pixel_color` / `get_brightness` / `set_brightness`
-- `get_idle_time` / `get_uptime` / `get_disk_usage` / `get_display_modes`
-- `get_network_info` / `ping` / `get_battery`
-- `open_url` / `open_file_explorer` / `open_file_location` / `show_notification`
-- `lock_workstation` / `shutdown` / `restart` / `sleep` / `hibernate`
-
-### Process Management (3)
-- `list_processes` / `launch_app` / `kill_process` / `launch_and_wait`
-
-### Audio (2)
-- `list_audio_devices` / `set_default_audio_device`
-
-### Memory & Templates (9)
-- `memory_set/get/search/list/forget` — SQLite-backed facts store
-- `layout_validate` — window drift + OCR keyword verification
-- `template_store/find/list/forget` — self-growing PNG template library
-
-### ONNX ML (7)
-- `onnx_status` / `onnx_download` / `onnx_detect` — YOLO11n + MobileNetV3
-- `onnx_watch_start/stop/status/cache` — background detection watcher
-- `export_yolo_dataset` — unused samples as YOLO-format dataset
-
-### Data Logging & Adaptive (8)
-- `datalog_query` / `datalog_status` / `datalog_export`
-- `agent_analyze` / `agent_suggest` / `agent_train`
-- `bridge_debug` — bridge state inspection
-- `set_config` — runtime training/logging/privacy toggles
-
-### Training Pipeline (5)
-- `training_list_samples` / `training_mark_used` / `training_save_sample`
-- `training_cleanup_noise` / `training_stats` / `export_yolo_dataset`
-- `priors_stats` — element frequency + position priors
-
----
+See [`docs/reference/tools.md`](../reference/tools.md) for the full categorized tool listing and [`backlog.md`](backlog.md) for the roadmap.
 
 ## Completed Work
 
@@ -169,6 +94,12 @@ All tools registered in `internal/server/server.go`, auto-documented in `docs/to
 
 ### v0.2.25 — Case-Insensitive Coordinate Match
 - `getIntArg` uses `strings.EqualFold` fallback when exact key match fails, fixing click coordinate extraction (Go struct marshaling produces capitalized `X`/`Y`).
+
+### v0.2.27 — ONNX + OCR Fallback for Template Matching
+- **find_image / find_all_images** — NCC failure cascades to ONNX YOLO → OCR. Degenerate templates (zero-dim, no variance) skip NCC entirely.
+- **ocr_languages** — new tool, native COM (no PowerShell)
+- **fullscreen detection** — `get_window_state` returns `fullscreen: bool`
+- **middle_click / horizontal_scroll** — button=middle on click, horizontal=true on scroll
 
 ---
 
@@ -212,15 +143,7 @@ Ability to stop mid-chain on error/state change — `on_error: "stop"` already e
 
 ## Versioning
 
-```
-v<major>.<minor>.<patch>
-```
-
-| Bump | When | Examples |
-|------|------|----------|
-| `+0.0.1` (patch) | Bug fixes, tool tweaks, doc updates | Bridge window fix, keylogger rewrite |
-| `+0.1.0` (minor) | New capabilities, architecture changes | Introspection engine, skill library |
-| `+1.0.0` (major) | Stable, field-tested | Full pipeline working |
+See [`docs/reference/versioning-strategy.md`](../reference/versioning-strategy.md) for the full versioning scheme, bump rules, tagging policy, and release process.
 
 ## Constraints
 

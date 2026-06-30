@@ -32,10 +32,11 @@ type MoveMouseArgs struct {
 	Y int32 `json:"y"`
 }
 
-type ScrollArgs struct {
-	Clicks    int32  `json:"clicks"`
-	Direction string `json:"direction,omitempty"`
-}
+	type ScrollArgs struct {
+		Clicks     int32  `json:"clicks"`
+		Direction  string `json:"direction,omitempty"`
+		Horizontal bool   `json:"horizontal,omitempty"`
+	}
 
 type KeyPressArgs struct {
 	Keys []string `json:"keys"`
@@ -350,7 +351,7 @@ func scrollHandler(ctx context.Context, req *mcp.CallToolRequest, args ScrollArg
 	if args.Direction == "down" {
 		clicks = -clicks
 	}
-	if err := actions.Scroll(clicks); err != nil {
+	if err := actions.Scroll(clicks, args.Horizontal); err != nil {
 		return nil, nil, fmt.Errorf("scroll failed: %w", err)
 	}
 	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatGeneral, "scroll")
@@ -742,6 +743,18 @@ func ocrHandler(ctx context.Context, req *mcp.CallToolRequest, args OCRArgs) (*m
 	}, result, nil
 }
 
+type OcrLanguagesArgs struct{}
+
+func ocrLanguagesHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
+	languages, err := actions.OcrLanguages()
+	if err != nil {
+		return nil, nil, fmt.Errorf("ocr_languages: %w", err)
+	}
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
+	}, map[string]any{"languages": languages}, nil
+}
+
 func getBrightnessHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
 	b, err := actions.GetBrightness()
 	if err != nil {
@@ -955,6 +968,14 @@ func findImageHandler(ctx context.Context, req *mcp.CallToolRequest, args FindIm
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "no_match"}}}, map[string]any{"found": false}, nil
 	}
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, result, nil
+}
+
+func findAllImagesHandler(ctx context.Context, req *mcp.CallToolRequest, args FindImageArgs) (*mcp.CallToolResult, any, error) {
+	results, err := actions.FindAllImages(args.ScreenB64, args.TemplateB64, args.Threshold)
+	if err != nil {
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: err.Error()}}}, map[string]any{"found": false, "matches": []actions.MatchResult{}}, nil
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, map[string]any{"found": len(results) > 0, "matches": results}, nil
 }
 
 func listAudioDevicesHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
@@ -1861,7 +1882,7 @@ func New(version string) *mcp.Server {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "click",
-		Description: "Click at screen coordinates x,y. Button: left/right. Clicks: 1 or 2.",
+		Description: "Click at screen coordinates x,y. Button: left/right/middle. Clicks: 1 or 2.",
 	}, clickHandler)
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -1871,7 +1892,7 @@ func New(version string) *mcp.Server {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "scroll",
-		Description: "Scroll the mouse wheel. Positive clicks = up, negative = down.",
+		Description: "Scroll the mouse wheel. Positive clicks = up, negative = down. Set horizontal=true for horizontal scroll.",
 	}, scrollHandler)
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -2228,6 +2249,16 @@ func New(version string) *mcp.Server {
 		Name:        "find_image",
 		Description: "Find a template image on screen using NCC template matching. Provide template as base64 PNG. Returns coordinates of best match.",
 	}, findImageHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "find_all_images",
+		Description: "Find ALL occurrences of a template image on screen using NCC template matching. Provide template as base64 PNG. Returns array of matches with coordinates and scores.",
+	}, findAllImagesHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "ocr_languages",
+		Description: "List all available Windows OCR languages. Returns array of language objects with tag, display_name, and native_name.",
+	}, ocrLanguagesHandler)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "list_audio_devices",

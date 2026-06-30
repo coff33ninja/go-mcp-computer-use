@@ -61,14 +61,14 @@ jobs:
         shell: pwsh
         run: |
           $ver = "${{ steps.version.outputs.version }}"
-          $content = Get-Content docs/CHANGELOG.md -Raw
+          $content = Get-Content docs/meta/CHANGELOG.md -Raw
           $pattern = "(?ms)## \[$ver\].*?(?=\n## \[|\z)"
           if ($content -match $pattern) {
             $Matches[0].Trim() | Set-Content -Path changelog-release.md
             Write-Host "Changelog extracted for v$ver"
           } else {
             Write-Warning "No changelog entry found for v$ver"
-            "See docs/CHANGELOG.md for details." | Set-Content -Path changelog-release.md
+            "See docs/meta/CHANGELOG.md for details." | Set-Content -Path changelog-release.md
           }
 
       - name: Checksum

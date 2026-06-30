@@ -14,10 +14,13 @@ const (
 	mouseEventMove      = 0x0001
 	mouseEventLeftDown  = 0x0002
 	mouseEventLeftUp    = 0x0004
-	mouseEventRightDown = 0x0008
-	mouseEventRightUp   = 0x0010
-	mouseEventWheel     = 0x0800
-	mouseEventAbsolute  = 0x8000
+	mouseEventRightDown   = 0x0008
+	mouseEventRightUp     = 0x0010
+	mouseEventMiddleDown  = 0x0020
+	mouseEventMiddleUp    = 0x0040
+	mouseEventWheel       = 0x0800
+	mouseEventHWheel      = 0x1000
+	mouseEventAbsolute    = 0x8000
 )
 
 type mouseInput struct {
@@ -71,6 +74,9 @@ func Click(args ClickInput) (err error) {
 	case "right":
 		downFlag = mouseEventRightDown
 		upFlag = mouseEventRightUp
+	case "middle":
+		downFlag = mouseEventMiddleDown
+		upFlag = mouseEventMiddleUp
 	default:
 		downFlag = mouseEventLeftDown
 		upFlag = mouseEventLeftUp
@@ -119,18 +125,22 @@ func GetCursorPosition() (int32, int32, error) {
 	return pt.X, pt.Y, nil
 }
 
-func Scroll(clicks int32) (err error) {
+func Scroll(clicks int32, horizontal bool) (err error) {
 	start := time.Now()
 	defer func() {
-		b, _ := json.Marshal(map[string]int32{"clicks": clicks})
+		b, _ := json.Marshal(map[string]any{"clicks": clicks, "horizontal": horizontal})
 		LogToolCall("scroll", string(b), err)
 		Adaptive.RecordResult("scroll", float64(time.Since(start).Milliseconds()), err == nil)
 		Adaptive.LearnFromCommand("scroll", string(b), err == nil)
 	}()
+	var flags uint32 = mouseEventWheel
+	if horizontal {
+		flags = mouseEventHWheel
+	}
 	i := input{
 		inputType: inputMouse,
 		mi: mouseInput{
-			dwFlags:   mouseEventWheel,
+			dwFlags:   flags,
 			mouseData: uint32(clicks * 120),
 		},
 	}

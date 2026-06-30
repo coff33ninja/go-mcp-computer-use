@@ -8,13 +8,14 @@ import (
 )
 
 var (
-	moveWindow       = user32.NewProc("MoveWindow")
-	getWindowRect    = user32.NewProc("GetWindowRect")
-	showWindowAsync  = user32.NewProc("ShowWindowAsync")
-	postMessageW     = user32.NewProc("PostMessageW")
-	isIconic         = user32.NewProc("IsIconic")
-	isZoomed         = user32.NewProc("IsZoomed")
-	findWindowW      = user32.NewProc("FindWindowW")
+	moveWindow          = user32.NewProc("MoveWindow")
+	getWindowRect       = user32.NewProc("GetWindowRect")
+	showWindowAsync     = user32.NewProc("ShowWindowAsync")
+	postMessageW        = user32.NewProc("PostMessageW")
+	isIconic            = user32.NewProc("IsIconic")
+	isZoomed            = user32.NewProc("IsZoomed")
+	findWindowW         = user32.NewProc("FindWindowW")
+	monitorFromWindow   = user32.NewProc("MonitorFromWindow")
 )
 
 const (
@@ -22,6 +23,7 @@ const (
 	SW_MAXIMIZE = 3
 	SW_HIDE     = 0
 	WM_CLOSE    = 0x0010
+	WS_CAPTION  = 0x00C00000
 )
 
 type WindowRect struct {
@@ -33,13 +35,25 @@ type WindowRect struct {
 	Height int32 `json:"height"`
 }
 
+type MONITORINFO struct {
+	Size    uint32
+	Monitor struct {
+		Left, Top, Right, Bottom int32
+	}
+	WorkArea struct {
+		Left, Top, Right, Bottom int32
+	}
+	Flags uint32
+}
+
 type WindowStateInfo struct {
-	Handle    uintptr `json:"handle"`
-	Title     string  `json:"title"`
-	Visible   bool    `json:"visible"`
-	Minimized bool    `json:"minimized"`
-	Maximized bool    `json:"maximized"`
-	Rect      *WindowRect `json:"rect,omitempty"`
+	Handle     uintptr     `json:"handle"`
+	Title      string      `json:"title"`
+	Visible    bool        `json:"visible"`
+	Minimized  bool        `json:"minimized"`
+	Maximized  bool        `json:"maximized"`
+	Fullscreen bool        `json:"fullscreen"`
+	Rect       *WindowRect `json:"rect,omitempty"`
 }
 
 func MoveWindowByHandle(hwnd uintptr, x, y, w, h int32) error {
@@ -91,6 +105,38 @@ func CloseWindow(hwnd uintptr) error {
 	return nil
 }
 
+func isFullscreen(hwnd uintptr) bool {
+	rect, err := GetWindowRectByHandle(hwnd)
+	if err != nil {
+		return false
+	}
+
+	style, _, _ := getWindowLongW.Call(hwnd, uintptr(^uint32(15)))
+	hasCaption := style&WS_CAPTION != 0
+	if hasCaption {
+		return false
+	}
+
+	hmon, _, _ := monitorFromWindow.Call(hwnd, MONITOR_DEFAULTTONEAREST)
+	if hmon == 0 {
+		return false
+	}
+
+	var mi MONITORINFO
+	mi.Size = uint32(unsafe.Sizeof(mi))
+	ret, _, _ := getMonitorInfoW.Call(hmon, uintptr(unsafe.Pointer(&mi)))
+	if ret == 0 {
+		return false
+	}
+
+	mw := mi.Monitor.Right - mi.Monitor.Left
+	mh := mi.Monitor.Bottom - mi.Monitor.Top
+	ww := rect.Right - rect.Left
+	wh := rect.Bottom - rect.Top
+
+	return ww >= mw && wh >= mh
+}
+
 func GetWindowState(hwnd uintptr) (*WindowStateInfo, error) {
 	title := getWindowTitle(hwnd)
 	info := &WindowStateInfo{
@@ -111,6 +157,8 @@ func GetWindowState(hwnd uintptr) (*WindowStateInfo, error) {
 	if err == nil {
 		info.Rect = rect
 	}
+
+	info.Fullscreen = isFullscreen(hwnd)
 
 	return info, nil
 }

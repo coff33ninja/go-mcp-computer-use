@@ -32,4 +32,4 @@
 
 ## Privacy Controls
 
-See [`security.md`](security.md) for the full data collection and privacy controls reference.
+See [`../security.md`](../security.md) for the full data collection and privacy controls reference.

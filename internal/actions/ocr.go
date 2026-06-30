@@ -7,7 +7,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"syscall"
 	"time"
+	"unsafe"
 )
 
 type OCRLine struct {
@@ -138,6 +140,77 @@ func OCRProportionalWindowRegion(hwnd uintptr, leftFrac, topFrac, rightFrac, bot
 	}
 	x, y, w, h := wn.ProportionalRegion(leftFrac, topFrac, rightFrac, bottomFrac)
 	return OCRRegion(x, y, w, h, language)
+}
+
+type LanguageInfo struct {
+	Tag         string `json:"tag"`
+	DisplayName string `json:"display_name"`
+	NativeName  string `json:"native_name"`
+}
+
+// ── OcrLanguages vtable (IOcrEngineStatics) ──
+// Verified 2026-06-30 — Win11 26200 (24H2), SDK 10.0.26200.0
+//   7 = get_AvailableRecognizerLanguages (returns IVectorView<Language>)
+// IVectorView<Language>:
+//   6 = GetAt
+//   7 = get_Size
+// Language:
+//   6 = get_LanguageTag (callStringGetter)
+//   7 = get_DisplayName (callStringGetter)
+//   8 = get_NativeName (callStringGetter)
+
+func OcrLanguages() ([]LanguageInfo, error) {
+	if err := ensureRo(); err != nil {
+		return nil, fmt.Errorf("WinRT init: %w", err)
+	}
+
+	hClass, err := newHString("Windows.Media.Ocr.OcrEngine")
+	if err != nil {
+		return nil, err
+	}
+	defer freeHString(hClass)
+
+	factory, err := roGetActivationFactory(hClass, IID_IOcrEngineStatics)
+	if err != nil {
+		return nil, fmt.Errorf("OcrEngineStatics: %w", err)
+	}
+	defer comRelease(factory)
+
+	var languagesView unsafe.Pointer
+	r, _, _ := syscall.SyscallN(vtblMethod(factory, 7), uintptr(factory), uintptr(unsafe.Pointer(&languagesView))) // 7 = get_AvailableRecognizerLanguages
+	if r != 0 {
+		return nil, fmt.Errorf("get_AvailableRecognizerLanguages 0x%X", r)
+	}
+	defer comRelease(languagesView)
+
+	var count uint32
+	r, _, _ = syscall.SyscallN(vtblMethod(languagesView, 7), uintptr(languagesView), uintptr(unsafe.Pointer(&count))) // 7 = get_Size
+	if r != 0 {
+		return nil, fmt.Errorf("IVectorView::get_Size 0x%X", r)
+	}
+
+	var result []LanguageInfo
+	for i := uint32(0); i < count; i++ {
+		var lang unsafe.Pointer
+		r, _, _ := syscall.SyscallN(vtblMethod(languagesView, 6), uintptr(languagesView), uintptr(i), uintptr(unsafe.Pointer(&lang))) // 6 = GetAt
+		if r != 0 {
+			continue
+		}
+
+		tag, _ := callStringGetter(lang, 6)
+		displayName, _ := callStringGetter(lang, 7)
+		nativeName, _ := callStringGetter(lang, 8)
+
+		comRelease(lang)
+
+		result = append(result, LanguageInfo{
+			Tag:         tag,
+			DisplayName: displayName,
+			NativeName:  nativeName,
+		})
+	}
+
+	return result, nil
 }
 
 func ocrFromBase64(b64, language string) (*OCRResult, error) {

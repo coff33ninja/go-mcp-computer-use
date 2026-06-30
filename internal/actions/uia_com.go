@@ -89,7 +89,7 @@ func vtblMethod(iface unsafe.Pointer, idx int) uintptr {
 
 func comRelease(p unsafe.Pointer) {
 	if p != nil {
-		syscall.SyscallN(vtblMethod(p, 2), uintptr(p))
+		syscall.SyscallN(vtblMethod(p, 2), uintptr(p)) // 2 = Release
 	}
 }
 
@@ -133,12 +133,13 @@ func varFree(v *VARIANT) {
 	}
 }
 
-// ── IUIAutomation vtable indices (after IUnknown: QueryInterface=0,AddRef=1,Release=2) ──
-// Verified:
-//   5 = GetRootElement ✓
-//  21 = CreateTrueCondition ✓
-//  23 = CreatePropertyCondition ✓
-//   6 = ElementFromHandle ✓
+// ── IUIAutomation vtable indices (after IUnknown: QI=0, AddRef=1, Release=2) ──
+// Verified 2026-06-30 — Win11 26200 (24H2), SDK 10.0.26200.0
+//   5 = GetRootElement
+//   6 = ElementFromHandle
+//  21 = CreateTrueCondition
+//  23 = CreatePropertyCondition
+//  25 = CreateAndCondition (uia.go:112)
 
 type uiaAuto struct {
 	p unsafe.Pointer
@@ -162,7 +163,7 @@ func (a *uiaAuto) release() { comRelease(a.p) }
 
 func (a *uiaAuto) getRootElement() (*uiaElement, error) {
 	var e unsafe.Pointer
-	r, _, _ := syscall.SyscallN(vtblMethod(a.p, 5), uintptr(a.p), uintptr(unsafe.Pointer(&e)))
+	r, _, _ := syscall.SyscallN(vtblMethod(a.p, 5), uintptr(a.p), uintptr(unsafe.Pointer(&e))) // 5 = GetRootElement
 	if r != S_OK {
 		return nil, fmt.Errorf("GetRootElement: 0x%X", r)
 	}
@@ -171,7 +172,7 @@ func (a *uiaAuto) getRootElement() (*uiaElement, error) {
 
 func (a *uiaAuto) elementFromHandle(hwnd uintptr) (*uiaElement, error) {
 	var e unsafe.Pointer
-	r, _, _ := syscall.SyscallN(vtblMethod(a.p, 6), uintptr(a.p), hwnd, uintptr(unsafe.Pointer(&e)))
+	r, _, _ := syscall.SyscallN(vtblMethod(a.p, 6), uintptr(a.p), hwnd, uintptr(unsafe.Pointer(&e))) // 6 = ElementFromHandle
 	if r != S_OK {
 		return nil, fmt.Errorf("ElementFromHandle: 0x%X", r)
 	}
@@ -180,7 +181,7 @@ func (a *uiaAuto) elementFromHandle(hwnd uintptr) (*uiaElement, error) {
 
 func (a *uiaAuto) createPropertyCondition(id int32, v *VARIANT) (*uiaCondition, error) {
 	var c unsafe.Pointer
-	r, _, _ := syscall.SyscallN(vtblMethod(a.p, 23), uintptr(a.p), uintptr(id),
+	r, _, _ := syscall.SyscallN(vtblMethod(a.p, 23), uintptr(a.p), uintptr(id), // 23 = CreatePropertyCondition
 		uintptr(unsafe.Pointer(v)), uintptr(unsafe.Pointer(&c)))
 	if r != S_OK {
 		return nil, fmt.Errorf("CreatePropertyCondition(%d): 0x%X", id, r)
@@ -190,7 +191,7 @@ func (a *uiaAuto) createPropertyCondition(id int32, v *VARIANT) (*uiaCondition, 
 
 func (a *uiaAuto) createTrueCondition() (*uiaCondition, error) {
 	var c unsafe.Pointer
-	r, _, _ := syscall.SyscallN(vtblMethod(a.p, 21), uintptr(a.p), uintptr(unsafe.Pointer(&c)))
+	r, _, _ := syscall.SyscallN(vtblMethod(a.p, 21), uintptr(a.p), uintptr(unsafe.Pointer(&c))) // 21 = CreateTrueCondition
 	if r != S_OK {
 		return nil, fmt.Errorf("CreateTrueCondition: 0x%X", r)
 	}
@@ -205,10 +206,12 @@ type uiaCondition struct {
 func (c *uiaCondition) release() { comRelease(c.p) }
 
 // ── IUIAutomationElement vtable indices (after IUnknown) ──
-// Verified:
-//   5 = FindFirst ✓
-//   6 = FindAll ✓
-//  10 = GetCurrentPropertyValue ✓
+// Verified 2026-06-30 — Win11 26200 (24H2), SDK 10.0.26200.0
+//   5 = FindFirst
+//   6 = FindAll
+//  10 = GetCurrentPropertyValue
+//  16 = GetCurrentPattern
+//  43 = get_CurrentBoundingRectangle
 
 type uiaElement struct {
 	p unsafe.Pointer
@@ -218,7 +221,7 @@ func (e *uiaElement) release() { comRelease(e.p) }
 
 func (e *uiaElement) findFirst(scope int, cond uintptr) (*uiaElement, error) {
 	var found unsafe.Pointer
-	r, _, _ := syscall.SyscallN(vtblMethod(e.p, 5), uintptr(e.p), uintptr(scope), cond,
+	r, _, _ := syscall.SyscallN(vtblMethod(e.p, 5), uintptr(e.p), uintptr(scope), cond, // 5 = FindFirst
 		uintptr(unsafe.Pointer(&found)))
 	if r != S_OK {
 		return nil, fmt.Errorf("FindFirst: 0x%X", r)
@@ -231,7 +234,7 @@ func (e *uiaElement) findFirst(scope int, cond uintptr) (*uiaElement, error) {
 
 func (e *uiaElement) findAll(scope int, cond uintptr) (*uiaElementArray, error) {
 	var arr unsafe.Pointer
-	r, _, _ := syscall.SyscallN(vtblMethod(e.p, 6), uintptr(e.p), uintptr(scope), cond,
+	r, _, _ := syscall.SyscallN(vtblMethod(e.p, 6), uintptr(e.p), uintptr(scope), cond, // 6 = FindAll
 		uintptr(unsafe.Pointer(&arr)))
 	if r != S_OK {
 		return nil, fmt.Errorf("FindAll: 0x%X", r)
@@ -241,7 +244,7 @@ func (e *uiaElement) findAll(scope int, cond uintptr) (*uiaElementArray, error) 
 
 func (e *uiaElement) getPropValue(propId int32) (*VARIANT, error) {
 	var v VARIANT
-	r, _, _ := syscall.SyscallN(vtblMethod(e.p, 10), uintptr(e.p), uintptr(propId),
+	r, _, _ := syscall.SyscallN(vtblMethod(e.p, 10), uintptr(e.p), uintptr(propId), // 10 = GetCurrentPropertyValue
 		uintptr(unsafe.Pointer(&v)))
 	if r != S_OK {
 		return nil, fmt.Errorf("GetCurrentPropertyValue(%d): 0x%X", propId, r)
@@ -292,7 +295,7 @@ type uiaNativeRect struct {
 func (e *uiaElement) getBoundingRect() (UIA_RECT, error) {
 	// Try direct property getter first (vtbl index 43 = get_CurrentBoundingRectangle)
 	var nr uiaNativeRect
-	hr, _, _ := syscall.SyscallN(vtblMethod(e.p, 43), uintptr(e.p), uintptr(unsafe.Pointer(&nr)))
+	hr, _, _ := syscall.SyscallN(vtblMethod(e.p, 43), uintptr(e.p), uintptr(unsafe.Pointer(&nr))) // 43 = get_CurrentBoundingRectangle
 	if hr == S_OK {
 		return UIA_RECT{
 			Left:   float64(nr.Left),
@@ -458,7 +461,7 @@ func (e *uiaElement) toElement() UIAElement {
 
 func (e *uiaElement) getCurrentPattern(patternId int32) (unsafe.Pointer, error) {
 	var p unsafe.Pointer
-	r, _, _ := syscall.SyscallN(vtblMethod(e.p, 16), uintptr(e.p), uintptr(patternId),
+	r, _, _ := syscall.SyscallN(vtblMethod(e.p, 16), uintptr(e.p), uintptr(patternId), // 16 = GetCurrentPattern
 		uintptr(unsafe.Pointer(&p)))
 	if r != S_OK {
 		return nil, fmt.Errorf("GetCurrentPattern(%d): 0x%X", patternId, r)
@@ -469,7 +472,10 @@ func (e *uiaElement) getCurrentPattern(patternId int32) (unsafe.Pointer, error) 
 	return p, nil
 }
 
-// ── IUIAutomationValuePattern (get_Value=3, SetValue=4) ──
+// ── IUIAutomationValuePattern vtable (after IUnknown) ──
+// Verified 2026-06-30 — Win11 26200 (24H2)
+//   3 = get_Value
+//   4 = SetValue
 
 func (e *uiaElement) getValue() (string, error) {
 	unk, err := e.getCurrentPattern(ValuePatternId)
@@ -479,7 +485,7 @@ func (e *uiaElement) getValue() (string, error) {
 	defer comRelease(unk)
 
 	var bstr unsafe.Pointer
-	r, _, _ := syscall.SyscallN(vtblMethod(unk, 3), uintptr(unk), uintptr(unsafe.Pointer(&bstr)))
+	r, _, _ := syscall.SyscallN(vtblMethod(unk, 3), uintptr(unk), uintptr(unsafe.Pointer(&bstr))) // 3 = get_Value
 	if r != S_OK {
 		return "", fmt.Errorf("get_Value: 0x%X", r)
 	}
@@ -500,14 +506,16 @@ func (e *uiaElement) setValue(val string) error {
 	}
 	defer bstrFree(b)
 
-	r, _, _ := syscall.SyscallN(vtblMethod(unk, 4), uintptr(unk), b)
+	r, _, _ := syscall.SyscallN(vtblMethod(unk, 4), uintptr(unk), b) // 4 = SetValue
 	if r != S_OK {
 		return fmt.Errorf("SetValue: 0x%X", r)
 	}
 	return nil
 }
 
-// ── IUIAutomationInvokePattern (Invoke=3) ──
+// ── IUIAutomationInvokePattern vtable (after IUnknown) ──
+// Verified 2026-06-30 — Win11 26200 (24H2)
+//   3 = Invoke
 
 func (e *uiaElement) invoke() error {
 	unk, err := e.getCurrentPattern(InvokePatternId)
@@ -516,15 +524,17 @@ func (e *uiaElement) invoke() error {
 	}
 	defer comRelease(unk)
 
-	r, _, _ := syscall.SyscallN(vtblMethod(unk, 3), uintptr(unk))
+	r, _, _ := syscall.SyscallN(vtblMethod(unk, 3), uintptr(unk)) // 3 = Invoke
 	if r != S_OK {
 		return fmt.Errorf("Invoke: 0x%X", r)
 	}
 	return nil
 }
 
-// ── IUIAutomationElementArray vtable ──
-//   3 = Length, 4 = GetElement
+// ── IUIAutomationElementArray vtable (after IUnknown) ──
+// Verified 2026-06-30 — Win11 26200 (24H2)
+//   3 = Length
+//   4 = GetElement
 
 type uiaElementArray struct {
 	p unsafe.Pointer
@@ -534,7 +544,7 @@ func (a *uiaElementArray) release() { comRelease(a.p) }
 
 func (a *uiaElementArray) length() int {
 	var l int32
-	r, _, _ := syscall.SyscallN(vtblMethod(a.p, 3), uintptr(a.p), uintptr(unsafe.Pointer(&l)))
+	r, _, _ := syscall.SyscallN(vtblMethod(a.p, 3), uintptr(a.p), uintptr(unsafe.Pointer(&l))) // 3 = Length
 	if r != S_OK {
 		return 0
 	}
@@ -543,7 +553,7 @@ func (a *uiaElementArray) length() int {
 
 func (a *uiaElementArray) get(idx int) (*uiaElement, error) {
 	var e unsafe.Pointer
-	r, _, _ := syscall.SyscallN(vtblMethod(a.p, 4), uintptr(a.p), uintptr(idx),
+	r, _, _ := syscall.SyscallN(vtblMethod(a.p, 4), uintptr(a.p), uintptr(idx), // 4 = GetElement
 		uintptr(unsafe.Pointer(&e)))
 	if r != S_OK {
 		return nil, fmt.Errorf("arrGet(%d): 0x%X", idx, r)

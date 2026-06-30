@@ -2,19 +2,7 @@
 
 ## Safety & Security: Data Collection Controls
 
-The server collects training data (screenshots + ONNX detections) for ML improvement. Users have full runtime control:
-
-| Capability | Mechanism |
-|------------|-----------|
-| **Disable all auto-save** | `set_config` with `training_enabled: false` — stops action snapshots + watcher saves instantly. No restart needed. Persists to disk. |
-| **Re-enable auto-save** | `set_config` with `training_enabled: true` |
-| **Disable prior adjustment** | `set_config` with `prior_adjustment: false` — ONNXDetect returns raw YOLO scores without learned bias |
-| **Stop watcher** | `onnx_watch_stop` — halts background screenshot polling |
-| **Delete collected data** | `training_cleanup_noise` to purge noise; `memory_forget` scope=ui to clear element caches |
-| **Export/download data** | `export_yolo_dataset` to inspect what was collected |
-| **Persistent config** | Changes to `~/.config/go-mcp-computer-use/config.json` survive server restarts |
-
-All training data is stored locally in `%APPDATA%/go-mcp-computer-use/training/`. No data is sent anywhere — the server has no telemetry, no network calls beyond model downloads.
+See [`../security.md`](../security.md) for data collection controls, privacy settings, and the full reference including `set_config` options, watcher management, and noise cleanup.
 
 ## v0.2.7 — Statistical priors, noise cleanup, config gating
 
@@ -77,20 +65,26 @@ New in v0.2.7:
 | `screenshot_element` | ✅ | v0.1.3 — B5: clamps to screen bounds |
 | `uia_get_text` | ✅ | v0.1.7 — B4: nil pattern check added |
 
-### Tools Not Yet Tested (7)
+### Tools Not Yet Tested (3)
 
 | Tool | Reason |
 |------|--------|
 | `type_text` | Interactive — needs terminal |
 | `key_press` | Interactive |
 | `key_sequence` | Interactive |
-| `find_image` | Needs template image |
-| `uia_invoke` | ✅ | B4 fixed — nil pattern check added |
-| `type_text` | ✅ | Returns ok — input blocked by UIPI on elevated targets (B9) |
-| `type_and_submit` | ✅ | Returns ok — same UIPI restriction (B9) |
-| `key_press` | ✅ | Ctrl+C, Enter, VolumeMute all return ok |
-| `select_all_and_type` | ⚠️ | "Tool execution aborted" — possible client timeout |
-| `find_text_and_click` | ✅ | Works (session 1) |
+
+## Test Session: v0.2.27 — 2026-06-30
+
+### Tools Tested (v0.2.27 additions)
+
+| Tool | Status | Notes |
+|------|--------|-------|
+| `find_all_images` | ✅ | Degenerate template (1×1 constant color) → NCC skipped → ONNX detected 68+ COCO objects → OCR 200+ words. Valid template at 0.99 threshold → same cascade. |
+| `find_image` | ✅ | Degenerate template → ONNX best element returned `{x:-19, y:4, w:168, h:47, score:1}`. |
+| `click` (button=middle) | ✅ | No error on middle click at (100,100). |
+| `scroll` (horizontal=true) | ✅ | No error with 3 clicks horizontal scroll. |
+| `get_window_state` (fullscreen) | ✅ | Returns `fullscreen: false` for normal windows, `true` for borderless fullscreen games. |
+| `ocr_languages` | ✅ | Native COM — 2 languages (en-GB, en-US). PowerShell fallback eliminated. |
 
 ---
 
@@ -165,7 +159,7 @@ But `list_displays` only returns DISPLAY1.
 
 ## Prompt Engineering: Learn-Once-Reuse-Forever Pattern
 
-The MCP server exposes 108 tools, but an AI agent using them starts **cold** every session — no knowledge of:
+The MCP server exposes 120 tools, but an AI agent using them starts **cold** every session — no knowledge of:
 - What windows exist on this user's desktop and where they're positioned
 - How specific applications render (Firefox tab bar vs URL bar, Outlook email list vs reading pane)
 - What sequences of tool calls successfully completed a task last time

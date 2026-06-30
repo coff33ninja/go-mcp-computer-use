@@ -1,5 +1,52 @@
 # Changelog
 
+## [0.2.27] - 2026-06-30
+
+### Added
+
+- **`find_image` / `find_all_images` ONNX + OCR fallback** — When NCC template matching fails (no match, degenerate template), both tools now cascade through ONNX YOLO object detection → Windows OCR. `find_image` returns the highest-confidence ONNX element (or first OCR word if ONNX is empty). `find_all_images` returns all ONNX elements + all OCR words. The fallback captures a fresh screenshot if no screenB64 was provided (`ensureScreenB64`), making it robust against degenerate templates.
+- **`findImageONNXFallback` / `findAllONNXFallback` helpers** — Extracted fallback logic with full cascade (ONNX → OCR) and screen capture self-healing.
+- **`ensureScreenB64` helper** — Captures screen on demand when the passed-in `screenB64` is empty, fixing the edge case where degenerate templates bypass screen decode.
+- **`ocr_languages` tool** — New `OcrLanguages()` function in `ocr.go:145` queries WinRT COM (`IOcrEngineStatics.get_AvailableRecognizerLanguages`) and returns every installed OCR language with tag, display name, and native name.
+- **Middle mouse button** — `Click` now supports `button: "middle"` via `mouseEventMiddleDown`/`mouseEventMiddleUp` (0x0020/0x0040).
+- **Horizontal scroll** — `Scroll` now takes `horizontal bool` parameter; uses `mouseEventHWheel` (0x1000) flag when horizontal. `chainScroll` passes it through from args.
+
+### Changed
+
+- `internal/actions/template.go` — `FindImage` and `FindAllImages` restructured: degenerate templates (zero-dim, no-variance) skip NCC entirely and go straight to ONNX+OCR fallback. Template-larger-than-screen still errors (unrecoverable). `FindAllImages` added as new NCC implementation with non-maximum suppression (overlap >50% suppressed).
+- `internal/actions/window_ext.go` — `GetWindowState` now returns `fullscreen` boolean field. Added `isFullscreen()` helper that checks `MonitorFromWindow` + `GetMonitorInfoW` + `WS_CAPTION` style.
+- `internal/actions/window_ext.go` — Added `monitorFromWindow` proc, `MONITORINFO` struct, `WS_CAPTION` constant.
+- `docs/tools.md` → `docs/reference/tools.md` — auto-regenerated (2 new tools, 120 total)
+- **Doc audit & reorganization** — Audited 20 files across `docs/`, `dev/`, `.github/instructions/`. Deleted `docs/todo.md` (dead) and `dev/models-setup.md` (duplicate of `docs/models-setup.md`). Deduplicated privacy table, accessibility block, inline tool listing (80 lines), and inline release cycle (8 steps) into cross-references. Reorganized flat `docs/` into subdirs: `adr/`, `reference/`, `guides/`, `meta/`. Moved 15 files to new locations. Updated all cross-references in README.md and all 18 docs files.
+- **CI/CD path updates** — `ci.yml` references `docs/tools.md` → `docs/reference/tools.md`; `release.yml` references `docs/CHANGELOG.md` → `docs/meta/CHANGELOG.md`; `scripts/gen-tools-doc.go` writes to `docs/reference/tools.md`; `scripts/push-and-release.ps1` references `docs/meta/CHANGELOG.md`.
+- **`scripts/gen-tools-doc.go`** — `MkdirAll("docs")` → `MkdirAll("docs/reference")`, output path changed from `docs/tools.md` to `docs/reference/tools.md`.
+- **New reference docs** — `docs/reference/windows-dll-ref.md` (every syscall proc, DLL, COM interface used), `docs/reference/uipi.md` (UIPI elevation detection logic + call sites), `docs/reference/com-patterns.md` (COM/WinRT patterns: vtable dispatch, async polling, HSTRING/BSTR lifecycle, threading model, UIA tree traversal)
+- **Cross-reference updates** — `README.md`, `codebase-map.md`, `windows-dll-ref.md` all updated with links to the 3 new reference docs
+- **`docs/reference/windows-dll-ref.md`** — Fixed inaccurate advapi32.dll proc names (removed `CheckTokenMembership`/`AllocateAndInitializeSid`/`FreeSid` that were never used in `uipi.go`)
+- **`docs/reference/vtable-verification.md`** — New doc covering COM vtable stability guarantees, SDK header verification procedure, CI/CD plan, and complete test table (13 tests, 16 unique vtbl indices, all verified)
+
+### Fixed
+
+- **`find_image` / `find_all_images` no longer error on degenerate templates** — Previously a constant-color or 0×0 template returned an unrecoverable error. Now falls through to ONNX + OCR object/text detection.
+
+### VTable Verification System (vtable hardening)
+
+- **36 vtblMethod() call sites annotated** — Every COM/WinRT vtable dispatch in `uia_com.go`, `ocr_com.go`, `ocr.go`, `winrt.go` tagged with inline `// N = MethodName (verified 2026-06-30, Win11 26200)` and block-level `// Verified YYYY-MM-DD — WinBuild SDK` headers above each interface definition.
+- **`internal/actions/vtable_test.go`** — 13 smoke tests with build tag `//go:build vtable && windows`. Covers all 16 unique vtbl indices used in production: UIA GetRootElement (vtbl 5), BoundingRect (43), FindFirst (5, 21), Conditions (21, 23, 25), GetPropValue (10), GetCurrentPattern (16), ValuePattern/Invoke/Array (3, 4, 6, 21), OCR GetLanguages (7, 6), OCR TryCreate (10), OCR TryCreateFromLanguage (9), StorageFile async pipeline (6, 8, 14, 0, 7), HSTRING round-trip, vtblMethod nil guard. All pass (~8s).
+- **`scripts/verify-vtable-docs.go`** — Parses all 36 vtblMethod() call sites from source, cross-references each unique index against `com-patterns.md` and `vtable-verification.md` doc tables, checks test coverage via `// vtbl:` annotations. Run `go run ./scripts/verify-vtable-docs.go`. Confirms all 16 unique indices are documented and tested.
+- **CI: `vtable-check` job** — `.github/workflows/ci.yml` runs `go test -v -tags=vtable ./internal/actions/ -run 'TestVtable'` after build, plus `go run ./scripts/verify-vtable-docs.go` to catch doc drift.
+- **`go vet` passes** — zero warnings across all vtable code.
+- **`scripts/verify-iid-usage.go`** — New Go script that parses `winrt.go`, scans `internal/actions/` for IID references, categorizes each as `used` (referenced outside winrt.go), `internal` (only within winrt.go), or `unused`. Cross-references against the Status column in `com-patterns.md` docs. With `-update`, rewrites the Status column. Run: `go run ./scripts/verify-iid-usage.go` or `go run ./scripts/verify-iid-usage.go -update`.
+- **`scripts/discover-winrt-iids.ps1` -UpdateDocs mode** — Added `-UpdateDocs` switch that auto-generates the 51-entry IID table in `docs/reference/com-patterns.md` from discovered values, replacing the content between `<!-- IID_TABLE_START -->` / `<!-- IID_TABLE_END -->` markers. Includes fallback pass for statics discovered under flat keys. Now also calls `verify-iid-usage.go -update` to set correct usage statuses. CI runs `-UpdateDocs` then `go run verify-iid-usage.go` then `git diff` to catch drift.
+- **`ci.yml` vtable-check job** — Added `Verify WinRT IID docs are in sync with source` step: runs `powershell -File scripts\discover-winrt-iids.ps1 -UpdateDocs` + `go run ./scripts/verify-iid-usage.go`, fails if `docs/reference/com-patterns.md` has uncommitted changes.
+- **`docs/reference/scripts.md`** — New reference doc cataloging all 8 scripts with purpose, invocation, uniqueness, and cross-references to docs and CI.
+- **`docs/reference/com-patterns.md`** — VTable dispatch section (§2) updated with `IUnknown base` column in all index tables. IID table wrapped in `<!-- IID_TABLE_START/END -->` markers with new **Status** column (used/internal/unused). Inline `-UpdateDocs` flag in both "run the script" instructions. 
+- **`docs/reference/vtable-verification.md`** — Expanded from "proposed plan" to actual test table with `vtbl Indices` + `Verified` columns, **Performance note** documenting why `FindAll` on desktop root is slow by design, and CI/CD integration reference.
+- **`uia.go` `andCondition` dead code fixed** — `CreateAndCondition` (vtbl 25) was called from `buildCondition` but not tested; now exercised by `TestVtable_IUIAutomation_Conditions`.
+- **`internal/actions/uia_ctrltype_test.go`** — 3 tests validating the UIA ControlTypeId map covers all 41 constants (50000–50040), no duplicates, no out-of-range values, and unknown names return nil.
+- **Cross-references updated** — `README.md`, `docs/reference/codebase-map.md`, `docs/reference/windows-dll-ref.md`, `docs/ci-cd-pipeline.md` all linked to new vtable docs.
+- **VTable indices are hard-won** — Every index was researched against SDK headers (UIAutomationClient.h, windows.data.h, windows.storage.h) and verified at runtime on Windows 11 (build 26200). These are the most fragile part of the codebase: an incorrect vtbl index silently calls the wrong method or crashes. The verification script and test suite exist because even a single off-by-one error can take days to diagnose. Microsoft freezes these indices for published interfaces, but when upgrading to a new Windows build, run `go test -tags=vtable` and `go run ./scripts/verify-vtable-docs.go` before shipping.
+
 ## [0.2.26] - 2026-06-30
 
 ### Fixed

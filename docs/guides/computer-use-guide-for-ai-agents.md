@@ -60,19 +60,20 @@ The **Model Context Protocol (MCP)** is an open standard (Anthropic, 2024) that 
 
 ### The go-mcp-computer-use Server
 
-The `mcp-server.exe` from [coff33ninja/go-mcp-computer-use](https://github.com/coff33ninja/go-mcp-computer-use) exposes **108 tools** that mirror every human peripheral capability on Windows:
+The `mcp-server.exe` from [coff33ninja/go-mcp-computer-use](https://github.com/coff33ninja/go-mcp-computer-use) exposes **120 tools** that mirror every human peripheral capability on Windows:
 
 #### Vision (Human: eyes → screen)
 - `screenshot` — capture what's on screen (like human looking)
-- `ocr` — read text from screen (like human reading)
-- `find_image` — locate visual elements (like human searching)
+- `ocr` / `ocr_languages` — read text from screen (like human reading)
+- `find_image` — locate visual elements with NCC + ONNX + OCR cascade
+- `find_all_images` — find all instances with NCC + ONNX + OCR cascade
 - `get_pixel_color` — check exact color at a point
 - `onnx_detect` — ML-based UI element detection (like human recognizing buttons)
 
 #### Pointing (Human: hand → mouse)
-- `click` — left/right click at coordinates
+- `click` — left/right/middle click at coordinates
 - `move_mouse` — reposition cursor
-- `scroll` — scroll up/down
+- `scroll` — scroll up/down/left/right (horizontal=true)
 - `drag` — click-hold-and-move (for selection, drag-and-drop)
 - `hover` — position cursor for tooltips
 

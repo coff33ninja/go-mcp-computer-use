@@ -20,14 +20,16 @@ type Tool struct {
 // categoryForTool returns the category label for a given tool name.
 // Keep this map sorted by category name, then tool name.
 var categoryForTool = map[string]string{
-	// Screenshot & Vision (8)
+	// Screenshot & Vision (10)
 	"screenshot":        "Screenshot & Vision",
 	"get_screen_size":   "Screenshot & Vision",
 	"get_pixel_color":   "Screenshot & Vision",
 	"get_screen_dpi":    "Screenshot & Vision",
 	"get_display_modes": "Screenshot & Vision",
 	"ocr":               "Screenshot & Vision",
+	"ocr_languages":     "Screenshot & Vision",
 	"find_image":        "Screenshot & Vision",
+	"find_all_images":   "Screenshot & Vision",
 	"record_screen":     "Screenshot & Vision",
 
 	// Mouse (6)
@@ -263,9 +265,9 @@ func main() {
 	b.WriteString("-->\n")
 
 	// Write to docs/
-	outputPath := filepath.Join("docs", "tools.md")
-	if err := os.MkdirAll("docs", 0755); err != nil {
-		fmt.Fprintf(os.Stderr, "error creating docs: %v\n", err)
+	outputPath := filepath.Join("docs", "reference", "tools.md")
+	if err := os.MkdirAll("docs/reference", 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "error creating docs/reference: %v\n", err)
 		os.Exit(1)
 	}
 	if err := os.WriteFile(outputPath, []byte(b.String()), 0644); err != nil {

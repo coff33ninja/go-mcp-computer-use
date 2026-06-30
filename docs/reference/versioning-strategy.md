@@ -6,7 +6,7 @@ Accepted (2026-06-27)
 
 ## Canonical Version Source
 
-The canonical version is the `VERSION` file at repository root. The versioning policy is defined in [`plan.md`](../plan.md#versioning).
+The canonical version is the `VERSION` file at repository root. The versioning policy is defined in this document.
 
 The `VERSION` file is read at build time and injected via ldflags:
 
@@ -14,7 +14,7 @@ The `VERSION` file is read at build time and injected via ldflags:
 go build -ldflags="-X main.Version=$(cat VERSION)" -o mcp-server.exe ./cmd/mcp-server/
 ```
 
-This is what MCP clients see via `server.info`. All other references (CHANGELOG, git tags, release artifacts) must match `VERSION`. See [`ci-cd-pipeline.md`](ci-cd-pipeline.md) for the automated workflow.
+This is what MCP clients see via `server.info`. All other references (CHANGELOG, git tags, release artifacts) must match `VERSION`. See [`../ci-cd-pipeline.md`](../ci-cd-pipeline.md) for the automated workflow.
 
 ## Versioning Scheme
 
@@ -45,7 +45,7 @@ Tags are immutable once pushed. If a release is faulty, bump the patch and re-ta
 
 ## Changelog Convention
 
-`docs/CHANGELOG.md` follows [Keep a Changelog](https://keepachangelog.com) with sections:
+`../meta/CHANGELOG.md` follows [Keep a Changelog](https://keepachangelog.com) with sections:
 
 - `### Added` — new tools, new capabilities
 - `### Changed` — modifications to existing tools or behavior
@@ -61,7 +61,7 @@ A changelog entry is required for every release. Entries are written in present-
 ```
 [1] Code complete — all changes for the release are merged
 [2] Bump version in VERSION file
-[3] Update `docs/CHANGELOG.md` with the new version heading
+[3] Update `../meta/CHANGELOG.md` with the new version heading
 [4] Run pre-release gates:
       - go build ./cmd/mcp-server/     (compiles)
       - go vet ./...                   (static analysis)
@@ -69,7 +69,7 @@ A changelog entry is required for every release. Entries are written in present-
 [5] Commit: "release: vX.Y.Z"
 [6] Tag:   git tag vX.Y.Z
 [7] Push:  git push && git push origin vX.Y.Z
-[8] CI/CD auto-builds and creates GitHub Release (see ci-cd-pipeline.md)
+[8] CI/CD auto-builds and creates GitHub Release (see ../ci-cd-pipeline.md)
 ```
 
 ## Commit Strategy
@@ -89,7 +89,7 @@ Use squash-merges into `master`/`main` — each release is a single commit on th
 
 ```bash
 # Edit VERSION: "0.1.0" → "0.1.1"
-# Edit docs/CHANGELOG.md: add ## [0.1.1] section
+# Edit ../meta/CHANGELOG.md: add ## [0.1.1] section
 $ver = (Get-Content VERSION -Raw).Trim()
 go build -ldflags="-X main.Version=$ver" ./cmd/mcp-server/ && go vet ./...
 go run ./cmd/benchmark/
@@ -100,8 +100,8 @@ git push && git push origin v0.1.1  # triggers release workflow
 
 ## Cross-References
 
-- `docs/CHANGELOG.md` — release history
+- `../meta/CHANGELOG.md` — release history
 - `VERSION` — canonical version source (replaces hardcoded string in server.go)
-- `docs/adr-001-mcp-sdk-selection.md` — SDK choice that defines the version field location
-- `docs/ci-cd-pipeline.md` — CI/CD workflows for automated build + release
+- `../adr/adr-001-mcp-sdk-selection.md` — SDK choice that defines the version field location
+- `../ci-cd-pipeline.md` — CI/CD workflows for automated build + release
 - `benchmark-results.txt` — performance data updated per release
