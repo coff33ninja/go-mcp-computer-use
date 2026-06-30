@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.2.18] - 2026-06-29
+
+### Added
+
+- **Post-Task Introspection Engine** (`internal/actions/introspection.go`) — three new MCP tools for task-aware self-improvement:
+  - `task_begin` — marks task start with description, timestamps
+  - `task_end` — closes task, mines insights from command_log between start/end: slowest tools, most failed tools, OCR stats, repeated command patterns, and improvement suggestions
+  - `introspection_analyze` — browse completed task history with full insight data
+  - Uses existing `command_log` + `ocr_log` tables — no new logging infra needed
+  - `task_log` table added to datalog DB
+
+### Changed
+
+- `datalog_status` now reports `task_count` in stats
+
 ## [0.2.17] - 2026-06-29
 
 ### Fixed

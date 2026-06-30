@@ -137,6 +137,22 @@ func createDataLogTables(db *sql.DB) error {
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_pair_session ON training_pairs(session_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_pair_created ON training_pairs(created_at)`,
+
+		`CREATE TABLE IF NOT EXISTS task_log (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			session_id TEXT NOT NULL DEFAULT '',
+			description TEXT NOT NULL DEFAULT '',
+			start_time TEXT NOT NULL,
+			end_time TEXT NOT NULL DEFAULT '',
+			step_count INTEGER NOT NULL DEFAULT 0,
+			success_count INTEGER NOT NULL DEFAULT 0,
+			fail_count INTEGER NOT NULL DEFAULT 0,
+			total_duration_ms INTEGER NOT NULL DEFAULT 0,
+			insights TEXT NOT NULL DEFAULT '{}',
+			created_at TEXT NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_task_session ON task_log(session_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_task_created ON task_log(created_at)`,
 	}
 	for _, s := range stmts {
 		if _, err := db.Exec(s); err != nil {
@@ -537,10 +553,11 @@ func ExportTrainingData(sessionID string, limit int) (*ExportTrainingOutput, err
 }
 
 type DataLogStats struct {
-	CommandCount  int `json:"command_count"`
-	ChainCount    int `json:"chain_count"`
-	OCRCount      int `json:"ocr_count"`
-	TrainingPairs int `json:"training_pairs"`
+	CommandCount    int `json:"command_count"`
+	ChainCount      int `json:"chain_count"`
+	OCRCount        int `json:"ocr_count"`
+	TrainingPairs   int `json:"training_pairs"`
+	TaskCount       int `json:"task_count"`
 }
 
 func DataLogStatsReport() (*DataLogStats, error) {
@@ -556,5 +573,6 @@ func DataLogStatsReport() (*DataLogStats, error) {
 	dlogDB.QueryRow("SELECT COUNT(*) FROM chain_log").Scan(&s.ChainCount)
 	dlogDB.QueryRow("SELECT COUNT(*) FROM ocr_log").Scan(&s.OCRCount)
 	dlogDB.QueryRow("SELECT COUNT(*) FROM training_pairs").Scan(&s.TrainingPairs)
+	dlogDB.QueryRow("SELECT COUNT(*) FROM task_log").Scan(&s.TaskCount)
 	return s, nil
 }

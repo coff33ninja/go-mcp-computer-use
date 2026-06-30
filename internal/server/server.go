@@ -1623,6 +1623,45 @@ func agentTrainHandler(ctx context.Context, req *mcp.CallToolRequest, _ AgentTra
 	}, analysis, nil
 }
 
+type TaskBeginArgs struct {
+	Description string `json:"description"`
+}
+
+type TaskEndArgs struct {
+	Summary string `json:"summary,omitempty"`
+	Success bool   `json:"success,omitempty"`
+}
+
+func taskBeginHandler(_ context.Context, _ *mcp.CallToolRequest, args TaskBeginArgs) (*mcp.CallToolResult, any, error) {
+	info, err := actions.TaskBegin(actions.TaskInput{Description: args.Description})
+	if err != nil {
+		return nil, nil, fmt.Errorf("task_begin: %w", err)
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, info, nil
+}
+
+func taskEndHandler(_ context.Context, _ *mcp.CallToolRequest, args TaskEndArgs) (*mcp.CallToolResult, any, error) {
+	info, err := actions.TaskEnd(actions.TaskEndInput{Summary: args.Summary, Success: args.Success})
+	if err != nil {
+		return nil, nil, fmt.Errorf("task_end: %w", err)
+	}
+	b, _ := json.MarshalIndent(info.Insights, "", "  ")
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: string(b)}},
+	}, info, nil
+}
+
+func introspectionAnalyzeHandler(_ context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
+	tasks, err := actions.IntrospectionAnalyze()
+	if err != nil {
+		return nil, nil, fmt.Errorf("introspection_analyze: %w", err)
+	}
+	b, _ := json.MarshalIndent(tasks, "", "  ")
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: string(b)}},
+	}, map[string]any{"tasks": tasks, "count": len(tasks)}, nil
+}
+
 func bridgeDebugHandler(_ context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
 	info := actions.BridgeDebugInfo()
 	return &mcp.CallToolResult{
@@ -2385,6 +2424,21 @@ func New(version string) *mcp.Server {
 		Name:        "agent_train",
 		Description: "Train the adaptive engine from datalog training_pairs. Rebuilds the OCR→command word index and sequence cache. Call after the datalog has accumulated new pairs.",
 	}, agentTrainHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "task_begin",
+		Description: "Mark the start of a task for post-task introspection. Call before the first tool call in a task.",
+	}, taskBeginHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "task_end",
+		Description: "Mark the end of a task. Returns mined insights: slow/failed tools, OCR stats, repeat patterns, and improvement suggestions.",
+	}, taskEndHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "introspection_analyze",
+		Description: "View task history with mined insights from past task_begin/task_end sessions.",
+	}, introspectionAnalyzeHandler)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "bridge_debug",
