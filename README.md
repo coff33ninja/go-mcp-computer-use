@@ -1,9 +1,9 @@
 # go-mcp-computer-use
 
-> **Built iteratively** across AI-assisted development sessions, with [`v0.1.x`](https://github.com/coff33ninja/go-mcp-computer-use/tree/v0.1.x) covering 70+ bug-fixed Win32/COM tools and [`v0.2.x`](https://github.com/coff33ninja/go-mcp-computer-use/tree/v0.2.x) (default branch) adding the chained automation pipeline, SQLite memory store, ONNX ML detection, introspection engine, adaptive ML, and the training data pipeline for user-specific model fine-tuning.
+> **Built iteratively** across AI-assisted development sessions, with [`v0.1.x`](https://github.com/coff33ninja/go-mcp-computer-use/tree/v0.1.x) covering 70+ bug-fixed Win32/COM tools and [`v0.2.x`](https://github.com/coff33ninja/go-mcp-computer-use/tree/v0.2.x) (stable, default branch) adding the chained automation pipeline, SQLite memory store, ONNX ML detection, introspection engine, adaptive ML, and the training data pipeline. Active development is on [`v0.3.x`](https://github.com/coff33ninja/go-mcp-computer-use/tree/v0.3.x) with the skill library, chain interruption, and cross-platform support.
 > The AI agent was guided by a curated set of quality-enforcement skills from [coff33ninja/ai-skills](https://github.com/coff33ninja/ai-skills) — anti-hallucination, anti-slop, safe-code-modifications, anti-sycophancy, code-simplification, context-engineering, don't-kill-tokens, os-awareness, anti-tool-sprawl, follow-existing-patterns, no-dead-code-removal, universal-format-lint, self-validate, verify-and-cite, and others.
 >
-> **Status:** v0.2.19 — 118 tools including statistical prior model, training pipeline, memory-backed UI element cache, ONNX detection, runtime privacy controls, key hold/release, input recording, set_config, YOLO dataset export, introspection engine, adaptive ML engine, and OCR→command training bridge. See [`docs/tools.md`](docs/tools.md) for the full listing.
+> **Status:** v0.3.0-dev (based on v0.2.19) — 118 tools. See [`docs/tools.md`](docs/tools.md) for the full listing and [`docs/plan.md`](docs/plan.md) for the v0.3.x roadmap.
 
 MCP server for Windows desktop computer use. Exposes mouse, keyboard, screenshot, OCR, template matching, window management, system control, and screen recording to AI agents via [Model Context Protocol](https://modelcontextprotocol.io).
 

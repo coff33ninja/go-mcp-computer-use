@@ -28,7 +28,7 @@ v<major>.<minor>.<patch>
 | `+0.1.0` (minor) | New tools, new capabilities, architecture changes, dependency adds | Adding native COM OCR, adding UIA layer, adding `chain` tool, introducing SQLite memory store |
 | `+1.0.0` (major) | Stable release with proven architecture, all planned slices complete, field-tested | Full automation pipeline working, memory store battle-tested, ONNX integration verified |
 
-**Current trajectory:** v0.1.x (bug-fix cycle on initial tools) → v0.2.x (automation pipeline + memory + ML + priors + keylogger) → v0.3.x (iterative improvements) → v1.0.0 (stable release)
+**Current trajectory:** v0.1.x (archived, bug-fix cycle) → v0.2.x (stable, pipeline + memory + ML + introspection) → v0.3.x (active development, skill library + cross-platform) → v1.0.0 (stable release)
 
 Breaking changes at 0.x require a minor bump (not major), per SemVer spec §4.
 
@@ -74,7 +74,7 @@ A changelog entry is required for every release. Entries are written in present-
 
 ## Commit Strategy
 
-Use squash-merges into `master`/`main` — each release is a single commit on the default branch. This keeps the release history clean and makes cherry-picks straightforward. Feature branches with incremental commits are preserved in the branch history but collapsed into one commit on merge to default.
+Use squash-merges into the release branch (`v0.2.x` stable, `v0.3.x` active development) — each release is a single commit on the default branch. This keeps the release history clean and makes cherry-picks straightforward. Feature branches with incremental commits are preserved in the branch history but collapsed into one commit on merge to default.
 
 ## Pre-Release Gates (mandatory)
 
