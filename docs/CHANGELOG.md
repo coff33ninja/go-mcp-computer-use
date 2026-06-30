@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.21] - 2026-06-30
+
+### Changed
+
+- **LogToolCall coverage: all 11 MCP action tools now instrumented** — Added `LogToolCall` to `key_down`, `key_up`, `focus_window`, and `launch_and_wait`, completing adaptive engine training pair coverage for every non-query action tool. Previously 4 tools produced commands without OCR context pairs, leaving gaps in the training index.
+
+### Changed files
+
+- `internal/actions/keyboard.go` — added `LogToolCall("key_down", ...)` to `KeyDown`, `LogToolCall("key_up", ...)` to `KeyUp`
+- `internal/actions/window.go` — added `LogToolCall("focus_window", ...)` to `FocusWindow`
+- `internal/actions/chained.go` — added `LogToolCall("launch_and_wait", ...)` to `LaunchAndWait`
+
 ## [0.2.20] - 2026-06-30
 
 ### Changed

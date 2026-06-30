@@ -192,9 +192,13 @@ func keyNameToVK(name string) (uint16, bool) {
 	return 0, false
 }
 
-func KeyDown(key string) error {
-	if err := warnElevated(); err != nil {
-		return err
+func KeyDown(key string) (err error) {
+	defer func() {
+		b, _ := json.Marshal(map[string]string{"key": key})
+		LogToolCall("key_down", string(b), err)
+	}()
+	if err = warnElevated(); err != nil {
+		return
 	}
 	vk, ok := keyNameToVK(key)
 	if !ok {
@@ -204,9 +208,13 @@ func KeyDown(key string) error {
 	return nil
 }
 
-func KeyUp(key string) error {
-	if err := warnElevated(); err != nil {
-		return err
+func KeyUp(key string) (err error) {
+	defer func() {
+		b, _ := json.Marshal(map[string]string{"key": key})
+		LogToolCall("key_up", string(b), err)
+	}()
+	if err = warnElevated(); err != nil {
+		return
 	}
 	vk, ok := keyNameToVK(key)
 	if !ok {

@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"encoding/json"
 	"syscall"
 	"unsafe"
 )
@@ -91,8 +92,12 @@ func ListWindows() ([]WindowInfo, error) {
 	return windows, nil
 }
 
-func FocusWindow(handle uintptr) error {
+func FocusWindow(handle uintptr) (err error) {
+	defer func() {
+		b, _ := json.Marshal(map[string]uintptr{"handle": handle})
+		LogToolCall("focus_window", string(b), err)
+	}()
 	setForegroundWindow.Call(handle)
 	showWindow.Call(handle, SW_RESTORE)
-	return nil
+	return
 }

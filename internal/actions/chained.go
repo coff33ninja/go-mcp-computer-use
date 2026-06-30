@@ -80,11 +80,17 @@ func TypeAndSubmit(text string) error {
 	return KeyPress([]string{"ENTER"})
 }
 
-func LaunchAndWait(path, windowTitle string, timeoutMs int32) (uintptr, error) {
-	if err := LaunchApp(path); err != nil {
+func LaunchAndWait(path, windowTitle string, timeoutMs int32) (hwnd uintptr, err error) {
+	defer func() {
+		b, _ := json.Marshal(map[string]any{
+			"path": path, "window_title": windowTitle, "timeout_ms": timeoutMs,
+		})
+		LogToolCall("launch_and_wait", string(b), err)
+	}()
+	if err = LaunchApp(path); err != nil {
 		return 0, fmt.Errorf("launch_and_wait: %w", err)
 	}
-	hwnd, err := WaitForWindow(windowTitle, timeoutMs)
+	hwnd, err = WaitForWindow(windowTitle, timeoutMs)
 	if err != nil {
 		return 0, fmt.Errorf("launch_and_wait: %w", err)
 	}
