@@ -243,8 +243,10 @@ func KeyPress(keys []string) (err error) {
 	}
 	var pressedMods []uint16
 	for _, k := range keys {
+		// Normalize to uppercase for map lookups
+		ku := strings.ToUpper(k)
 		// Check CTRL+/CONTROL+ prefix (e.g. "CTRL+A")
-		if strings.HasPrefix(k, "CTRL+") || strings.HasPrefix(k, "CONTROL+") {
+		if strings.HasPrefix(ku, "CTRL+") || strings.HasPrefix(ku, "CONTROL+") {
 			parts := strings.SplitN(k, "+", 2)
 			if len(parts) == 2 && len(parts[1]) == 1 {
 				ch := parts[1][0]
@@ -263,13 +265,13 @@ func KeyPress(keys []string) (err error) {
 			}
 		}
 		// Modifier keys
-		if vk, ok := vkModMap[k]; ok {
+		if vk, ok := vkModMap[ku]; ok {
 			sendVK(vk, true)
 			pressedMods = append(pressedMods, vk)
 			continue
 		}
 		// Special key names (ENTER, BACKSPACE, etc.)
-		if vk, ok := vkSpecialMap[k]; ok {
+		if vk, ok := vkSpecialMap[ku]; ok {
 			sendVKPress(vk)
 			continue
 		}

@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.2.26] - 2026-06-30
+
+### Fixed
+
+- **Chain tool: `computer_use_*` prefix normalization** — `execTool` now strips the `computer_use_` prefix from tool names before dispatch lookup, so all `computer_use_*` tools (click, type, key_press, ocr, get_screen_size, etc.) work inside chain steps.
+- **Chain `success` aggregation** — `result.Success` now initializes to `true` before checking step results, fixing false-negative `success: false` when all steps pass.
+- **Keyboard modifier key case sensitivity** — `KeyPress` normalizes modifier key names to uppercase before `vkModMap`/`vkSpecialMap` lookups, so `"Ctrl"`, `"ctrl"`, `"CTRL"` all correctly match instead of being silently skipped.
+- **Window focus reliability** — `FocusWindow` uses `AttachThreadInput` to attach to the target window's input thread before `SetForegroundWindow`, working around Windows focus-stealing restrictions for background automation processes.
+
+### Changed files
+
+- `internal/actions/chain.go` — `execTool` adds `strings.TrimPrefix(step.Tool, "computer_use_")` at line 312; `ExecuteChain` initializes `result.Success = true` before failure loop at line 200
+- `internal/actions/keyboard.go` — `KeyPress` normalizes keys via `strings.ToUpper` before modifier/special key lookups
+- `internal/actions/window.go` — `FocusWindow` uses `AttachThreadInput` with `GetWindowThreadProcessId`/`GetCurrentThreadId`
+- `internal/actions/system.go` — added `getCurrentThreadId` (kernel32) and `attachThreadInput` (user32) proc declarations
+
 ## [0.2.25] - 2026-06-30
 
 ### Fixed

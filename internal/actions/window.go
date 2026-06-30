@@ -101,7 +101,15 @@ func FocusWindow(handle uintptr) (err error) {
 		Adaptive.RecordResult("focus_window", float64(time.Since(start).Milliseconds()), err == nil)
 		Adaptive.LearnFromCommand("focus_window", string(b), err == nil)
 	}()
-	setForegroundWindow.Call(handle)
+	windowThread, _, _ := getWindowThreadProcessId.Call(handle, 0)
+	currentThread, _, _ := getCurrentThreadId.Call()
+	if windowThread != currentThread {
+		attachThreadInput.Call(currentThread, windowThread, 1)
+		setForegroundWindow.Call(handle)
+		attachThreadInput.Call(currentThread, windowThread, 0)
+	} else {
+		setForegroundWindow.Call(handle)
+	}
 	showWindow.Call(handle, SW_RESTORE)
 	return
 }

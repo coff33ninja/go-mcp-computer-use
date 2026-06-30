@@ -26,6 +26,7 @@ var (
 	globalAlloc        = kernel32.NewProc("GlobalAlloc")
 	globalLock         = kernel32.NewProc("GlobalLock")
 	globalUnlock       = kernel32.NewProc("GlobalUnlock")
+	getCurrentThreadId = kernel32.NewProc("GetCurrentThreadId")
 
 	shell32       = windows.NewLazySystemDLL("shell32.dll")
 	shellExecuteW = shell32.NewProc("ShellExecuteW")
@@ -35,7 +36,8 @@ var (
 	getClipboardData   = user32.NewProc("GetClipboardData")
 	setClipboardData   = user32.NewProc("SetClipboardData")
 	emptyClipboard     = user32.NewProc("EmptyClipboard")
-	getForegroundWindow = user32.NewProc("GetForegroundWindow")
+	getForegroundWindow  = user32.NewProc("GetForegroundWindow")
+	attachThreadInput    = user32.NewProc("AttachThreadInput")
 )
 
 const (
