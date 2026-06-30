@@ -1,9 +1,9 @@
 # go-mcp-computer-use
 
-> **Built iteratively** across AI-assisted development sessions, with v0.1.x covering 70+ bug-fixed Win32/COM tools and v0.2.x adding the chained automation pipeline, SQLite memory store, ONNX ML detection, and the training data pipeline for user-specific model fine-tuning.
+> **Built iteratively** across AI-assisted development sessions, with [`v0.1.x`](https://github.com/coff33ninja/go-mcp-computer-use/tree/v0.1.x) covering 70+ bug-fixed Win32/COM tools and [`v0.2.x`](https://github.com/coff33ninja/go-mcp-computer-use/tree/v0.2.x) (default branch) adding the chained automation pipeline, SQLite memory store, ONNX ML detection, introspection engine, adaptive ML, and the training data pipeline for user-specific model fine-tuning.
 > The AI agent was guided by a curated set of quality-enforcement skills from [coff33ninja/ai-skills](https://github.com/coff33ninja/ai-skills) — anti-hallucination, anti-slop, safe-code-modifications, anti-sycophancy, code-simplification, context-engineering, don't-kill-tokens, os-awareness, anti-tool-sprawl, follow-existing-patterns, no-dead-code-removal, universal-format-lint, self-validate, verify-and-cite, and others.
 >
-> **Status:** v0.2.11 — tools include statistical prior model, training pipeline, memory-backed UI element cache, ONNX detection, runtime privacy controls, key hold/release, input recording, set_config, and YOLO dataset export. See [`docs/tools.md`](docs/tools.md) for the full listing.
+> **Status:** v0.2.19 — 118 tools including statistical prior model, training pipeline, memory-backed UI element cache, ONNX detection, runtime privacy controls, key hold/release, input recording, set_config, YOLO dataset export, introspection engine, adaptive ML engine, and OCR→command training bridge. See [`docs/tools.md`](docs/tools.md) for the full listing.
 
 MCP server for Windows desktop computer use. Exposes mouse, keyboard, screenshot, OCR, template matching, window management, system control, and screen recording to AI agents via [Model Context Protocol](https://modelcontextprotocol.io).
 
@@ -31,13 +31,13 @@ MCP server for Windows desktop computer use. Exposes mouse, keyboard, screenshot
 - **Training data pipeline** — persistent screenshot collection with categorized folders (`raw/click/`, `raw/type/`, `raw/navigate/`, `watcher/elements_found/`, etc.) and SQLite metadata. Auto-saves on every UI action for model fine-tuning.
 - **Memory-backed UI element cache** — ONNX detections auto-stored as memory facts (`ui:{window}:{class}`) with TTL. AI reuses cached coordinates across sessions.
 - **`find_ui_element` tool** — cascading lookup: memory → ONNX → OCR. Self-learning: saves findings to memory + training store.
-- **108 MCP tools** — see [`docs/tools.md`](docs/tools.md) for the full listing
+- **118 MCP tools** — see [`docs/tools.md`](docs/tools.md) for the full listing
 
 ## Tools
 
 Auto-generated reference at [`docs/tools.md`](docs/tools.md) — always in sync with `internal/server/server.go`. Run `go run ./scripts/gen-tools-doc.go` to regenerate.
 
-Categories: Screenshot & Vision, Mouse, Keyboard, Window Management, Chained / Composite, Chain Automation, UI Automation, Browser Automation, File Explorer, Audio, Memory & Templates, ONNX ML, Priors & Statistics, Training Pipeline, Data Export, Runtime Config, System, Process Management.
+Categories: Screenshot & Vision, Mouse, Keyboard, Window Management, Chained / Composite, Chain Automation, UI Automation, Browser Automation, File Explorer, Audio, Memory & Templates, ONNX ML, Priors & Statistics, Training Pipeline, Data Export, Data Logging, Adaptive Agent, Introspection & Debugging, Runtime Config, System, Process Management.
 
 ## Security
 
