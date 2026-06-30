@@ -30,6 +30,10 @@ jobs:
           }
           echo "version=$ver" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
+      - name: Regenerate tools.md
+        shell: pwsh
+        run: go run ./scripts/gen-tools-doc.go
+
       - name: Lint
         shell: pwsh
         run: ./scripts/lint.ps1
