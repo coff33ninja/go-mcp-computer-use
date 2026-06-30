@@ -44,3 +44,9 @@ CGO is required for ONNX ML inference via Zig cc. All builds include the full to
 - Harder: COM threading model must be managed per-thread
 - Involved: WinRT async operations require polling IAsyncInfo::Status rather than callback pattern
 - Unofficial: brightness control still shells out to PowerShell for WMI APIs
+
+---
+
+<sub><sup>
+this ADR says we use "Go + syscall/windows with direct Win32 API calls, plus native COM where beneficial". translation: we mash together C structs until the unsafe pointers line up, then pray the vtable dispatch doesn't crash. "COM threading model must be managed per-thread" is documentation-speak for "this will randomly crash and you won't know why". the fact that brightness control still shells out to PowerShell is the comedic punchline — we built native COM WinRT for OCR and UIA, but changing screen brightness? that's where we draw the line. PowerShell it is.
+</sup></sub>

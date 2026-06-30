@@ -644,3 +644,9 @@ $p.StandardOutput.ReadLine()  # initialize result
 $p.StandardOutput.ReadLine()  # tools/list result
 $p.Kill()
 ```
+
+---
+
+<sub><sup>
+19 clients. 19 different config file locations. 19 different top-level keys. some use `mcpServers`, some use `servers`, one uses `context_servers`, another uses `mcp` with array commands, and Continue.dev uses an ARRAY of objects instead of a dictionary because why not. this file exists because the MCP ecosystem is a beautiful nightmare of "standards". every client has a different bug too — OpenCode has the .dat desync, Zed silently skips entries without `"source": "custom"`, Windsurf uses `serverUrl` not `url`. we didn't choose the chaos. the chaos chose us.
+</sup></sub>

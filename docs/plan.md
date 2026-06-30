@@ -162,3 +162,9 @@ v<major>.<minor>.<patch>
 - Adaptive engine: pure Go (rolling averages, TF-IDF) — no Python/external ML
 - Bridge window: 30s — OCR→AI→MCP→Command round trip ceiling
 - Data logging SQLite: same pattern as memory/training stores, WAL journal mode
+
+---
+
+<sub><sup>
+look at this beautiful architecture diagram. layers. responsibilities. no overlap. it's a work of art. now look at the code — it's a single file called `misc.go` that somehow handles battery, brightness, AND clipboard. "no overlap in responsibility" sounds great in a markdown file. in practice, we have a file called `chained.go` that's the junk drawer of tools nobody knew where to put. the plan is aspirational. the code is chaotic. and somehow both are equally valid descriptions of this project.
+</sup></sub>

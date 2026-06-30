@@ -73,3 +73,9 @@ internal/config/config.go     — JSON config file
 ## Agent Architecture
 
 See [`computer-use-guide-for-ai-agents.md`](computer-use-guide-for-ai-agents.md) for the full layered agent stack: LLM → MCP → Controller/Perception/Memory/Training → World.
+
+---
+
+<sub><sup>
+the code map shows a beautiful tree of `internal/actions/` with 30+ files. what it doesn't show is that half of those files are held together by global variables, the `uia_com.go` file is a masterpiece of unsafe pointers and vtable arithmetic that would make a C++ developer cry, and `misc.go` is where we put everything that didn't fit anywhere else (battery, brightness, clipboard, notifications, power, and somebody's hopes and dreams). the architecture diagram is aspirational. the code is a monument to the fact that Go + Win32 is both possible and a terrible idea.
+</sup></sub>

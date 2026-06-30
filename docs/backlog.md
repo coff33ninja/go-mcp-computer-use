@@ -710,3 +710,9 @@
 3. **Cross-platform interface** — Linux/macOS stubs for portable task definitions
 4. **User-configurable tool subsets** — allow users to load only the tool groups they need per agent
 5. **ML model improvement** — fix YOLO11n opset 22 incompatibility, explore UI-specific fine-tuning
+
+---
+
+<sub><sup>
+"every desktop ability a human has" — bold claim for a project that doesn't have registry tools, environment variable management, or virtual desktop support. the summary table shows 108 HAVE, 117 NEXT, 101 FAR, for a grand total of 326 tools. at the current rate of 20 tools per evening, that's approximately 11 more sleepless nights. the strategy section says "build out NEXT items" as if we've ever finished a phase before getting distracted by something shinier. we haven't. we won't. and that's okay.
+</sup></sub>

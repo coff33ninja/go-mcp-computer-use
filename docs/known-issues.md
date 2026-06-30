@@ -359,3 +359,9 @@ Currently all screen analysis is single-frame (OCR or ONNX on still images). Tem
 - `RoInitialize` now uses `RO_INIT_MULTITHREADED` (v0.1.2 fix) to match UIA's `COINIT_MULTITHREADED` — both paths use MTA.
 - OCR uses native COM WinRT path, falls back to PowerShell on failure.
 - Server was built with `-ldflags="-s -w"` to reduce binary size.
+
+---
+
+<sub><sup>
+this file is 361 lines. the actual MCP server code is maybe 2000 lines. that means nearly 1 in 6 lines of this project is documenting things that are broken. B1 through B15, each with its own tragic backstory. B6 is still our favorite: a multiplication by 10000 instead of 10000*1000 meant Wait(100ms) blocked for 27.7 hours. a single wrong constant turned a 100ms delay into an overnight hostage situation. and you wonder why we test things.
+</sup></sub>

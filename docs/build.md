@@ -57,3 +57,9 @@ Benchmark results (1600x900 display, averaged):
 | get_volume | 10 ms | |
 
 Run `go run .\cmd\benchmark\` locally to produce current numbers.
+
+---
+
+<sub><sup>
+CGO is mandatory. Zig cc is mandatory. if you don't have Zig installed, you get to learn about it today. "just run `winget install zig`" we say, as if that doesn't download an entire programming language just to compile a Go binary. the cross-compile command is 127 characters long and needs `CGO_ENABLED=1`, `GOOS=windows`, `GOARCH=amd64`, `CC="zig cc"`, and your firstborn child's name. and after all that, the binary still crashes on Pentium Gold G5400s because we forgot to pin `-mcpu=x86_64_v2`. good times.
+</sup></sub>

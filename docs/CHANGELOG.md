@@ -501,3 +501,9 @@
 ### Security
 
 - Added SECURITY WARNING section to README detailing dangerous capabilities
+
+---
+
+<sub><sup>
+this changelog has 503 lines for a project that's been in development for approximately 72 hours. versions 0.1.0 through 0.2.19 were all released within a single week. we went from "added screenshot" to "post-task introspection engine" in three days. the whiplash is real. every entry reads like someone discovered a new Windows API and immediately built a tool around it. "oh, `GetAsyncKeyState` exists? let's rewrite the keylogger." "wait, there's a `BitBlt` function? screenshot tool, here we come." this isn't a changelog, it's a fever dream.
+</sup></sub>

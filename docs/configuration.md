@@ -33,3 +33,9 @@
 ## Privacy Controls
 
 See [`security.md`](security.md) for the full data collection and privacy controls reference.
+
+---
+
+<sub><sup>
+here are 12 configuration fields, and you will still need to tweak all of them because the defaults were chosen at 3am. `watcher_auto_start` defaults to `false` because we didn't trust ourselves not to fill your disk with screenshots. `training_enabled` defaults to `true` because we DO trust ourselves to fill your disk with screenshots. the duality of the developer. `verify_bounds` exists because someone clicked at coordinates that didn't exist and blamed us. fair.
+</sup></sub>

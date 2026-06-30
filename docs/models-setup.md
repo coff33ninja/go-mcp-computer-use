@@ -19,3 +19,9 @@ to the models directory. The Go library is `github.com/yalue/onnxruntime_go` v1.
 (ORT API v20), compatible with ORT 1.20.x.
 
 DLL search order: models dir → working dir → `C:\WINDOWS\System32`.
+
+---
+
+<sub><sup>
+"known incompatibility: our model uses opset 22 but our runtime only supports opset 21" — aka "we shipped a model that doesn't work with the runtime we ship". this is the software equivalent of selling a car with a key that doesn't fit the ignition. the workaround? "manually export it yourself". classic. also, the DLL search order reads like a scavenger hunt, and we're sorry in advance for the 47 minutes you'll spend wondering why onnx_detect returns nothing. it's not you. it's us. it's always us.
+</sup></sub>

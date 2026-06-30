@@ -105,3 +105,9 @@ git push && git push origin v0.1.1  # triggers release workflow
 - `docs/adr-001-mcp-sdk-selection.md` — SDK choice that defines the version field location
 - `docs/ci-cd-pipeline.md` — CI/CD workflows for automated build + release
 - `benchmark-results.txt` — performance data updated per release
+
+---
+
+<sub><sup>
+an entire document dedicated to versioning strategy for a project that's been at v0.x for 72 hours. "breaking changes at 0.x require a minor bump (not major), per SemVer spec §4" — we are citing sections of the SemVer spec. for a v0 project. the release process has 8 steps, 4 pre-release gates, and a commit convention. all for a changelog that grows faster than our ability to tag releases. "tags are immutable once pushed" — famous last words from someone who definitely pushed a bad tag at 3am.
+</sup></sub>

@@ -14,3 +14,9 @@ This project sits at an intersection of **capability and responsibility**. The s
 **This is a dual-use tool.** The same capabilities that enable assistive technology also enable malicious use — remote abuse, surveillance, unauthorized access, or automated harm. The security warning is not hypothetical. This server should only be connected to trusted MCP clients on trusted machines. The accessibility potential exists alongside real abuse potential, and users deploy this tool at their own risk.
 
 This is an area of active exploration. Contributions, ideas, and real-world accessibility use cases are welcome.
+
+---
+
+<sub><sup>
+"the same capabilities that make this tool powerful also make it a platform for assistive technology" — this sentence is doing double duty as both a genuine feel-good moment and a legal disclaimer. we built a tool that can shut down your computer, read your clipboard, and click buttons on your screen, and we're saying "but think of the people who can use this to send emails without moving their hands!" which is both noble and terrifying. the "dual-use" paragraph is our way of saying "please don't be evil" in corporate speak. we mean it though. be nice.
+</sup></sub>

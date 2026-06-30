@@ -100,7 +100,7 @@ v0.3.x: we spent v0.1.x fixing bugs and v0.2.x adding features just so we could 
 
 somewhere out there, a product manager just got promoted for the same idea in a google doc. you're welcome, capitalism.
 
-also, the keylogger rewrite was supposed to be "just swap the api calls". we said that at 2pm. at 2am we were staring at `GetAsyncKeyState` docs wondering why scroll wheel doesn't exist in the year of our lord 2026. microsoft said "no horizontal scroll for you" and we said "fine, we didn't want it anyway." we're not crying. it's just the pollen.
+also, the keylogger rewrite was supposed to be "just swap the api calls". we said that at 2pm. at 2am we were staring at `GetAsyncKeyState` docs wondering why scroll wheel doesn't exist in the year of our overlords 2026. microsoft said "no horizontal scroll for you" and we said "fine, we didn't want it anyway." we're not crying. it's just the pollen.
 
 **skill library? more like skill library, please.**
 </sup></sub>

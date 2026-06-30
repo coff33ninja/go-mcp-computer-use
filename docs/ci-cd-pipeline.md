@@ -86,3 +86,9 @@ go run ./cmd/benchmark/
 - `.github/workflows/ci.yml` — CI workflow
 - `.github/workflows/release.yml` — release workflow
 - `docs/versioning-strategy.md` — version bump rules
+
+---
+
+<sub><sup>
+"Windows-only Go project. CI builds + vets on every push/PR." — this sentence has caused more suffering than the entire codebase combined. the release workflow uses Zig cc for CGO cross-compilation with `-mcpu=x86_64_v2` because the first release binary crashed on any CPU older than a 2022 Intel. our CI pipeline has more CPU architecture pins than a Linux distro. also, the "local CI" instructions use PowerShell. because of course they do. it's Windows all the way down.
+</sup></sub>

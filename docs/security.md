@@ -66,3 +66,9 @@ The `set_config` tool can be called by the AI agent or directly by the user via 
 ```
 
 See [`mcp-client-configs.md`](mcp-client-configs.md) for per-agent config examples.
+
+---
+
+<sub><sup>
+this whole file is basically a legal disclaimer cosplaying as documentation. "warning: this tool can do everything" — yeah, that's the point. every sentence is a lawyer saying "we told you so" in increasingly creative ways. the UIPI section is just us complaining about a security feature we can't work around, and the privacy controls table is longer than the actual feature list because apparently people don't trust the AI that's already reading their screen. fair enough. you shouldn't.
+</sup></sub>

@@ -218,4 +218,10 @@ Recall is designed to **survive a compromised OS** (VBS Enclave isolates from ke
 
 **They could coexist**: An AI agent using go-mcp-computer-use could, in theory, query Windows Recall's semantic index via the Recall WinRT API to understand what the user was doing before the AI took over. But their threat models and design philosophies are fundamentally different — one is a vault, the other is a toolbox.
 
-> **Bottom line:** If you want to search your past activity, use Recall. If you want an AI to control your computer, use go-mcp-computer-use. If you're worried about the screenshots, Recall's encryption is stronger but go-mcp-computer-use gives you simpler controls to just stop collecting.
+
+
+---
+
+<sub><sup>
+this file compares a 16MB open-source project to a Microsoft multi-billion dollar enterprise feature with NPU hardware requirements, VBS enclaves, and TPM-backed encryption. and honestly? we hold up pretty well. sure, we have no encryption, no access control, no semantic search, and our "AI pipeline" is an 80-class COCO model from 2020. but we're open source, we're portable, and we don't require a Copilot+ PC with a Qualcomm Snapdragon X processor. take that, Microsoft. we'll take the security audit when you're ready.
+</sup></sub>

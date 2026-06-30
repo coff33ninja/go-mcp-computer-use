@@ -312,3 +312,9 @@ Copilot picks tools based on your prompt. Prefix your instruction with the task 
 8. **OCR language** — set the `language` parameter if the UI isn't in English
 9. **Region OCR is faster** — OCR a region instead of full screen when possible
 10. **Template matching threshold** — start at 0.8 and lower if no match found
+
+---
+
+<sub><sup>
+this guide tells AI agents which tools to use for different tasks. it assumes the AI will listen. it won't. the first thing any self-respecting AI does when given 108 tools is call `shutdown` at least once "just to see what happens". the "prompt patterns that work" section is adorable — "screenshot first, prefer text over coordinates" — as if the AI hasn't already clicked at (0, 0) and wondered why nothing happened. the tips are good though. we should probably put them in the system prompt. nah.
+</sup></sub>
