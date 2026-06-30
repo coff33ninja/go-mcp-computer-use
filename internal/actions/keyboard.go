@@ -198,6 +198,7 @@ func KeyDown(key string) (err error) {
 		b, _ := json.Marshal(map[string]string{"key": key})
 		LogToolCall("key_down", string(b), err)
 		Adaptive.RecordResult("key_down", float64(time.Since(start).Milliseconds()), err == nil)
+		Adaptive.LearnFromCommand("key_down", string(b), err == nil)
 	}()
 	if err = warnElevated(); err != nil {
 		return
@@ -216,6 +217,7 @@ func KeyUp(key string) (err error) {
 		b, _ := json.Marshal(map[string]string{"key": key})
 		LogToolCall("key_up", string(b), err)
 		Adaptive.RecordResult("key_up", float64(time.Since(start).Milliseconds()), err == nil)
+		Adaptive.LearnFromCommand("key_up", string(b), err == nil)
 	}()
 	if err = warnElevated(); err != nil {
 		return
@@ -234,6 +236,7 @@ func KeyPress(keys []string) (err error) {
 		b, _ := json.Marshal(map[string][]string{"keys": keys})
 		LogToolCall("key_press", string(b), err)
 		Adaptive.RecordResult("key_press", float64(time.Since(start).Milliseconds()), err == nil)
+		Adaptive.LearnFromCommand("key_press", string(b), err == nil)
 	}()
 	if err := warnElevated(); err != nil {
 		return err
@@ -287,6 +290,7 @@ func TypeText(text string) (err error) {
 		b, _ := json.Marshal(map[string]string{"text": text})
 		LogToolCall("type", string(b), err)
 		Adaptive.RecordResult("type", float64(time.Since(start).Milliseconds()), err == nil)
+		Adaptive.LearnFromCommand("type", string(b), err == nil)
 	}()
 	if err := warnElevated(); err != nil {
 		return err

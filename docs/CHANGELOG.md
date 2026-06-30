@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.2.23] - 2026-06-30
+
+### Changed
+
+- **Adaptive engine: coord prediction fallback to `__learned__` aggregate** — `predictCoord` now falls back to the runtime-learned `__learned__` aggregate coordinate when per-token samples in `coordIndex` are below the threshold of 3. This ensures `agent_suggest` returns coordinate predictions for `click`/`hover`/`move_mouse` even when the specific OCR tokens haven't accumulated 3+ samples yet — the aggregate `__learned__` accumulates across all invocations of the same tool.
+
+### Changed files
+
+- `internal/actions/adaptive.go` — `predictCoord` now checks `__learned__` in `toolMap` as fallback when `tCount < 3`, returning the aggregate coord instead of `nil`
+
 ## [0.2.22] - 2026-06-30
 
 ### Changed

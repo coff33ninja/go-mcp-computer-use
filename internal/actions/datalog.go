@@ -222,6 +222,9 @@ func LogToolCall(tool string, argsJSON string, err error) {
 		} else if result != nil {
 			slog.Warn("LogToolCall pair completed", "tool", tool, "ocr_after_len", len(result.Text))
 		}
+
+		// Learn coordinates with OCR context for spatial predictions.
+		Adaptive.LearnFromCommandWithContext(tool, argsJSON, ocrBefore, errVal == nil)
 	}
 
 	go func() {

@@ -99,6 +99,7 @@ func FocusWindow(handle uintptr) (err error) {
 		b, _ := json.Marshal(map[string]uintptr{"handle": handle})
 		LogToolCall("focus_window", string(b), err)
 		Adaptive.RecordResult("focus_window", float64(time.Since(start).Milliseconds()), err == nil)
+		Adaptive.LearnFromCommand("focus_window", string(b), err == nil)
 	}()
 	setForegroundWindow.Call(handle)
 	showWindow.Call(handle, SW_RESTORE)

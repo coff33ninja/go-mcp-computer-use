@@ -100,11 +100,31 @@ type SequenceExample struct {
 	Freq      float64 `json:"freq"`
 }
 
+type PredictedCoord struct {
+	X          int     `json:"x,omitempty"`
+	Y          int     `json:"y,omitempty"`
+	Confidence float64 `json:"confidence,omitempty"`
+	Samples    int     `json:"samples,omitempty"`
+}
+
+type coordPoint struct {
+	x int
+	y int
+}
+
+type coordSample struct {
+	xSum    int64
+	ySum    int64
+	count   int
+	success int
+}
+
 type PredictedAction struct {
-	Command    string  `json:"command"`
-	Confidence float64 `json:"confidence"`
-	SampleSize int     `json:"sample_size"`
-	SuccessRate float64 `json:"success_rate"`
+	Command     string           `json:"command"`
+	Confidence  float64          `json:"confidence"`
+	SampleSize  int              `json:"sample_size"`
+	SuccessRate float64          `json:"success_rate"`
+	Coord       *PredictedCoord  `json:"coord,omitempty"`
 }
 
 type EngineAnalysis struct {
@@ -121,6 +141,7 @@ type AdaptiveEngine struct {
 	successes  map[string]*ToolSuccess
 	sequences  []SequenceExample
 	wordToCmds map[string]map[string]*cmdFreq
+	coordIndex map[string]map[string]*coordSample
 	totalCmds  int
 	totalSeqs  int
 	lastTrain  time.Time
@@ -142,6 +163,7 @@ func NewAdaptiveEngine() *AdaptiveEngine {
 		timings:    make(map[string]*ToolTiming),
 		successes:  make(map[string]*ToolSuccess),
 		wordToCmds: make(map[string]map[string]*cmdFreq),
+		coordIndex: make(map[string]map[string]*coordSample),
 	}
 }
 
@@ -238,6 +260,75 @@ func tokenize(text string) []string {
 	return tokens
 }
 
+var coordTools = map[string]bool{
+	"click":      true,
+	"move_mouse": true,
+	"hover":      true,
+	"drag":       true,
+}
+
+func extractArgsFromJSON(cmdJSON string) string {
+	var cmdData map[string]any
+	if err := json.Unmarshal([]byte(cmdJSON), &cmdData); err != nil {
+		return ""
+	}
+	switch a := cmdData["args"].(type) {
+	case string:
+		return a
+	default:
+		return ""
+	}
+}
+
+func getIntArg(args map[string]any, key string) (int, bool) {
+	v, ok := args[key]
+	if !ok {
+		return 0, false
+	}
+	switch n := v.(type) {
+	case float64:
+		return int(n), true
+	case int:
+		return n, true
+	case int64:
+		return int(n), true
+	default:
+		return 0, false
+	}
+}
+
+func extractCoordsFromArgs(tool string, argsJSON string) []coordPoint {
+	if !coordTools[tool] {
+		return nil
+	}
+	var args map[string]any
+	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
+		return nil
+	}
+	switch tool {
+	case "click", "move_mouse", "hover":
+		x, xOK := getIntArg(args, "x")
+		y, yOK := getIntArg(args, "y")
+		if xOK && yOK {
+			return []coordPoint{{x: x, y: y}}
+		}
+	case "drag":
+		fx, fxOK := getIntArg(args, "from_x")
+		fy, fyOK := getIntArg(args, "from_y")
+		tx, txOK := getIntArg(args, "to_x")
+		ty, tyOK := getIntArg(args, "to_y")
+		var pts []coordPoint
+		if fxOK && fyOK {
+			pts = append(pts, coordPoint{x: fx, y: fy})
+		}
+		if txOK && tyOK {
+			pts = append(pts, coordPoint{x: tx, y: ty})
+		}
+		return pts
+	}
+	return nil
+}
+
 func (e *AdaptiveEngine) TrainFromDatalog() error {
 	q := DataLogQuery{Table: "pairs", Limit: 2000}
 	rows, err := QueryDataLog(q)
@@ -246,6 +337,7 @@ func (e *AdaptiveEngine) TrainFromDatalog() error {
 	}
 	e.mu.Lock()
 	e.wordToCmds = make(map[string]map[string]*cmdFreq)
+	e.coordIndex = make(map[string]map[string]*coordSample)
 	e.sequences = nil
 	e.totalCmds = 0
 	e.totalSeqs = 0
@@ -265,7 +357,9 @@ func (e *AdaptiveEngine) TrainFromDatalog() error {
 			continue
 		}
 
+		argsRaw := extractArgsFromJSON(cmdJSON)
 		tokens := tokenize(ocrBefore)
+		coords := extractCoordsFromArgs(tool, argsRaw)
 		e.mu.Lock()
 		for _, tok := range tokens {
 			cmds, ok := e.wordToCmds[tok]
@@ -282,6 +376,25 @@ func (e *AdaptiveEngine) TrainFromDatalog() error {
 				cf.success++
 			} else {
 				cf.fail++
+			}
+
+			for _, cp := range coords {
+				toolMap, ok := e.coordIndex[tool]
+				if !ok {
+					toolMap = make(map[string]*coordSample)
+					e.coordIndex[tool] = toolMap
+				}
+				cs, ok := toolMap[tok]
+				if !ok {
+					cs = &coordSample{}
+					toolMap[tok] = cs
+				}
+				cs.xSum += int64(cp.x)
+				cs.ySum += int64(cp.y)
+				cs.count++
+				if success {
+					cs.success++
+				}
 			}
 		}
 		e.totalSeqs++
@@ -386,12 +499,16 @@ func (e *AdaptiveEngine) PredictActions(ocrText string, limit int) []PredictedAc
 		if cs.samples > 0 {
 			sr = float64(cs.successes) / float64(cs.samples)
 		}
-		results = append(results, PredictedAction{
+		pa := PredictedAction{
 			Command:     cmd,
 			Confidence:  math.Round(conf*100) / 100,
 			SampleSize:  cs.samples,
 			SuccessRate: math.Round(sr*100) / 100,
-		})
+		}
+		if cmd == "click" || cmd == "move_mouse" || cmd == "hover" {
+			pa.Coord = e.predictCoord(cmd, tokens)
+		}
+		results = append(results, pa)
 	}
 	sort.Slice(results, func(i, j int) bool {
 		return results[i].Confidence > results[j].Confidence
@@ -400,6 +517,114 @@ func (e *AdaptiveEngine) PredictActions(ocrText string, limit int) []PredictedAc
 		results = results[:limit]
 	}
 	return results
+}
+
+func (e *AdaptiveEngine) predictCoord(tool string, tokens []string) *PredictedCoord {
+	var txSum, tySum int64
+	var tCount, tSuccess int
+
+	// First, try matching against OCR-context tokens (per-token coord index).
+	toolMap, toolOK := e.coordIndex[tool]
+	if toolOK {
+		for _, tok := range tokens {
+			cs, ok := toolMap[tok]
+			if !ok {
+				continue
+			}
+			txSum += cs.xSum
+			tySum += cs.ySum
+			tCount += cs.count
+			tSuccess += cs.success
+		}
+	}
+
+	// If insufficient token-specific samples, fall back to the runtime-learned
+	// __learned__ aggregate which accumulates across all invocations.
+	if tCount < 3 && toolOK {
+		if cs, ok := toolMap["__learned__"]; ok && cs.count >= 3 {
+			return &PredictedCoord{
+				X:          int(cs.xSum / int64(cs.count)),
+				Y:          int(cs.ySum / int64(cs.count)),
+				Confidence: float64(cs.success) / float64(cs.count),
+				Samples:    cs.count,
+			}
+		}
+	}
+
+	if tCount < 3 {
+		return nil
+	}
+	conf := float64(tSuccess) / float64(tCount)
+	return &PredictedCoord{
+		X:          int(txSum / int64(tCount)),
+		Y:          int(tySum / int64(tCount)),
+		Confidence: math.Round(conf*100) / 100,
+		Samples:    tCount,
+	}
+}
+
+func (e *AdaptiveEngine) LearnFromCommand(tool, argsJSON string, success bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	coords := extractCoordsFromArgs(tool, argsJSON)
+	if len(coords) == 0 {
+		return
+	}
+	for _, cp := range coords {
+		toolMap, ok := e.coordIndex[tool]
+		if !ok {
+			toolMap = make(map[string]*coordSample)
+			e.coordIndex[tool] = toolMap
+		}
+		key := "__learned__"
+		cs, ok := toolMap[key]
+		if !ok {
+			cs = &coordSample{}
+			toolMap[key] = cs
+		}
+		cs.xSum += int64(cp.x)
+		cs.ySum += int64(cp.y)
+		cs.count++
+		if success {
+			cs.success++
+		}
+	}
+}
+
+func (e *AdaptiveEngine) LearnFromCommandWithContext(tool, argsJSON, ocrBefore string, success bool) {
+	if ocrBefore == "" {
+		return
+	}
+	tokens := tokenize(ocrBefore)
+	if len(tokens) == 0 {
+		return
+	}
+	coords := extractCoordsFromArgs(tool, argsJSON)
+	if len(coords) == 0 {
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	for _, tok := range tokens {
+		toolMap, ok := e.coordIndex[tool]
+		if !ok {
+			toolMap = make(map[string]*coordSample)
+			e.coordIndex[tool] = toolMap
+		}
+		for _, cp := range coords {
+			cs, ok := toolMap[tok]
+			if !ok {
+				cs = &coordSample{}
+				toolMap[tok] = cs
+			}
+			cs.xSum += int64(cp.x)
+			cs.ySum += int64(cp.y)
+			cs.count++
+			if success {
+				cs.success++
+			}
+		}
+	}
 }
 
 func (e *AdaptiveEngine) Analyze() *EngineAnalysis {

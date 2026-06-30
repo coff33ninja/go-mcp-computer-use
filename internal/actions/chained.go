@@ -88,6 +88,7 @@ func LaunchAndWait(path, windowTitle string, timeoutMs int32) (hwnd uintptr, err
 		})
 		LogToolCall("launch_and_wait", string(b), err)
 		Adaptive.RecordResult("launch_and_wait", float64(time.Since(start).Milliseconds()), err == nil)
+		Adaptive.LearnFromCommand("launch_and_wait", string(b), err == nil)
 	}()
 	if err = LaunchApp(path); err != nil {
 		return 0, fmt.Errorf("launch_and_wait: %w", err)
@@ -135,6 +136,7 @@ func Hover(x, y int32) (err error) {
 		b, _ := json.Marshal(map[string]int32{"x": x, "y": y})
 		LogToolCall("hover", string(b), err)
 		Adaptive.RecordResult("hover", float64(time.Since(start).Milliseconds()), err == nil)
+		Adaptive.LearnFromCommand("hover", string(b), err == nil)
 	}()
 	if err = ValidateClickCoord(x, y); err != nil {
 		return
