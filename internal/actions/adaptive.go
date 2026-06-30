@@ -397,6 +397,29 @@ func (e *AdaptiveEngine) TrainFromDatalog() error {
 				}
 			}
 		}
+		// Aggregate all coords for this tool under __learned__ key so
+		// coordinate predictions survive restart even when per-token
+		// samples are below the threshold.
+		if len(coords) > 0 {
+			for _, cp := range coords {
+				toolMap, ok := e.coordIndex[tool]
+				if !ok {
+					toolMap = make(map[string]*coordSample)
+					e.coordIndex[tool] = toolMap
+				}
+				cs, ok := toolMap["__learned__"]
+				if !ok {
+					cs = &coordSample{}
+					toolMap["__learned__"] = cs
+				}
+				cs.xSum += int64(cp.x)
+				cs.ySum += int64(cp.y)
+				cs.count++
+				if success {
+					cs.success++
+				}
+			}
+		}
 		e.totalSeqs++
 		e.totalCmds++
 		e.mu.Unlock()

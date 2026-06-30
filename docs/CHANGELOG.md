@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.2.24] - 2026-06-30
+
+### Changed
+
+- **Adaptive engine: `__learned__` aggregate built from persisted training data** — `TrainFromDatalog` now aggregates all coordinate samples per tool into the `__learned__` key in `coordIndex`, so coordinate predictions survive server restart. Combined with the v0.2.23 fallback in `predictCoord`, `agent_suggest` now returns coordinate predictions for `click`/`hover`/`move_mouse` using the aggregate average from all training data, even before any runtime samples accumulate.
+
+### Changed files
+
+- `internal/actions/adaptive.go` — `TrainFromDatalog` stores aggregated coords under `__learned__` key per tool
+
 ## [0.2.23] - 2026-06-30
 
 ### Changed
