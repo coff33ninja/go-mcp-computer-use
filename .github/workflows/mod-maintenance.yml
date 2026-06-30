@@ -51,6 +51,6 @@ jobs:
           gh pr create `
             --title "chore(deps): weekly go module update" `
             --body "Automated weekly Go module dependency update via \`go get -u ./...\` followed by \`go mod tidy\`." `
-            --base v0.2.x
+            --base v0.3.x
         env:
           GH_TOKEN: ${{ github.token }}
