@@ -2,8 +2,6 @@
 
 Auto-generated from `internal/server/server.go`. Total: **120 tools**.
 
-For the full tool→handler→action function→source file mapping, see [`codebase-map.md`](codebase-map.md).
-
 ## Screenshot & Vision (10)
 
 - `find_all_images` — Find ALL occurrences of a template image on screen using NCC template matching. Provide template as base64 PNG. Returns array of matches with coordinates and scores.
