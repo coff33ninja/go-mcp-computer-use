@@ -54,10 +54,11 @@ Post-Task Introspection — NEXT SLICE
 - **Feedback loop** — every action is verified by perception before continuing
 - **Stable planner/executor interface** — high-level skills decoupled from tool layer so vision models, LLMs, or backends can be swapped
 
-## Current State: v0.3.x — Skill Library Phase
+## Current State: v0.3.x — Skill Library Phase (synced with v0.2.26)
 
 All tools registered in `internal/server/server.go`, auto-documented in `docs/tools.md`.
-**118 tools** across 20 categories. Stable release line: `v0.2.x` (default branch). Active development: `v0.3.x`.
+**120+ tools** across 20 categories. Stable release line: `v0.2.x` (default branch, active). Active development: `v0.3.x`.
+Adaptive engine now includes timing stats, success rates, coordinate prediction, and full OCR-bridge training pair coverage across all 11 action tools.
 
 ### Tool Categories
 
@@ -113,6 +114,26 @@ All tools registered in `internal/server/server.go`, auto-documented in `docs/to
 - **Keylogger rewritten: hooks → polling** — `WH_MOUSE_LL` + `WH_KEYBOARD_LL` replaced with `GetAsyncKeyState` polling loop (50ms ticker). Eliminates system-wide input lag. No locked OS thread, no Windows message loop. Scroll wheel sacrificed (acceptable trade-off).
 - **CI lint failure fixed** — `gen-tools-doc.go` missing categories for 4 tools, stale `docs2/` output removed, docs regenerated.
 
+### v0.2.20 — OCR Bridge Auto-Complete
+- **`LogToolCall`** now synchronously captures OCR after setting a pending training pair.
+- Every action produces a complete `(ocr_before, tool, ocr_after)` triple. Previously all training pairs clustered under "click".
+- Added `LogToolCall` to `Hover` and `MoveMouse`.
+
+### v0.2.21 — Full Action Coverage
+- Added `LogToolCall` to `key_down`, `key_up`, `focus_window`, `launch_and_wait`.
+- All 11 MCP action tools now produce training pairs.
+
+### v0.2.22 — Real Timing Stats
+- `RecordResult` called from every action tool's defer with real captured start time.
+- `timing_stats` (mean, stddev, min, max, count) and `success_rates` now populate correctly.
+
+### v0.2.23–24 — Coordinate Prediction
+- **Coordinate learning** — `LearnFromCommand` stores per-tool coordinate aggregates. `TrainFromDatalog` persists and rebuilds the `__learned__` aggregate on restart.
+- **`predictCoord`** — `agent_suggest` returns `coord: {x, y, confidence, samples}` for `click`/`hover`/`move_mouse` from aggregate training data.
+
+### v0.2.25 — Case-Insensitive Coordinate Match
+- `getIntArg` uses `strings.EqualFold` fallback when exact key match fails, fixing click coordinate extraction (Go struct marshaling produces capitalized `X`/`Y`).
+
 ---
 
 ## Next Up — Prioritized (v0.3.x)
@@ -157,7 +178,7 @@ v<major>.<minor>.<patch>
 ## Key Decisions
 
 - `sendVKPress` with 50ms delay — UE5 games require minimum key hold duration
-- Keylogger uses `GetAsyncKeyState` polling at 50ms — replaced `WH_*_LL` hooks which caused system-wide input lag
+- Keylogger uses `GetAsyncKeyState` polling loop (50ms ticker) — avoids system-wide input lag from low-level hooks
 - CGO mandatory for ONNX — Zig cc with x86_64_v2 CPU baseline
 - Adaptive engine: pure Go (rolling averages, TF-IDF) — no Python/external ML
 - Bridge window: 30s — OCR→AI→MCP→Command round trip ceiling

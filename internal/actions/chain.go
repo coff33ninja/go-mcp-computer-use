@@ -197,6 +197,7 @@ func ExecuteChain(req ChainRequest) (*ChainResult, error) {
 		return nil, fmt.Errorf("chain timed out after %v", globalTimeout)
 	}
 
+	result.Success = true
 	for _, r := range result.Results {
 		if !r.Success {
 			result.Success = false
@@ -309,7 +310,8 @@ var trainingTools = map[string]struct {
 }
 
 func execTool(step ChainStep, args map[string]any, _ *chainState) StepResult {
-	fn, ok := toolDispatch[step.Tool]
+	toolName := strings.TrimPrefix(step.Tool, "computer_use_")
+	fn, ok := toolDispatch[toolName]
 	if !ok {
 		return StepResult{
 			Tool:    step.Tool,
@@ -331,7 +333,7 @@ func execTool(step ChainStep, args map[string]any, _ *chainState) StepResult {
 	}
 	argsJSON, _ := json.Marshal(args)
 	go LogCommand(step.Tool, string(argsJSON), true, "", "", elapsed)
-	if t, ok := trainingTools[step.Tool]; ok {
+	if t, ok := trainingTools[toolName]; ok {
 		SaveSnapshotAfterAction(TrainingSourceRaw, t.Category, t.MakePrompt(args))
 	}
 	return StepResult{

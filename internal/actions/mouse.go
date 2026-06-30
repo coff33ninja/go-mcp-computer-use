@@ -52,9 +52,12 @@ func Click(args ClickInput) (err error) {
 		args.Clicks = 1
 	}
 
+	start := time.Now()
 	defer func() {
 		b, _ := json.Marshal(args)
 		LogToolCall("click", string(b), err)
+		Adaptive.RecordResult("click", float64(time.Since(start).Milliseconds()), err == nil)
+		Adaptive.LearnFromCommand("click", string(b), err == nil)
 	}()
 
 	if err := ValidateClickCoord(args.X, args.Y); err != nil {
@@ -89,15 +92,22 @@ func Click(args ClickInput) (err error) {
 	return nil
 }
 
-func MoveMouse(x, y int32) error {
-	if err := ValidateClickCoord(x, y); err != nil {
-		return err
+func MoveMouse(x, y int32) (err error) {
+	start := time.Now()
+	defer func() {
+		b, _ := json.Marshal(map[string]int32{"x": x, "y": y})
+		LogToolCall("move_mouse", string(b), err)
+		Adaptive.RecordResult("move_mouse", float64(time.Since(start).Milliseconds()), err == nil)
+		Adaptive.LearnFromCommand("move_mouse", string(b), err == nil)
+	}()
+	if err = ValidateClickCoord(x, y); err != nil {
+		return
 	}
 	ret, _, _ := setCursorPos.Call(uintptr(x), uintptr(y))
 	if ret == 0 {
-		return syscall.GetLastError()
+		err = syscall.GetLastError()
 	}
-	return nil
+	return
 }
 
 func GetCursorPosition() (int32, int32, error) {
@@ -110,9 +120,12 @@ func GetCursorPosition() (int32, int32, error) {
 }
 
 func Scroll(clicks int32) (err error) {
+	start := time.Now()
 	defer func() {
 		b, _ := json.Marshal(map[string]int32{"clicks": clicks})
 		LogToolCall("scroll", string(b), err)
+		Adaptive.RecordResult("scroll", float64(time.Since(start).Milliseconds()), err == nil)
+		Adaptive.LearnFromCommand("scroll", string(b), err == nil)
 	}()
 	i := input{
 		inputType: inputMouse,
@@ -126,9 +139,12 @@ func Scroll(clicks int32) (err error) {
 }
 
 func Drag(fromX, fromY, toX, toY int32) (err error) {
+	start := time.Now()
 	defer func() {
 		b, _ := json.Marshal(map[string]int32{"from_x": fromX, "from_y": fromY, "to_x": toX, "to_y": toY})
 		LogToolCall("drag", string(b), err)
+		Adaptive.RecordResult("drag", float64(time.Since(start).Milliseconds()), err == nil)
+		Adaptive.LearnFromCommand("drag", string(b), err == nil)
 	}()
 	if err := ValidateClickCoord(fromX, fromY); err != nil {
 		return err

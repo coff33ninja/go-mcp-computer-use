@@ -213,6 +213,18 @@ func LogToolCall(tool string, argsJSON string, err error) {
 		pendingTime = time.Now()
 		slog.Warn("LogToolCall set pending", "ocr_before", ocrBefore[:min(len(ocrBefore), 40)])
 		pairMu.Unlock()
+
+		// Auto-capture OCR after action to complete the training pair.
+		// This ensures every action produces a (ocr_before, command, ocr_after) pair,
+		// so the adaptive engine can associate the screen context with the correct tool name.
+		if result, ocrErr := OCRScreen(""); ocrErr != nil {
+			slog.Warn("LogToolCall OCR auto-capture failed", "tool", tool, "error", ocrErr)
+		} else if result != nil {
+			slog.Warn("LogToolCall pair completed", "tool", tool, "ocr_after_len", len(result.Text))
+		}
+
+		// Learn coordinates with OCR context for spatial predictions.
+		Adaptive.LearnFromCommandWithContext(tool, argsJSON, ocrBefore, errVal == nil)
 	}
 
 	go func() {

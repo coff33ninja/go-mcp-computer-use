@@ -192,9 +192,16 @@ func keyNameToVK(name string) (uint16, bool) {
 	return 0, false
 }
 
-func KeyDown(key string) error {
-	if err := warnElevated(); err != nil {
-		return err
+func KeyDown(key string) (err error) {
+	start := time.Now()
+	defer func() {
+		b, _ := json.Marshal(map[string]string{"key": key})
+		LogToolCall("key_down", string(b), err)
+		Adaptive.RecordResult("key_down", float64(time.Since(start).Milliseconds()), err == nil)
+		Adaptive.LearnFromCommand("key_down", string(b), err == nil)
+	}()
+	if err = warnElevated(); err != nil {
+		return
 	}
 	vk, ok := keyNameToVK(key)
 	if !ok {
@@ -204,9 +211,16 @@ func KeyDown(key string) error {
 	return nil
 }
 
-func KeyUp(key string) error {
-	if err := warnElevated(); err != nil {
-		return err
+func KeyUp(key string) (err error) {
+	start := time.Now()
+	defer func() {
+		b, _ := json.Marshal(map[string]string{"key": key})
+		LogToolCall("key_up", string(b), err)
+		Adaptive.RecordResult("key_up", float64(time.Since(start).Milliseconds()), err == nil)
+		Adaptive.LearnFromCommand("key_up", string(b), err == nil)
+	}()
+	if err = warnElevated(); err != nil {
+		return
 	}
 	vk, ok := keyNameToVK(key)
 	if !ok {
@@ -217,17 +231,22 @@ func KeyUp(key string) error {
 }
 
 func KeyPress(keys []string) (err error) {
+	start := time.Now()
 	defer func() {
 		b, _ := json.Marshal(map[string][]string{"keys": keys})
 		LogToolCall("key_press", string(b), err)
+		Adaptive.RecordResult("key_press", float64(time.Since(start).Milliseconds()), err == nil)
+		Adaptive.LearnFromCommand("key_press", string(b), err == nil)
 	}()
 	if err := warnElevated(); err != nil {
 		return err
 	}
 	var pressedMods []uint16
 	for _, k := range keys {
+		// Normalize to uppercase for map lookups
+		ku := strings.ToUpper(k)
 		// Check CTRL+/CONTROL+ prefix (e.g. "CTRL+A")
-		if strings.HasPrefix(k, "CTRL+") || strings.HasPrefix(k, "CONTROL+") {
+		if strings.HasPrefix(ku, "CTRL+") || strings.HasPrefix(ku, "CONTROL+") {
 			parts := strings.SplitN(k, "+", 2)
 			if len(parts) == 2 && len(parts[1]) == 1 {
 				ch := parts[1][0]
@@ -246,13 +265,13 @@ func KeyPress(keys []string) (err error) {
 			}
 		}
 		// Modifier keys
-		if vk, ok := vkModMap[k]; ok {
+		if vk, ok := vkModMap[ku]; ok {
 			sendVK(vk, true)
 			pressedMods = append(pressedMods, vk)
 			continue
 		}
 		// Special key names (ENTER, BACKSPACE, etc.)
-		if vk, ok := vkSpecialMap[k]; ok {
+		if vk, ok := vkSpecialMap[ku]; ok {
 			sendVKPress(vk)
 			continue
 		}
@@ -268,9 +287,12 @@ func KeyPress(keys []string) (err error) {
 }
 
 func TypeText(text string) (err error) {
+	start := time.Now()
 	defer func() {
 		b, _ := json.Marshal(map[string]string{"text": text})
 		LogToolCall("type", string(b), err)
+		Adaptive.RecordResult("type", float64(time.Since(start).Milliseconds()), err == nil)
+		Adaptive.LearnFromCommand("type", string(b), err == nil)
 	}()
 	if err := warnElevated(); err != nil {
 		return err

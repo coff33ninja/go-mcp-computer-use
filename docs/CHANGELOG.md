@@ -1,5 +1,89 @@
 # Changelog
 
+## [0.2.26] - 2026-06-30
+
+### Fixed
+
+- **Chain tool: `computer_use_*` prefix normalization** — `execTool` now strips the `computer_use_` prefix from tool names before dispatch lookup, so all `computer_use_*` tools (click, type, key_press, ocr, get_screen_size, etc.) work inside chain steps.
+- **Chain `success` aggregation** — `result.Success` now initializes to `true` before checking step results, fixing false-negative `success: false` when all steps pass.
+- **Keyboard modifier key case sensitivity** — `KeyPress` normalizes modifier key names to uppercase before `vkModMap`/`vkSpecialMap` lookups, so `"Ctrl"`, `"ctrl"`, `"CTRL"` all correctly match instead of being silently skipped.
+- **Window focus reliability** — `FocusWindow` uses `AttachThreadInput` to attach to the target window's input thread before `SetForegroundWindow`, working around Windows focus-stealing restrictions for background automation processes.
+
+### Changed files
+
+- `internal/actions/chain.go` — `execTool` adds `strings.TrimPrefix(step.Tool, "computer_use_")` at line 312; `ExecuteChain` initializes `result.Success = true` before failure loop at line 200
+- `internal/actions/keyboard.go` — `KeyPress` normalizes keys via `strings.ToUpper` before modifier/special key lookups
+- `internal/actions/window.go` — `FocusWindow` uses `AttachThreadInput` with `GetWindowThreadProcessId`/`GetCurrentThreadId`
+- `internal/actions/system.go` — added `getCurrentThreadId` (kernel32) and `attachThreadInput` (user32) proc declarations
+
+## [0.2.25] - 2026-06-30
+
+### Fixed
+
+- **Coordinate extraction: case-insensitive key matching** — `getIntArg` now falls back to case-insensitive key lookup when an exact match fails, fixing coordinate extraction for `click` and `move_mouse` tools which store their args with capitalized `X`/`Y` (from Go `json.Marshal` of struct fields) while the code searched for lowercase `x`/`y`. This caused all click coordinate data to be silently ignored by `TrainFromDatalog`, meaning the `__learned__` aggregate and per-token coordinate index never accumulated click coordinates.
+
+### Changed files
+
+- `internal/actions/adaptive.go` — `getIntArg` now does case-insensitive key lookup via `strings.EqualFold` as fallback
+
+## [0.2.24] - 2026-06-30
+
+### Changed
+
+- **Adaptive engine: `__learned__` aggregate built from persisted training data** — `TrainFromDatalog` now aggregates all coordinate samples per tool into the `__learned__` key in `coordIndex`, so coordinate predictions survive server restart. Combined with the v0.2.23 fallback in `predictCoord`, `agent_suggest` now returns coordinate predictions for `click`/`hover`/`move_mouse` using the aggregate average from all training data, even before any runtime samples accumulate.
+
+### Changed files
+
+- `internal/actions/adaptive.go` — `TrainFromDatalog` stores aggregated coords under `__learned__` key per tool
+
+## [0.2.23] - 2026-06-30
+
+### Changed
+
+- **Adaptive engine: coord prediction fallback to `__learned__` aggregate** — `predictCoord` now falls back to the runtime-learned `__learned__` aggregate coordinate when per-token samples in `coordIndex` are below the threshold of 3. This ensures `agent_suggest` returns coordinate predictions for `click`/`hover`/`move_mouse` even when the specific OCR tokens haven't accumulated 3+ samples yet — the aggregate `__learned__` accumulates across all invocations of the same tool.
+
+### Changed files
+
+- `internal/actions/adaptive.go` — `predictCoord` now checks `__learned__` in `toolMap` as fallback when `tCount < 3`, returning the aggregate coord instead of `nil`
+
+## [0.2.22] - 2026-06-30
+
+### Changed
+
+- **Adaptive engine: real timing_stats and success_rates** — `RecordResult` is now called from every action tool's defer with a captured start time, so `timing_stats` (mean, stddev, count, min, max) and `success_rates` per tool populate correctly. Previously `RecordCommand` was defined but never called, leaving both maps permanently empty.
+
+### Changed files
+
+- `internal/actions/datalog.go` — removed `Adaptive.RecordResult(tool, 0, ...)` from `LogToolCall` (moved to per-action defer with real timing)
+- `internal/actions/chained.go` — added `start` capture + `RecordResult` to `LaunchAndWait` and `Hover`
+- `internal/actions/keyboard.go` — added `start` capture + `RecordResult` to `KeyDown`, `KeyUp`, `KeyPress`, `TypeText`
+- `internal/actions/mouse.go` — added `start` capture + `RecordResult` to `Click`, `MoveMouse`, `Scroll`, `Drag`
+- `internal/actions/window.go` — added `time` import + `start` capture + `RecordResult` to `FocusWindow`
+
+## [0.2.21] - 2026-06-30
+
+### Changed
+
+- **LogToolCall coverage: all 11 MCP action tools now instrumented** — Added `LogToolCall` to `key_down`, `key_up`, `focus_window`, and `launch_and_wait`, completing adaptive engine training pair coverage for every non-query action tool. Previously 4 tools produced commands without OCR context pairs, leaving gaps in the training index.
+
+### Changed files
+
+- `internal/actions/keyboard.go` — added `LogToolCall("key_down", ...)` to `KeyDown`, `LogToolCall("key_up", ...)` to `KeyUp`
+- `internal/actions/window.go` — added `LogToolCall("focus_window", ...)` to `FocusWindow`
+- `internal/actions/chained.go` — added `LogToolCall("launch_and_wait", ...)` to `LaunchAndWait`
+
+## [0.2.20] - 2026-06-30
+
+### Changed
+
+- **Adaptive engine: OCR bridge auto-complete in `LogToolCall`** — `LogToolCall` now synchronously captures OCR after setting a pending training pair, ensuring every action produces a complete `(ocr_before, tool, ocr_after)` pair. Previously pairs only completed when the next explicit `OCRScreen()` call happened, causing all training sequences to cluster under "click". Also added `LogToolCall` to `Hover` and `MoveMouse` which were missing it entirely.
+
+### Changed files
+
+- `internal/actions/datalog.go` — `LogToolCall` auto-captures OCR after pending pair set
+- `internal/actions/chained.go` — added `LogToolCall("hover", ...)` to `Hover`
+- `internal/actions/mouse.go` — added `LogToolCall("move_mouse", ...)` to `MoveMouse`
+
 ## [0.2.19] - 2026-06-30
 
 ### Changed
@@ -9,6 +93,8 @@
 ### Fixed
 
 - **CI lint failure — stale tools.md & uncategorized tools** — `scripts/gen-tools-doc.go` was missing category entries for 4 tools (`bridge_debug`, `introspection_analyze`, `task_begin`, `task_end`), causing them to fall under "Uncategorized" and `docs/tools.md` to show 114 instead of 118 tools. The lint check (regenerate + diff) then failed, skipping the build job. Added `"Introspection & Debugging"` category, removed stale `docs2/` staging output from the script, and regenerated `docs/tools.md`.
+
+- **`yolo_dataset` location inconsistency** — removed stale `yolo_dataset/` from repo root (empty train/val dirs). `export_yolo_dataset` now defaults to `%APPDATA%\go-mcp-computer-use\yolo_dataset\` when `output_dir` is omitted. Added `yolo_dataset/` to `.gitignore` to prevent future repo root drift.
 
 ## [0.2.18] - 2026-06-29
 

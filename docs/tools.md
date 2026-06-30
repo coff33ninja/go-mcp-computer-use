@@ -135,7 +135,7 @@ Auto-generated from `internal/server/server.go`. Total: **118 tools**.
 ## Adaptive Agent (3)
 
 - `agent_analyze` — Analyze the adaptive engine state — timing stats, success rates per tool, and learned OCR→command sequences. Returns a full report for AI decision-making.
-- `agent_suggest` — Given OCR screen text, predict the best next command based on past successful sequences. Returns ranked predictions with confidence scores.
+- `agent_suggest` — Given OCR screen text, predict the best next command based on past successful sequences. Returns ranked predictions with confidence scores and optional coord (x, y, confidence, samples) for click/hover/move_mouse.
 - `agent_train` — Train the adaptive engine from datalog training_pairs. Rebuilds the OCR→command word index and sequence cache. Call after the datalog has accumulated new pairs.
 
 ## Introspection & Debugging (4)

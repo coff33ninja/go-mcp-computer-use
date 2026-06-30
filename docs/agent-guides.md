@@ -1,7 +1,7 @@
 # Agent Prompt Engineering Guide
 
 > How to configure AI agents with the right tool subset for different tasks.
-> The full 108-tool set (v0.2.9) is powerful but bloated for simple tasks. Load only what you need.
+> The full 118-tool set (v0.2.19) is powerful but bloated for simple tasks. Load only what you need.
 
 ---
 
@@ -150,6 +150,10 @@ wait, wait_for_text
 get_system_info, get_disk_usage
 find_text_and_click (dismiss error dialogs)
 screenshot_element (capture specific window)
+datalog_query, datalog_export, datalog_status (audit past actions)
+bridge_debug (inspect OCR→command bridge state)
+task_begin, task_end, introspection_analyze (post-mortem analysis)
+agent_analyze (check per-tool success rates and timing stats)
 ```
 
 **Omit:**
@@ -163,6 +167,8 @@ recording
 > Take a screenshot to see the error. Use OCR to extract error text into clipboard for analysis.
 > Use `find_text_and_click` to click "OK", "Cancel", or "Close" buttons on dialogs.
 > For console apps, use `launch_and_wait` to run and capture output.
+> Use `task_begin` + `task_end` to wrap each debugging session — introspection mines slow/failed
+> tools and suggests improvements. Query `datalog_query(commands)` to audit what happened.
 
 ---
 
@@ -179,6 +185,7 @@ wait, wait_for_text, wait_for_window
 find_text_and_click
 record_screen (capture result)
 get_cursor_position (for coordinate recording)
+chain (multi-step sequences with capture, poll, and branching)
 ```
 
 **Omit:**
@@ -193,6 +200,38 @@ template matching (OCR is more robust)
 > Break the automation into a sequence: screenshot → analyze → act → wait for result → repeat.
 > Use `wait_for_text` and `wait_for_window` to make the script robust (not hardcoded delays).
 > Use `find_text_and_click` instead of hardcoded coordinates.
+> For complex sequences, use `chain` with poll steps and variable capture for conditional logic.
+
+---
+
+### 7. Self-Improving & Adaptive
+
+When the agent needs to learn from past actions, adapt timing, or audit its own performance.
+
+**Load these tools:**
+```
+agent_analyze (full timing stats, success rates, learned sequences)
+agent_suggest (predict best next command from OCR context)
+agent_train (rebuild word→command index from training_pairs)
+task_begin, task_end, introspection_analyze (wrap tasks with post-mortem)
+datalog_query, datalog_export, datalog_status (query execution history)
+memory_list, memory_get, memory_search (recall stored facts)
+priors_stats (element frequency/position stats per window)
+```
+
+**Omit:**
+```
+power commands
+recording (unless capturing demo)
+```
+
+**System prompt hint:**
+> Call `task_begin` at the start of every major task. On completion, `task_end(summary)` mines
+> what went wrong — slowest tools, most failed, repeat patterns. Read `agent_analyze` periodically
+> to adapt timing: if `type` has low success rate, try `uia_invoke` or add a focus step first.
+> Use `agent_suggest(ocr_text)` when unsure what to do next — it predicts the best command
+> and can return `coord` (x, y, samples) for click/hover/move_mouse, based on past
+> successful sequences in similar screen contexts.
 
 ---
 
@@ -298,6 +337,32 @@ Copilot picks tools based on your prompt. Prefix your instruction with the task 
 ```
 *Best for: working inside a specific application window*
 
+### Pattern 5: Task-Wrap (Self-Audit)
+```
+1. TASK_BEGIN("description")
+2. ... perform actions ...
+3. TASK_END(summary="what happened", success=true|false)
+4. INTROSPECTION_ANALYZE to review mined insights
+```
+*Best for: long-running tasks where you want post-mortem on what failed*
+
+### Pattern 6: Adaptive Timing
+```
+1. AGENT_ANALYZE to check timing stats
+2. If "wait" has high stddev, use WAIT_FOR_TEXT instead
+3. If "click" has low success rate, verify focus first
+```
+*Best for: recovering from repeated failures — let the data guide you*
+
+### Pattern 7: Context-Aware Prediction
+```
+1. OCR to get current screen state
+2. AGENT_SUGGEST(ocr_text) to get ranked next-command predictions
+3. Pick the highest-confidence command and execute
+4. AGENT_TRAIN to rebuild index after new successful pairs
+```
+*Best for: when you're stuck or the screen state maps to a known workflow*
+
 ---
 
 ## General Tips
@@ -312,9 +377,13 @@ Copilot picks tools based on your prompt. Prefix your instruction with the task 
 8. **OCR language** — set the `language` parameter if the UI isn't in English
 9. **Region OCR is faster** — OCR a region instead of full screen when possible
 10. **Template matching threshold** — start at 0.8 and lower if no match found
+11. **Wrap tasks** — `task_begin`/`task_end` around major work; introspection mines what went wrong automatically
+12. **Query the datalog** — `datalog_query(table="commands", success=false)` shows which tools keep failing
+13. **Let the adaptive engine help** — `agent_suggest(ocr_text)` predicts the best command based on past successes
+14. **Retrain after learning** — call `agent_train` after a successful new workflow to update the prediction index
 
 ---
 
 <sub><sup>
-this guide tells AI agents which tools to use for different tasks. it assumes the AI will listen. it won't. the first thing any self-respecting AI does when given 108 tools is call `shutdown` at least once "just to see what happens". the "prompt patterns that work" section is adorable — "screenshot first, prefer text over coordinates" — as if the AI hasn't already clicked at (0, 0) and wondered why nothing happened. the tips are good though. we should probably put them in the system prompt. nah.
+this guide tells AI agents which tools to use for different tasks. it assumes the AI will listen. it won't. the first thing any self-respecting AI does when given 108 (now 120+) tools is call `shutdown` at least once "just to see what happens". the "prompt patterns that work" section is adorable — "screenshot first, prefer text over coordinates" — as if the AI hasn't already clicked at (0, 0) and wondered why nothing happened. the tips are good though. we should probably put them in the system prompt. nah.
 </sup></sub>
