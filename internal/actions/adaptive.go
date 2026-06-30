@@ -281,9 +281,19 @@ func extractArgsFromJSON(cmdJSON string) string {
 }
 
 func getIntArg(args map[string]any, key string) (int, bool) {
+	// Try exact match first, then case-insensitive fallback
 	v, ok := args[key]
 	if !ok {
-		return 0, false
+		for k, val := range args {
+			if strings.EqualFold(k, key) {
+				v = val
+				ok = true
+				break
+			}
+		}
+		if !ok {
+			return 0, false
+		}
 	}
 	switch n := v.(type) {
 	case float64:

@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.2.25] - 2026-06-30
+
+### Fixed
+
+- **Coordinate extraction: case-insensitive key matching** — `getIntArg` now falls back to case-insensitive key lookup when an exact match fails, fixing coordinate extraction for `click` and `move_mouse` tools which store their args with capitalized `X`/`Y` (from Go `json.Marshal` of struct fields) while the code searched for lowercase `x`/`y`. This caused all click coordinate data to be silently ignored by `TrainFromDatalog`, meaning the `__learned__` aggregate and per-token coordinate index never accumulated click coordinates.
+
+### Changed files
+
+- `internal/actions/adaptive.go` — `getIntArg` now does case-insensitive key lookup via `strings.EqualFold` as fallback
+
 ## [0.2.24] - 2026-06-30
 
 ### Changed
