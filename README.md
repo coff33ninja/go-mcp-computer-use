@@ -92,3 +92,15 @@ oh and to the poor soul who just realized their game runs as admin and spent an 
 
 **MCP server? more like MCP server, please.**
 </sup></sub>
+
+---
+
+<sub><sup>
+v0.3.x: we spent v0.1.x fixing bugs and v0.2.x adding features just so we could spend v0.3.x wrapping them in fancy macros and calling it a "skill library". the code doesn't know the difference. the AI doesn't care. but the docs look *really* professional now.
+
+somewhere out there, a product manager just got promoted for the same idea in a google doc. you're welcome, capitalism.
+
+also, the keylogger rewrite was supposed to be "just swap the api calls". we said that at 2pm. at 2am we were staring at `GetAsyncKeyState` docs wondering why scroll wheel doesn't exist in the year of our lord 2026. microsoft said "no horizontal scroll for you" and we said "fine, we didn't want it anyway." we're not crying. it's just the pollen.
+
+**skill library? more like skill library, please.**
+</sup></sub>
