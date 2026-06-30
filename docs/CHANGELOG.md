@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.20] - 2026-06-30
+
+### Changed
+
+- **Adaptive engine: OCR bridge auto-complete in `LogToolCall`** — `LogToolCall` now synchronously captures OCR after setting a pending training pair, ensuring every action produces a complete `(ocr_before, tool, ocr_after)` pair. Previously pairs only completed when the next explicit `OCRScreen()` call happened, causing all training sequences to cluster under "click". Also added `LogToolCall` to `Hover` and `MoveMouse` which were missing it entirely.
+
+### Changed files
+
+- `internal/actions/datalog.go` — `LogToolCall` auto-captures OCR after pending pair set
+- `internal/actions/chained.go` — added `LogToolCall("hover", ...)` to `Hover`
+- `internal/actions/mouse.go` — added `LogToolCall("move_mouse", ...)` to `MoveMouse`
+
 ## [0.2.19] - 2026-06-30
 
 ### Changed

@@ -89,15 +89,19 @@ func Click(args ClickInput) (err error) {
 	return nil
 }
 
-func MoveMouse(x, y int32) error {
-	if err := ValidateClickCoord(x, y); err != nil {
-		return err
+func MoveMouse(x, y int32) (err error) {
+	defer func() {
+		b, _ := json.Marshal(map[string]int32{"x": x, "y": y})
+		LogToolCall("move_mouse", string(b), err)
+	}()
+	if err = ValidateClickCoord(x, y); err != nil {
+		return
 	}
 	ret, _, _ := setCursorPos.Call(uintptr(x), uintptr(y))
 	if ret == 0 {
-		return syscall.GetLastError()
+		err = syscall.GetLastError()
 	}
-	return nil
+	return
 }
 
 func GetCursorPosition() (int32, int32, error) {

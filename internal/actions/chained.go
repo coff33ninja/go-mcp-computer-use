@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -120,15 +121,20 @@ func ScreenshotElement(handle uintptr) (string, error) {
 	return CaptureRegion(x, y, w, h)
 }
 
-func Hover(x, y int32) error {
-	if err := ValidateClickCoord(x, y); err != nil {
-		return err
+func Hover(x, y int32) (err error) {
+	defer func() {
+		b, _ := json.Marshal(map[string]int32{"x": x, "y": y})
+		LogToolCall("hover", string(b), err)
+	}()
+	if err = ValidateClickCoord(x, y); err != nil {
+		return
 	}
-	if err := MoveMouse(x, y); err != nil {
-		return fmt.Errorf("hover move: %w", err)
+	if err = MoveMouse(x, y); err != nil {
+		err = fmt.Errorf("hover move: %w", err)
+		return
 	}
 	Wait(300)
-	return nil
+	return
 }
 
 func WaitForText(text string, timeoutMs int32, language string) (*OCRResult, error) {
