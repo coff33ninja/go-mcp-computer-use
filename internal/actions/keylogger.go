@@ -2,7 +2,6 @@ package actions
 
 import (
 	"fmt"
-	"runtime"
 	"sync"
 	"syscall"
 	"time"
@@ -12,120 +11,53 @@ import (
 )
 
 const (
-	whKeyboardLL   = 13
-	whMouseLL      = 14
-	wmKeyDown      = 0x0100
-	wmKeyUp        = 0x0101
-	wmSysKeyDown   = 0x0104
-	wmSysKeyUp     = 0x0105
-	wmQuit         = 0x0012
-	wmMouseMove    = 0x0200
-	wmLButtonDown  = 0x0201
-	wmLButtonUp    = 0x0202
-	wmLButtonDblClk = 0x0203
-	wmRButtonDown  = 0x0204
-	wmRButtonUp    = 0x0205
-	wmRButtonDblClk = 0x0206
-	wmMouseWheel   = 0x020A
-	wmMouseHwheel  = 0x020E
-	llkhfUp        = 0x80
 	eventSystemForeground = 0x0003
 	wineventOutOfContext  = 0x0000
+	pollInterval          = 50 * time.Millisecond
+	vkLButton             = 0x01
+	vkRButton             = 0x02
+	vkMButton             = 0x04
+	vkXButton1            = 0x05
+	vkXButton2            = 0x06
 )
 
-type kbdLLHookStruct struct {
-	vkCode      uint32
-	scanCode    uint32
-	flags       uint32
-	time        uint32
-	dwExtraInfo uintptr
-}
-
-type msLLHookStruct struct {
-	ptX         int32
-	ptY         int32
-	mouseData   uint32
-	flags       uint32
-	time        uint32
-	dwExtraInfo uintptr
-}
-
-type msg struct {
-	hwnd    uintptr
-	message uint32
-	wParam  uintptr
-	lParam  uintptr
-	time    uint32
-	ptX     int32
-	ptY     int32
-}
-
 type recordedEvent struct {
-	kind         string
-	keyName      string
-	button       string
-	x, y         int32
-	startX, startY int32
-	down         bool
-	clicks       int
-	scrollDelta  int32
-	timestamp    time.Time
+	kind             string
+	keyName          string
+	button           string
+	x, y             int32
+	startX, startY   int32
+	down             bool
+	clicks           int
+	scrollDelta      int32
+	timestamp        time.Time
 }
+
+type winEventHookProc func(hWinEventHook uintptr, event uint32, hwnd uintptr, idObject int32, idChild int32, dwEventThread uint32, dwmsEventTime uint32) uintptr
 
 var (
-	klMu             sync.Mutex
-	klActive         bool
-	klEvents         []recordedEvent
-	klStartTime      time.Time
-	klLastEventTime  time.Time
-	klKbdHook        windows.Handle
-	klMouseHook      windows.Handle
-	klWinEventHandle windows.Handle
-	klThreadID       uint32
-	klDone           chan struct{}
-	klDownKeys       map[uint32]bool
-	klStartWindow    string
-	klEndWindow      string
-	klMouseDown      struct {
-		left  bool
-		right bool
-		startTime time.Time
-		startX, startY int32
+	klMu              sync.Mutex
+	klActive          bool
+	klEvents          []recordedEvent
+	klStartTime       time.Time
+	klLastEventTime   time.Time
+	klDone            chan struct{}
+	klDownKeys        map[uint32]bool
+	klStartWindow     string
+	klEndWindow       string
+	klMouseDown       struct {
+		left, right       bool
+		startTime         time.Time
+		startX, startY    int32
 	}
-	klLastMove       struct {
+	klLastMove        struct {
 		x, y int32
 		time time.Time
 	}
-	klLogMouseMoves  bool
+	klLogMouseMoves   bool
+	klWinEventHandle  windows.Handle
+	klEventCallback   uintptr
 )
-
-var (
-	klUser32        = windows.NewLazySystemDLL("user32.dll")
-	klSetHook       = klUser32.NewProc("SetWindowsHookExW")
-	klUnhook        = klUser32.NewProc("UnhookWindowsHookEx")
-	klCallNext      = klUser32.NewProc("CallNextHookEx")
-	klGetMsg        = klUser32.NewProc("GetMessageW")
-	klPostThread    = klUser32.NewProc("PostThreadMessageW")
-	klWinEventHook  = klUser32.NewProc("SetWinEventHook")
-	klUnhookEvent   = klUser32.NewProc("UnhookWinEvent")
-	klGetForeground = klUser32.NewProc("GetForegroundWindow")
-	klGetWinText    = klUser32.NewProc("GetWindowTextW")
-	klGetWinTextLen = klUser32.NewProc("GetWindowTextLengthW")
-)
-
-func klGetForegroundTitle() string {
-	hwnd, _, _ := klGetForeground.Call()
-	if hwnd == 0 {
-		return ""
-	}
-	len, _, _ := klGetWinTextLen.Call(hwnd)
-	if len == 0 {
-		return ""
-	}
-	buf := make([]uint16, len+1)
-	klGetWinText.Call(hwnd, uintptr(unsafe.Pointer(&buf[0])), uintptr(len+1))
-	return windows.UTF16ToString(buf)
-}
 
 var vkSpecialRev map[uint32]string
 var vkModRev map[uint32]string
@@ -161,6 +93,42 @@ func vkDecode(vk uint32) (string, bool) {
 	return "", false
 }
 
+var (
+	klUser32         = windows.NewLazySystemDLL("user32.dll")
+	klGetAsyncKey    = klUser32.NewProc("GetAsyncKeyState")
+	klGetCursorPos   = klUser32.NewProc("GetCursorPos")
+	klGetForeground  = klUser32.NewProc("GetForegroundWindow")
+	klGetWinText     = klUser32.NewProc("GetWindowTextW")
+	klGetWinTextLen  = klUser32.NewProc("GetWindowTextLengthW")
+	klWinEventHook   = klUser32.NewProc("SetWinEventHook")
+	klUnhookEvent    = klUser32.NewProc("UnhookWinEvent")
+)
+
+func klGetState(vk int) bool {
+	ret, _, _ := klGetAsyncKey.Call(uintptr(vk))
+	return (ret & 0x8000) != 0
+}
+
+func klGetMousePos() (int32, int32) {
+	var pt point
+	klGetCursorPos.Call(uintptr(unsafe.Pointer(&pt)))
+	return pt.X, pt.Y
+}
+
+func klGetForegroundTitle() string {
+	hwnd, _, _ := klGetForeground.Call()
+	if hwnd == 0 {
+		return ""
+	}
+	len, _, _ := klGetWinTextLen.Call(hwnd)
+	if len == 0 {
+		return ""
+	}
+	buf := make([]uint16, len+1)
+	klGetWinText.Call(hwnd, uintptr(unsafe.Pointer(&buf[0])), uintptr(len+1))
+	return windows.UTF16ToString(buf)
+}
+
 func klRecord(ev recordedEvent) {
 	klMu.Lock()
 	defer klMu.Unlock()
@@ -171,140 +139,6 @@ func klRecord(ev recordedEvent) {
 	klEvents = append(klEvents, ev)
 	klLastEventTime = ev.timestamp
 }
-
-func kbdHookProc(nCode int, wParam uintptr, lParam uintptr) uintptr {
-	if nCode == 0 {
-		kbd := (*kbdLLHookStruct)(*(*unsafe.Pointer)(unsafe.Pointer(&lParam)))
-		isUp := (kbd.flags & llkhfUp) != 0
-		down := (wParam == wmKeyDown || wParam == wmSysKeyDown) && !isUp
-
-		if down || isUp || wParam == wmKeyUp || wParam == wmSysKeyUp {
-			klMu.Lock()
-			alreadyDown := klDownKeys[kbd.vkCode]
-			if down && !alreadyDown {
-				klDownKeys[kbd.vkCode] = true
-				klMu.Unlock()
-				name, ok := vkDecode(kbd.vkCode)
-				if !ok {
-					name = fmt.Sprintf("VK_0x%02X", kbd.vkCode)
-				}
-				klRecord(recordedEvent{kind: "key", keyName: name, down: true})
-			} else if !down && alreadyDown {
-				delete(klDownKeys, kbd.vkCode)
-				klMu.Unlock()
-				name, ok := vkDecode(kbd.vkCode)
-				if !ok {
-					name = fmt.Sprintf("VK_0x%02X", kbd.vkCode)
-				}
-				klRecord(recordedEvent{kind: "key", keyName: name, down: false})
-			} else {
-				klMu.Unlock()
-			}
-		}
-	}
-	ret, _, _ := klCallNext.Call(0, uintptr(nCode), wParam, lParam)
-	return ret
-}
-
-func mouseHookProc(nCode int, wParam uintptr, lParam uintptr) uintptr {
-	if nCode == 0 {
-		ms := (*msLLHookStruct)(*(*unsafe.Pointer)(unsafe.Pointer(&lParam)))
-
-		switch wParam {
-		case wmMouseMove:
-			if klLogMouseMoves {
-				klMu.Lock()
-				dx := ms.ptX - klLastMove.x
-				dy := ms.ptY - klLastMove.y
-				since := time.Since(klLastMove.time)
-				sigMove := dx*dx+dy*dy > 100
-				klMu.Unlock()
-				if sigMove && since > 40*time.Millisecond {
-					klMu.Lock()
-					klLastMove.x = ms.ptX
-					klLastMove.y = ms.ptY
-					klLastMove.time = time.Now()
-					klMu.Unlock()
-					klRecord(recordedEvent{kind: "mouse_move", x: ms.ptX, y: ms.ptY})
-				}
-			}
-
-		case wmLButtonDown, wmLButtonDblClk:
-			klMu.Lock()
-			klMouseDown.left = true
-			klMouseDown.startTime = time.Now()
-			klMouseDown.startX = ms.ptX
-			klMouseDown.startY = ms.ptY
-			klMu.Unlock()
-
-		case wmLButtonUp:
-			klMu.Lock()
-			if klMouseDown.left {
-				elapsed := time.Since(klMouseDown.startTime)
-				dx := ms.ptX - klMouseDown.startX
-				dy := ms.ptY - klMouseDown.startY
-				dist := dx*dx + dy*dy
-				klMouseDown.left = false
-				klMu.Unlock()
-
-				if dist > 100 || elapsed > 300*time.Millisecond {
-					klRecord(recordedEvent{kind: "drag", button: "left",
-						startX: klMouseDown.startX, startY: klMouseDown.startY,
-						x: ms.ptX, y: ms.ptY})
-				} else {
-					clicks := 1
-					if wParam == wmLButtonDblClk {
-						clicks = 2
-					}
-					klRecord(recordedEvent{kind: "click", button: "left", x: ms.ptX, y: ms.ptY, clicks: clicks})
-				}
-			} else {
-				klMu.Unlock()
-			}
-
-		case wmRButtonDown, wmRButtonDblClk:
-			klMu.Lock()
-			klMouseDown.right = true
-			klMouseDown.startTime = time.Now()
-			klMouseDown.startX = ms.ptX
-			klMouseDown.startY = ms.ptY
-			klMu.Unlock()
-
-		case wmRButtonUp:
-			klMu.Lock()
-			if klMouseDown.right {
-				klMouseDown.right = false
-				klMu.Unlock()
-				klRecord(recordedEvent{kind: "click", button: "right", x: ms.ptX, y: ms.ptY, clicks: 1})
-			} else {
-				klMu.Unlock()
-			}
-
-		case wmMouseWheel:
-			delta := int32(int16(ms.mouseData >> 16))
-			clicks := delta / 120
-			if clicks != 0 {
-				klRecord(recordedEvent{kind: "scroll", scrollDelta: clicks})
-			}
-		}
-	}
-	ret, _, _ := klCallNext.Call(0, uintptr(nCode), wParam, lParam)
-	return ret
-}
-
-func winEventHookProc(hWinEventHook uintptr, event uint32, hwnd uintptr, idObject int32, idChild int32, dwEventThread uint32, dwmsEventTime uint32) uintptr {
-	if event == eventSystemForeground {
-		title := klGetForegroundTitle()
-		if title != "" {
-			klRecord(recordedEvent{kind: "focus", keyName: title})
-		}
-	}
-	return 0
-}
-
-var klKbdCallback uintptr
-var klMouseCallback uintptr
-var klWinEventCallback uintptr
 
 func StartKeylogger() error {
 	klMu.Lock()
@@ -323,64 +157,147 @@ func StartKeylogger() error {
 	klLastEventTime = time.Now()
 	klStartWindow = klGetForegroundTitle()
 
-	errCh := make(chan error, 1)
-
-	go func() {
-		runtime.LockOSThread()
-		defer runtime.UnlockOSThread()
-		defer func() {
-			klMu.Lock()
-			klActive = false
-			klMu.Unlock()
-			close(klDone)
-		}()
-
-		klKbdCallback = syscall.NewCallback(kbdHookProc)
-		klMouseCallback = syscall.NewCallback(mouseHookProc)
-		klWinEventCallback = syscall.NewCallback(winEventHookProc)
-
-		kbdHook, _, _ := klSetHook.Call(whKeyboardLL, klKbdCallback, 0, 0)
-		if kbdHook == 0 {
-			errCh <- fmt.Errorf("SetWindowsHookEx(WH_KEYBOARD_LL) failed")
-			return
-		}
-
-		mouseHook, _, _ := klSetHook.Call(whMouseLL, klMouseCallback, 0, 0)
-		if mouseHook == 0 {
-			klUnhook.Call(kbdHook)
-			errCh <- fmt.Errorf("SetWindowsHookEx(WH_MOUSE_LL) failed")
-			return
-		}
-
-		winEventHook, _, _ := klWinEventHook.Call(
-			eventSystemForeground, eventSystemForeground,
-			0, klWinEventCallback, 0, 0, wineventOutOfContext)
-		if winEventHook == 0 {
-			klUnhook.Call(kbdHook)
-			klUnhook.Call(mouseHook)
-			errCh <- fmt.Errorf("SetWinEventHook failed")
-			return
-		}
-
-		klMu.Lock()
-		klKbdHook = windows.Handle(kbdHook)
-		klMouseHook = windows.Handle(mouseHook)
-		klWinEventHandle = windows.Handle(winEventHook)
-		klThreadID = windows.GetCurrentThreadId()
-		klMu.Unlock()
-
-		errCh <- nil
-
-		var m msg
-		for {
-			ret, _, _ := klGetMsg.Call(uintptr(unsafe.Pointer(&m)), 0, 0, 0)
-			if ret == 0 {
-				break
+	klEventCallback = syscall.NewCallback(func(hWinEventHook uintptr, event uint32, hwnd uintptr, idObject int32, idChild int32, dwEventThread uint32, dwmsEventTime uint32) uintptr {
+		if event == eventSystemForeground {
+			title := klGetForegroundTitle()
+			if title != "" {
+				klRecord(recordedEvent{kind: "focus", keyName: title})
 			}
 		}
-	}()
+		return 0
+	})
 
-	return <-errCh
+	winEventHook, _, _ := klWinEventHook.Call(
+		eventSystemForeground, eventSystemForeground,
+		0, klEventCallback, 0, 0, wineventOutOfContext)
+	if winEventHook == 0 {
+		klActive = false
+		return fmt.Errorf("SetWinEventHook failed")
+	}
+	klWinEventHandle = windows.Handle(winEventHook)
+
+	go pollLoop()
+
+	return nil
+}
+
+func pollLoop() {
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+
+	var prevKeyState [256]bool
+	mouseStartTime := time.Time{}
+	mouseStartX, mouseStartY := int32(0), int32(0)
+	mouseDownButtons := [6]bool{}
+	prevX, prevY := klGetMousePos()
+	prevFocus := klStartWindow
+
+	for i := 0; i < 256; i++ {
+		prevKeyState[i] = klGetState(i)
+		if prevKeyState[i] {
+			klDownKeys[uint32(i)] = true
+		}
+	}
+
+	for {
+		select {
+		case <-ticker.C:
+			klPollKeys(&prevKeyState)
+			klPollMouse(&prevX, &prevY, &mouseStartTime, &mouseStartX, &mouseStartY, &mouseDownButtons, &prevFocus)
+		case <-klDone:
+			return
+		}
+	}
+}
+
+func klPollKeys(prev *[256]bool) {
+	for vk := 0; vk < 256; vk++ {
+		down := klGetState(vk)
+		wasDown := prev[vk]
+		if down && !wasDown {
+			name, ok := vkDecode(uint32(vk))
+			if !ok {
+				name = fmt.Sprintf("VK_0x%02X", vk)
+			}
+			klRecord(recordedEvent{kind: "key", keyName: name, down: true})
+			klMu.Lock()
+			klDownKeys[uint32(vk)] = true
+			klMu.Unlock()
+		} else if !down && wasDown {
+			name, ok := vkDecode(uint32(vk))
+			if !ok {
+				name = fmt.Sprintf("VK_0x%02X", vk)
+			}
+			klRecord(recordedEvent{kind: "key", keyName: name, down: false})
+			klMu.Lock()
+			delete(klDownKeys, uint32(vk))
+			klMu.Unlock()
+		}
+		prev[vk] = down
+	}
+}
+
+func klPollMouse(prevX, prevY *int32, startTime *time.Time, startX, startY *int32, mouseDown *[6]bool, prevFocus *string) {
+	x, y := klGetMousePos()
+
+	if x != *prevX || y != *prevY {
+		if klLogMouseMoves {
+			dx := x - *prevX
+			dy := y - *prevY
+			since := time.Since(klLastMove.time)
+			if (dx*dx+dy*dy > 25) && since > 100*time.Millisecond {
+				klRecord(recordedEvent{kind: "mouse_move", x: x, y: y})
+				klMu.Lock()
+				klLastMove.x = x
+				klLastMove.y = y
+				klLastMove.time = time.Now()
+				klMu.Unlock()
+			}
+		}
+		*prevX = x
+		*prevY = y
+	}
+
+	buttonDown := []bool{
+		klGetState(vkLButton),
+		klGetState(vkRButton),
+		klGetState(vkMButton),
+		klGetState(vkXButton1),
+		klGetState(vkXButton2),
+	}
+	buttonNames := []string{"left", "right", "middle", "xbutton1", "xbutton2"}
+
+	for i := 0; i < 5; i++ {
+		if buttonDown[i] && !mouseDown[i] {
+			mouseDown[i] = true
+			*startTime = time.Now()
+			*startX = x
+			*startY = y
+		} else if !buttonDown[i] && mouseDown[i] {
+			mouseDown[i] = false
+			elapsed := time.Since(*startTime)
+			dx := x - *startX
+			dy := y - *startY
+			dist := dx*dx + dy*dy
+
+			if i == 0 || i == 1 {
+				if dist > 100 || elapsed > 300*time.Millisecond {
+					klRecord(recordedEvent{kind: "drag", button: buttonNames[i],
+						startX: *startX, startY: *startY, x: x, y: y})
+				} else {
+					klRecord(recordedEvent{kind: "click", button: buttonNames[i], x: x, y: y, clicks: 1})
+				}
+			} else {
+				klRecord(recordedEvent{kind: "click", button: buttonNames[i], x: x, y: y, clicks: 1})
+			}
+		}
+	}
+
+	focus := klGetForegroundTitle()
+	if focus != "" && focus != *prevFocus {
+		klRecord(recordedEvent{kind: "focus", keyName: focus})
+		*prevFocus = focus
+	}
 }
 
 func StopKeylogger() ([]map[string]any, map[string]any, error) {
@@ -389,17 +306,14 @@ func StopKeylogger() ([]map[string]any, map[string]any, error) {
 		klMu.Unlock()
 		return nil, nil, fmt.Errorf("keylogger not active")
 	}
-	tid := klThreadID
 	klMu.Unlock()
 
 	klEndWindow = klGetForegroundTitle()
 
-	klPostThread.Call(uintptr(tid), wmQuit, 0, 0)
-	<-klDone
+	close(klDone)
 
 	klMu.Lock()
-	klUnhook.Call(uintptr(klKbdHook))
-	klUnhook.Call(uintptr(klMouseHook))
+	klActive = false
 	klUnhookEvent.Call(uintptr(klWinEventHandle))
 	events := klEvents
 	startWin := klStartWindow
@@ -476,7 +390,6 @@ func klEventsToSteps(events []recordedEvent) []map[string]any {
 				"tool": "drag",
 				"args": map[string]any{"from_x": ev.startX, "from_y": ev.startY, "to_x": ev.x, "to_y": ev.y},
 			})
-
 		case "mouse_move":
 			steps = append(steps, map[string]any{
 				"tool": "move_mouse",
@@ -497,6 +410,5 @@ func klEventsToSteps(events []recordedEvent) []map[string]any {
 		baseTime = ev.timestamp
 	}
 
-	_ = baseTime
 	return steps
 }

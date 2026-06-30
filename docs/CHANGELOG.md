@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.2.19] - 2026-06-30
+
+### Changed
+
+- **Keylogger rewrite: hooks → polling** — Replaced `WH_MOUSE_LL` + `WH_KEYBOARD_LL` low-level hooks with `GetAsyncKeyState` polling loop (50ms ticker). Eliminates the system-wide input lag caused by the Go hook callback trampoline on every mouse event. The polling loop runs in a goroutine with no locked OS thread and no Windows message loop. Trade-off: scroll wheel events no longer detectable (acceptable cost for eliminating system-wide input lag).
+
+### Fixed
+
+- **CI lint failure — stale tools.md & uncategorized tools** — `scripts/gen-tools-doc.go` was missing category entries for 4 tools (`bridge_debug`, `introspection_analyze`, `task_begin`, `task_end`), causing them to fall under "Uncategorized" and `docs/tools.md` to show 114 instead of 118 tools. The lint check (regenerate + diff) then failed, skipping the build job. Added `"Introspection & Debugging"` category, removed stale `docs2/` staging output from the script, and regenerated `docs/tools.md`.
+
 ## [0.2.18] - 2026-06-29
 
 ### Added

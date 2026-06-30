@@ -171,8 +171,8 @@ internal/actions/introspection.go
 └── MCP tools     — introspection_analyze, introspection_suggest
 ```
 
-### 2. Keylogger Rewrite (MEDIUM)
-Replace `WH_MOUSE_LL` hook with polling (`GetAsyncKeyState` every 50ms) to eliminate system-wide input lag.
+### 2. Keylogger Rewrite (COMPLETED — v0.2.19)
+Replaced `WH_MOUSE_LL` + `WH_KEYBOARD_LL` hooks with `GetAsyncKeyState` polling loop (50ms ticker). Eliminates system-wide input lag. Polling runs in a goroutine — no locked OS thread, no Windows message loop.
 
 ### 3. Chain Interruption (MEDIUM)
 Ability to stop mid-chain on error/state change — `on_error: "stop"` already exists, needs `interrupt` signaling.
