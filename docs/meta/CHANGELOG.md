@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.2.30] - 2026-07-03
+
+### Security
+
+- **Bump `golang.org/x/net` v0.54.0 → v0.55.0** — dependency update from Dependabot patching a security vulnerability in the `go_modules` group. Indirect dependency used by `pdfcpu` and `xuri/excelize/v2` transitive chains.
+
+### Changed
+
+- **`write_file` — `overwrite` is now optional** — changed `Overwrite bool` to `*Overwrite *bool` with `omitempty` JSON tag. The field is no longer required in the tool schema, defaulting to `false` when omitted. Fixes `validating root: required: missing properties: ["overwrite"]` error when creating new files.
+- **`get_file_info` — returns metadata instead of "ok"** — removed hardcoded `TextContent{Text: "ok"}` from handler. The SDK now auto-populates the response from the structured result, returning the actual file info JSON (`name`, `size`, `is_dir`, `mod_time`, `mode`).
+
 ## [0.2.29] - 2026-07-02
 
 ### Added
