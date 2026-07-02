@@ -13,6 +13,59 @@ import (
 	"github.com/user/go-mcp-computer-use/internal/config"
 )
 
+func shouldVerify(autoVerify *bool, expected *actions.ExpConfig) bool {
+	return (autoVerify != nil && *autoVerify) || expected != nil
+}
+
+func verifyCfg(ec *actions.ExpConfig, rx, ry, rw, rh *int32) *actions.VerifyConfig {
+	if ec == nil {
+		return &actions.VerifyConfig{RegionX: rx, RegionY: ry, RegionW: rw, RegionH: rh, AfterWaitMs: 300}
+	}
+	return &actions.VerifyConfig{
+		ExpectedText: ec.Text, NotText: ec.NotText,
+		RegionX: rx, RegionY: ry, RegionW: rw, RegionH: rh,
+		AfterWaitMs: ec.WaitMs,
+	}
+}
+
+func preVerifyCheck(ec *actions.ExpConfig, rx, ry, rw, rh *int32) error {
+	if ec == nil {
+		return nil
+	}
+	vr := actions.VerifyAction(verifyCfg(ec, rx, ry, rw, rh))
+	if !vr.Passed {
+		return fmt.Errorf("precondition: %s", vr.Reason)
+	}
+	return nil
+}
+
+func verifiedResult(extra any, vr *actions.VerifyResult) (*mcp.CallToolResult, any, error) {
+	if vr == nil {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
+		}, extra, nil
+	}
+	out := map[string]any{"ok": true, "verified": vr.Passed, "verification": vr}
+	if extra != nil {
+		out["extra"] = extra
+	}
+	status := "ok"
+	if vr.Passed {
+		status = "ok (verified)"
+	} else {
+		status = "ok (unverified: " + vr.Reason + ")"
+	}
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: status}},
+	}, out, nil
+}
+
+type VerifyArgs struct {
+	AutoVerify  *bool              `json:"auto_verify,omitempty"`
+	Expected    *actions.ExpConfig `json:"expected,omitempty"`
+	PreExpected *actions.ExpConfig `json:"pre_expected,omitempty"`
+}
+
 type ScreenshotArgs struct {
 	X *int32 `json:"x,omitempty"`
 	Y *int32 `json:"y,omitempty"`
@@ -25,6 +78,7 @@ type ClickArgs struct {
 	Y      int32  `json:"y"`
 	Button string `json:"button,omitempty"`
 	Clicks int    `json:"clicks,omitempty"`
+	VerifyArgs
 }
 
 type MoveMouseArgs struct {
@@ -36,10 +90,12 @@ type MoveMouseArgs struct {
 		Clicks     int32  `json:"clicks"`
 		Direction  string `json:"direction,omitempty"`
 		Horizontal bool   `json:"horizontal,omitempty"`
+		VerifyArgs
 	}
 
 type KeyPressArgs struct {
 	Keys []string `json:"keys"`
+	VerifyArgs
 }
 
 type KeyEventArgs struct {
@@ -52,6 +108,7 @@ type KeyloggerStatusArgs struct{}
 
 type TypeArgs struct {
 	Text string `json:"text"`
+	VerifyArgs
 }
 
 type ScreenSizeResult struct {
@@ -69,6 +126,7 @@ type DragArgs struct {
 	FromY int32 `json:"from_y"`
 	ToX   int32 `json:"to_x"`
 	ToY   int32 `json:"to_y"`
+	VerifyArgs
 }
 
 type FocusWindowArgs struct {
@@ -93,6 +151,7 @@ type SetClipboardArgs struct {
 
 type OpenURLArgs struct {
 	URL string `json:"url"`
+	VerifyArgs
 }
 
 type WaitArgs struct {
@@ -106,6 +165,7 @@ type PixelColorArgs struct {
 
 type LaunchAppArgs struct {
 	Path string `json:"path"`
+	VerifyArgs
 }
 
 type KillProcessArgs struct {
@@ -155,16 +215,18 @@ type PingArgs struct {
 }
 
 type FindTextAndClickArgs struct {
-	Text     string `json:"text"`
-	Language string `json:"language,omitempty"`
-	X        *int32 `json:"x,omitempty"`
-	Y        *int32 `json:"y,omitempty"`
-	W        *int32 `json:"w,omitempty"`
-	H        *int32 `json:"h,omitempty"`
+	Text     string  `json:"text"`
+	Language string  `json:"language,omitempty"`
+	X        *int32  `json:"x,omitempty"`
+	Y        *int32  `json:"y,omitempty"`
+	W        *int32  `json:"w,omitempty"`
+	H        *int32  `json:"h,omitempty"`
+	VerifyArgs
 }
 
 type TypeAndSubmitArgs struct {
 	Text string `json:"text"`
+	VerifyArgs
 }
 
 type LaunchAndWaitArgs struct {
@@ -190,12 +252,14 @@ type WaitForTextArgs struct {
 
 type SelectAllAndTypeArgs struct {
 	Text string `json:"text"`
+	VerifyArgs
 }
 
 type ClickMenuItemArgs struct {
 	WindowTitle  string `json:"window_title"`
 	MenuItemText string `json:"menu_item_text"`
 	Language     string `json:"language,omitempty"`
+	VerifyArgs
 }
 
 type SetKeyboardLayoutArgs struct {
@@ -322,19 +386,22 @@ func screenshotHandler(ctx context.Context, req *mcp.CallToolRequest, args Scree
 }
 
 func clickHandler(ctx context.Context, req *mcp.CallToolRequest, args ClickArgs) (*mcp.CallToolResult, any, error) {
+	rx, ry, rw, rh := actions.SmartRegionAround(args.X, args.Y, 400)
+	if err := preVerifyCheck(args.PreExpected, &rx, &ry, &rw, &rh); err != nil {
+		return nil, nil, err
+	}
 	if err := actions.Click(actions.ClickInput{
-		X:      args.X,
-		Y:      args.Y,
-		Button: args.Button,
-		Clicks: args.Clicks,
+		X: args.X, Y: args.Y, Button: args.Button, Clicks: args.Clicks,
 	}); err != nil {
 		return nil, nil, fmt.Errorf("click failed: %w", err)
 	}
 	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatClick,
 		fmt.Sprintf("click at (%d,%d)", args.X, args.Y))
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
-	}, nil, nil
+	var vr *actions.VerifyResult
+	if shouldVerify(args.AutoVerify, args.Expected) {
+		vr = actions.VerifyAction(verifyCfg(args.Expected, &rx, &ry, &rw, &rh))
+	}
+	return verifiedResult(nil, vr)
 }
 
 func moveMouseHandler(ctx context.Context, req *mcp.CallToolRequest, args MoveMouseArgs) (*mcp.CallToolResult, any, error) {
@@ -347,6 +414,9 @@ func moveMouseHandler(ctx context.Context, req *mcp.CallToolRequest, args MoveMo
 }
 
 func scrollHandler(ctx context.Context, req *mcp.CallToolRequest, args ScrollArgs) (*mcp.CallToolResult, any, error) {
+	if err := preVerifyCheck(args.PreExpected, nil, nil, nil, nil); err != nil {
+		return nil, nil, err
+	}
 	clicks := args.Clicks
 	if args.Direction == "down" {
 		clicks = -clicks
@@ -355,19 +425,26 @@ func scrollHandler(ctx context.Context, req *mcp.CallToolRequest, args ScrollArg
 		return nil, nil, fmt.Errorf("scroll failed: %w", err)
 	}
 	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatGeneral, "scroll")
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
-	}, nil, nil
+	var vr *actions.VerifyResult
+	if shouldVerify(args.AutoVerify, args.Expected) {
+		vr = actions.VerifyAction(verifyCfg(args.Expected, nil, nil, nil, nil))
+	}
+	return verifiedResult(nil, vr)
 }
 
 func keyPressHandler(ctx context.Context, req *mcp.CallToolRequest, args KeyPressArgs) (*mcp.CallToolResult, any, error) {
+	if err := preVerifyCheck(args.PreExpected, nil, nil, nil, nil); err != nil {
+		return nil, nil, err
+	}
 	if err := actions.KeyPress(args.Keys); err != nil {
 		return nil, nil, fmt.Errorf("key_press failed: %w", err)
 	}
 	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatGeneral, "key press")
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
-	}, nil, nil
+	var vr *actions.VerifyResult
+	if shouldVerify(args.AutoVerify, args.Expected) {
+		vr = actions.VerifyAction(verifyCfg(args.Expected, nil, nil, nil, nil))
+	}
+	return verifiedResult(nil, vr)
 }
 
 func keyDownHandler(ctx context.Context, req *mcp.CallToolRequest, args KeyEventArgs) (*mcp.CallToolResult, any, error) {
@@ -426,13 +503,23 @@ func keyloggerStatusHandler(ctx context.Context, req *mcp.CallToolRequest, args 
 }
 
 func typeHandler(ctx context.Context, req *mcp.CallToolRequest, args TypeArgs) (*mcp.CallToolResult, any, error) {
+	cx, cy, cerr := actions.GetCursorPosition()
+	if cerr != nil {
+		cx, cy = 0, 0
+	}
+	rx, ry, rw, rh := actions.SmartRegionAround(cx, cy, 400)
+	if err := preVerifyCheck(args.PreExpected, &rx, &ry, &rw, &rh); err != nil {
+		return nil, nil, err
+	}
 	if err := actions.TypeText(args.Text); err != nil {
 		return nil, nil, fmt.Errorf("type failed: %w", err)
 	}
 	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatType, "type text")
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
-	}, nil, nil
+	var vr *actions.VerifyResult
+	if shouldVerify(args.AutoVerify, args.Expected) {
+		vr = actions.VerifyAction(verifyCfg(args.Expected, &rx, &ry, &rw, &rh))
+	}
+	return verifiedResult(nil, vr)
 }
 
 func screenSizeHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
@@ -453,14 +540,20 @@ func cursorPosHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mc
 }
 
 func dragHandler(ctx context.Context, req *mcp.CallToolRequest, args DragArgs) (*mcp.CallToolResult, any, error) {
+	rx, ry, rw, rh := actions.SmartRegionAround(args.ToX, args.ToY, 400)
+	if err := preVerifyCheck(args.PreExpected, &rx, &ry, &rw, &rh); err != nil {
+		return nil, nil, err
+	}
 	if err := actions.Drag(args.FromX, args.FromY, args.ToX, args.ToY); err != nil {
 		return nil, nil, fmt.Errorf("drag failed: %w", err)
 	}
 	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatGeneral,
 		fmt.Sprintf("drag from (%d,%d) to (%d,%d)", args.FromX, args.FromY, args.ToX, args.ToY))
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
-	}, nil, nil
+	var vr *actions.VerifyResult
+	if shouldVerify(args.AutoVerify, args.Expected) {
+		vr = actions.VerifyAction(verifyCfg(args.Expected, &rx, &ry, &rw, &rh))
+	}
+	return verifiedResult(nil, vr)
 }
 
 func listWindowsHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
@@ -550,14 +643,19 @@ func setClipboardHandler(ctx context.Context, req *mcp.CallToolRequest, args Set
 }
 
 func openURLHandler(ctx context.Context, req *mcp.CallToolRequest, args OpenURLArgs) (*mcp.CallToolResult, any, error) {
+	if err := preVerifyCheck(args.PreExpected, nil, nil, nil, nil); err != nil {
+		return nil, nil, err
+	}
 	if err := actions.OpenURL(args.URL); err != nil {
 		return nil, nil, fmt.Errorf("open_url failed: %w", err)
 	}
 	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatNavigate,
 		fmt.Sprintf("open url %s", args.URL))
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
-	}, nil, nil
+	var vr *actions.VerifyResult
+	if shouldVerify(args.AutoVerify, args.Expected) {
+		vr = actions.VerifyAction(verifyCfg(args.Expected, nil, nil, nil, nil))
+	}
+	return verifiedResult(nil, vr)
 }
 
 func waitHandler(ctx context.Context, req *mcp.CallToolRequest, args WaitArgs) (*mcp.CallToolResult, any, error) {
@@ -588,12 +686,19 @@ func listProcessesHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) 
 }
 
 func launchAppHandler(ctx context.Context, req *mcp.CallToolRequest, args LaunchAppArgs) (*mcp.CallToolResult, any, error) {
+	if err := preVerifyCheck(args.PreExpected, nil, nil, nil, nil); err != nil {
+		return nil, nil, err
+	}
 	if err := actions.LaunchApp(args.Path); err != nil {
 		return nil, nil, fmt.Errorf("launch_app failed: %w", err)
 	}
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
-	}, nil, nil
+	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatLaunch,
+		fmt.Sprintf("launch app %s", args.Path))
+	var vr *actions.VerifyResult
+	if shouldVerify(args.AutoVerify, args.Expected) {
+		vr = actions.VerifyAction(verifyCfg(args.Expected, nil, nil, nil, nil))
+	}
+	return verifiedResult(nil, vr)
 }
 
 func killProcessHandler(ctx context.Context, req *mcp.CallToolRequest, args KillProcessArgs) (*mcp.CallToolResult, any, error) {
@@ -805,28 +910,45 @@ func pingHandler(ctx context.Context, req *mcp.CallToolRequest, args PingArgs) (
 }
 
 func findTextAndClickHandler(ctx context.Context, req *mcp.CallToolRequest, args FindTextAndClickArgs) (*mcp.CallToolResult, any, error) {
-	opts := actions.FindTextOpts{
-		Text:     args.Text,
-		Language: args.Language,
-		RegionX:  args.X,
-		RegionY:  args.Y,
-		RegionW:  args.W,
-		RegionH:  args.H,
+	if err := preVerifyCheck(args.PreExpected, args.X, args.Y, args.W, args.H); err != nil {
+		return nil, nil, err
 	}
-	if err := actions.FindTextAndClick(opts); err != nil {
+	opts := actions.FindTextOpts{
+		Text: args.Text, Language: args.Language,
+		RegionX: args.X, RegionY: args.Y, RegionW: args.W, RegionH: args.H,
+	}
+	cx, cy, err := actions.FindTextAndClick(opts)
+	if err != nil {
 		return nil, nil, fmt.Errorf("find_text_and_click: %w", err)
 	}
 	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatClick,
 		fmt.Sprintf("find text and click: %s", args.Text))
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
+	var vr *actions.VerifyResult
+	if shouldVerify(args.AutoVerify, args.Expected) {
+		rx, ry, rw, rh := actions.SmartRegionAround(cx, cy, 400)
+		vr = actions.VerifyAction(verifyCfg(args.Expected, &rx, &ry, &rw, &rh))
+	}
+	return verifiedResult(nil, vr)
 }
 
 func typeAndSubmitHandler(ctx context.Context, req *mcp.CallToolRequest, args TypeAndSubmitArgs) (*mcp.CallToolResult, any, error) {
+	cx, cy, cerr := actions.GetCursorPosition()
+	if cerr != nil {
+		cx, cy = 0, 0
+	}
+	rx, ry, rw, rh := actions.SmartRegionAround(cx, cy, 400)
+	if err := preVerifyCheck(args.PreExpected, &rx, &ry, &rw, &rh); err != nil {
+		return nil, nil, err
+	}
 	if err := actions.TypeAndSubmit(args.Text); err != nil {
 		return nil, nil, fmt.Errorf("type_and_submit: %w", err)
 	}
 	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatType, "type and submit")
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
+	var vr *actions.VerifyResult
+	if shouldVerify(args.AutoVerify, args.Expected) {
+		vr = actions.VerifyAction(verifyCfg(args.Expected, &rx, &ry, &rw, &rh))
+	}
+	return verifiedResult(nil, vr)
 }
 
 func launchAndWaitHandler(ctx context.Context, req *mcp.CallToolRequest, args LaunchAndWaitArgs) (*mcp.CallToolResult, any, error) {
@@ -867,18 +989,46 @@ func waitForTextHandler(ctx context.Context, req *mcp.CallToolRequest, args Wait
 }
 
 func selectAllAndTypeHandler(ctx context.Context, req *mcp.CallToolRequest, args SelectAllAndTypeArgs) (*mcp.CallToolResult, any, error) {
+	cx, cy, cerr := actions.GetCursorPosition()
+	if cerr != nil {
+		cx, cy = 0, 0
+	}
+	rx, ry, rw, rh := actions.SmartRegionAround(cx, cy, 400)
+	if err := preVerifyCheck(args.PreExpected, &rx, &ry, &rw, &rh); err != nil {
+		return nil, nil, err
+	}
 	if err := actions.SelectAllAndType(args.Text); err != nil {
 		return nil, nil, fmt.Errorf("select_all_and_type: %w", err)
 	}
 	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatType, "select all and type")
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
+	var vr *actions.VerifyResult
+	if shouldVerify(args.AutoVerify, args.Expected) {
+		vr = actions.VerifyAction(verifyCfg(args.Expected, &rx, &ry, &rw, &rh))
+	}
+	return verifiedResult(nil, vr)
 }
 
 func clickMenuItemHandler(ctx context.Context, req *mcp.CallToolRequest, args ClickMenuItemArgs) (*mcp.CallToolResult, any, error) {
+	var rx, ry, rw, rh *int32
+	hwnd := actions.FindWindowByTitle(args.WindowTitle)
+	if hwnd != 0 {
+		if state, err := actions.GetWindowState(hwnd); err == nil && state.Rect != nil {
+			rx, ry, rw, rh = &state.Rect.Left, &state.Rect.Top, &state.Rect.Width, &state.Rect.Height
+		}
+	}
+	if err := preVerifyCheck(args.PreExpected, rx, ry, rw, rh); err != nil {
+		return nil, nil, err
+	}
 	if err := actions.ClickMenuItem(args.WindowTitle, args.MenuItemText, args.Language); err != nil {
 		return nil, nil, fmt.Errorf("click_menu_item: %w", err)
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
+	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatClick,
+		fmt.Sprintf("click menu item: %s", args.MenuItemText))
+	var vr *actions.VerifyResult
+	if shouldVerify(args.AutoVerify, args.Expected) {
+		vr = actions.VerifyAction(verifyCfg(args.Expected, rx, ry, rw, rh))
+	}
+	return verifiedResult(nil, vr)
 }
 
 func getUptimeHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {

@@ -16,12 +16,11 @@ type FindTextOpts struct {
 	RegionH  *int32
 }
 
-func FindTextAndClick(opts FindTextOpts) error {
+func FindTextAndClick(opts FindTextOpts) (clickX, clickY int32, err error) {
 	if opts.Text == "" {
-		return fmt.Errorf("find_text_and_click: empty text")
+		return 0, 0, fmt.Errorf("find_text_and_click: empty text")
 	}
 	var result *OCRResult
-	var err error
 
 	if opts.RegionW != nil && opts.RegionH != nil {
 		x := int32(0)
@@ -29,7 +28,6 @@ func FindTextAndClick(opts FindTextOpts) error {
 		if opts.RegionX != nil { x = *opts.RegionX }
 		if opts.RegionY != nil { y = *opts.RegionY }
 		w, h := *opts.RegionW, *opts.RegionH
-		// Auto-expand tiny OCR crops to a generous proportion of the active window
 		if w < 300 || h < 300 {
 			if info, cerr := GetActiveWindowInfo(); cerr == nil && info.Handle != 0 {
 				result, err = OCRProportionalWindowRegion(info.Handle, 0.05, 0.05, 0.95, 0.95, opts.Language)
@@ -43,7 +41,7 @@ func FindTextAndClick(opts FindTextOpts) error {
 		result, err = OCRScreen(opts.Language)
 	}
 	if err != nil {
-		return fmt.Errorf("find_text_and_click ocr: %w", err)
+		return 0, 0, fmt.Errorf("find_text_and_click ocr: %w", err)
 	}
 search:
 
@@ -52,17 +50,17 @@ search:
 		if strings.Contains(strings.ToLower(word.Text), lowerText) {
 			cx := int32(word.X + word.W/2)
 			cy := int32(word.Y + word.H/2)
-			return Click(ClickInput{X: cx, Y: cy, Button: "left", Clicks: 1})
+			return cx, cy, Click(ClickInput{X: cx, Y: cy, Button: "left", Clicks: 1})
 		}
 	}
 	for _, line := range result.Lines {
 		if strings.Contains(strings.ToLower(line.Text), lowerText) {
 			cx := int32(line.X + line.W/2)
 			cy := int32(line.Y + line.H/2)
-			return Click(ClickInput{X: cx, Y: cy, Button: "left", Clicks: 1})
+			return cx, cy, Click(ClickInput{X: cx, Y: cy, Button: "left", Clicks: 1})
 		}
 	}
-	return fmt.Errorf("find_text_and_click: text %q not found on screen", opts.Text)
+	return 0, 0, fmt.Errorf("find_text_and_click: text %q not found on screen", opts.Text)
 }
 
 func TypeAndSubmit(text string) error {

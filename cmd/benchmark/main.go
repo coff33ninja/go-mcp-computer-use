@@ -63,7 +63,7 @@ func main() {
 
 	findText := measure("find_text_and_click (unlikely text) 3x", func() {
 		for i := 0; i < 3; i++ {
-			actions.FindTextAndClick(actions.FindTextOpts{
+			_, _, _ = actions.FindTextAndClick(actions.FindTextOpts{
 				Text: fmt.Sprintf("__benchmark_nonexistent_%d__", i),
 			})
 		}

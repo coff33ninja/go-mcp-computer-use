@@ -11,11 +11,12 @@ import (
 // ── Step types ──
 
 const (
-	StepTool = "tool"
-	StepWait = "wait"
-	StepPoll = "poll"
-	StepIf   = "if"
-	StepLoop = "loop"
+	StepTool   = "tool"
+	StepWait   = "wait"
+	StepPoll   = "poll"
+	StepIf     = "if"
+	StepLoop   = "loop"
+	StepVerify = "verify"
 )
 
 // ── Poll / If / Loop config ──
@@ -46,15 +47,22 @@ type ChainRequest struct {
 }
 
 type ChainStep struct {
-	Type        string         `json:"type,omitempty"`
-	Capture     string         `json:"capture,omitempty"`
-	Tool        string         `json:"tool,omitempty"`
-	Args        map[string]any `json:"args,omitempty"`
-	WaitMs      int            `json:"wait_ms,omitempty"`
-	Poll        *PollConfig    `json:"poll,omitempty"`
-	If          *IfConfig      `json:"if,omitempty"`
-	Loop        *LoopConfig    `json:"loop,omitempty"`
-	FocusWindow string         `json:"focus_window,omitempty"`
+	Type        string            `json:"type,omitempty"`
+	Capture     string            `json:"capture,omitempty"`
+	Tool        string            `json:"tool,omitempty"`
+	Args        map[string]any    `json:"args,omitempty"`
+	WaitMs      int               `json:"wait_ms,omitempty"`
+	Poll        *PollConfig       `json:"poll,omitempty"`
+	If          *IfConfig         `json:"if,omitempty"`
+	Loop        *LoopConfig       `json:"loop,omitempty"`
+	Verify      *VerifyStepConfig `json:"verify,omitempty"`
+	FocusWindow string            `json:"focus_window,omitempty"`
+}
+
+type VerifyStepConfig struct {
+	Expected *ExpConfig `json:"expected,omitempty"`
+	Retries  int        `json:"retries,omitempty"`
+	WaitMs   int        `json:"wait_ms,omitempty"`
 }
 
 type ChainResult struct {
@@ -248,6 +256,8 @@ func execSteps(steps []ChainStep, state *chainState) ([]StepResult, int) {
 			stepResult = execIf(step, state)
 		case StepLoop:
 			stepResult = execLoop(step, state)
+		case StepVerify:
+			stepResult = execVerify(step, stepArgs, state)
 		default:
 			stepResult = execTool(step, stepArgs, state)
 		}
@@ -341,6 +351,85 @@ func execTool(step ChainStep, args map[string]any, _ *chainState) StepResult {
 		Success: true,
 		Output:  output,
 	}
+}
+
+// ── Verify step ──
+
+func execVerify(step ChainStep, args map[string]any, state *chainState) StepResult {
+	cfg := step.Verify
+	if cfg == nil {
+		return StepResult{Tool: "verify", Success: false, Error: "missing verify config"}
+	}
+	if step.Tool == "" {
+		return StepResult{Tool: "verify", Success: false, Error: "verify: tool name required"}
+	}
+
+	toolName := strings.TrimPrefix(step.Tool, "computer_use_")
+	toolFn, ok := toolDispatch[toolName]
+	if !ok {
+		return StepResult{Tool: step.Tool, Success: false, Error: fmt.Sprintf("verify: unknown tool %q", step.Tool)}
+	}
+
+	before, err := OCRScreen("")
+	if err != nil {
+		return StepResult{Tool: "verify", Success: false, Error: fmt.Sprintf("verify before OCR: %v", err)}
+	}
+
+	maxAttempts := cfg.Retries + 1
+	for try := 0; try < maxAttempts; try++ {
+		output, execErr := toolFn(args)
+
+		if execErr == nil {
+			if t, ok := trainingTools[toolName]; ok {
+				SaveSnapshotAfterAction(TrainingSourceRaw, t.Category, t.MakePrompt(args))
+			}
+		}
+
+		waitMs := cfg.WaitMs
+		if waitMs <= 0 {
+			waitMs = 500
+		}
+		time.Sleep(time.Duration(waitMs) * time.Millisecond)
+
+		after, ocrErr := OCRScreen("")
+		if ocrErr != nil {
+			return StepResult{
+				Tool: "verify", Success: false, Error: fmt.Sprintf("verify after OCR: %v", ocrErr),
+				Output: map[string]any{"tool_output": output, "tool_error": execErr},
+			}
+		}
+
+		vc := &VerifyConfig{BeforeOCR: before}
+		if cfg.Expected != nil {
+			vc.ExpectedText = cfg.Expected.Text
+			vc.NotText = cfg.Expected.NotText
+			vc.AfterWaitMs = cfg.Expected.WaitMs
+		}
+
+		vr := VerifyAction(vc)
+		vr.BeforeOCR = before
+		vr.AfterOCR = after
+
+		if vr.Passed || try >= maxAttempts-1 {
+			errStr := ""
+			if !vr.Passed {
+				errStr = vr.Reason
+			}
+			return StepResult{
+				Tool:    step.Tool,
+				Success: vr.Passed,
+				Error:   errStr,
+				Output: map[string]any{
+					"tool_output":  output,
+					"tool_error":   execErr,
+					"verified":     vr.Passed,
+					"verification": vr,
+				},
+			}
+		}
+	}
+
+	return StepResult{Tool: step.Tool, Success: false, Error: "verify: max retries exceeded"}
 }
 
 // ── Poll step ──
@@ -493,6 +582,9 @@ func execLoop(step ChainStep, state *chainState) StepResult {
 // ── Step type detection ──
 
 func detectStepType(s ChainStep) string {
+	if s.Verify != nil {
+		return StepVerify
+	}
 	if s.WaitMs > 0 {
 		return StepWait
 	}
@@ -980,7 +1072,8 @@ func chainFindTextAndClick(args map[string]any) (any, error) {
 		v := int32(h)
 		opts.RegionH = &v
 	}
-	return nil, FindTextAndClick(opts)
+	_, _, err := FindTextAndClick(opts)
+	return nil, err
 }
 
 func chainWaitForText(args map[string]any) (any, error) {

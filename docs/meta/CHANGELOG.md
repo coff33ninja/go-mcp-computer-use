@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.2.28] - 2026-07-02
+
+### Added
+
+- **Auto-verify on 5 remaining high-value tools** — `open_url`, `launch_app`, `find_text_and_click`, `select_all_and_type`, `click_menu_item` now support `auto_verify` and `expected` parameters with OCR-based post-action verification, matching the existing 6 tools.
+- **`TrainingCatLaunch` category** — New `"launch"` training category for app launch snapshots.
+- **Pre-action validation (`pre_expected`)** — All 11 verification-enabled tools now accept `pre_expected` with the same `ExpConfig` shape (text/not_text/change). Runs OCR before the action and fails fast if precondition not met — action is never executed.
+- **`VerifyArgs` embeddable struct** — Replaced duplicate `AutoVerify`/`Expected`/`PreExpected` fields across all 11 arg structs with a single `VerifyArgs` embed, reducing 22 lines of redundancy.
+- **`preVerifyCheck` helper** — Common pre-verify logic extracted to server.go.
+- **Region-of-typing OCR** — `type`, `type_and_submit`, `select_all_and_type` now capture cursor position (`GetCursorPosition`) before typing and restrict verification OCR to `SmartRegionAround(cursor, 400px)` instead of full-screen scan.
+- **Window-aware OCR for `click_menu_item`** — Verification scans only within the target window bounds (found by `FindWindowByTitle` + `GetWindowState`) instead of full screen.
+- **Coordinate-reuse for `find_text_and_click`** — `FindTextAndClick` now returns click coordinates `(int32, int32, error)`. The handler uses `SmartRegionAround(click_pos, 400px)` for post-verify instead of full-screen OCR. Pre-verify uses the specified search region.
+
+### Changed
+
+- `internal/actions/chained.go` — `FindTextAndClick` signature changed from `error` → `(int32, int32, error)`. Callers updated: `server.go`, `chain.go`, `cmd/benchmark/main.go`.
+- `internal/actions/training.go` — Added `TrainingCatLaunch`.
+- `internal/server/server.go` — All 11 verification handlers updated with cursor-aware region (type tools), window-bounds region (click_menu_item), coordinate-reuse region (find_text_and_click), and pre-verify checks. `VerifyArgs` struct replaces repetitive fields.
+
 ## [0.2.27] - 2026-06-30
 
 ### Added

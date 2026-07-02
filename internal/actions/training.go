@@ -19,6 +19,7 @@ const (
 	TrainingCatNavigate     = "navigate"
 	TrainingCatOCR          = "ocr"
 	TrainingCatGeneral      = "general"
+	TrainingCatLaunch        = "launch"
 	TrainingCatElementsFound = "elements_found"
 	TrainingCatNoElements   = "no_elements"
 )
