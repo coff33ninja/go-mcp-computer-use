@@ -95,6 +95,12 @@ See [`docs/reference/tools.md`](../reference/tools.md) for the full categorized 
 ### v0.2.25 — Case-Insensitive Coordinate Match
 - `getIntArg` uses `strings.EqualFold` fallback when exact key match fails, fixing click coordinate extraction (Go struct marshaling produces capitalized `X`/`Y`).
 
+### v0.2.28 — Action Verification System
+- **Auto-verify on 5 more tools** — `open_url`, `launch_app`, `find_text_and_click`, `select_all_and_type`, `click_menu_item` support `auto_verify`/`expected`.
+- **Pre-action validation** — `pre_expected` field on all 11 verification tools, fails fast before action execution.
+- **Region-aware OCR** — type tools capture cursor position (`SmartRegionAround`), `click_menu_item` uses window bounds, `find_text_and_click` reuses click coordinates.
+- **`VerifyArgs` embeddable struct** — eliminated 22 lines of field duplication across arg structs.
+
 ### v0.2.27 — ONNX + OCR Fallback for Template Matching
 - **find_image / find_all_images** — NCC failure cascades to ONNX YOLO → OCR. Degenerate templates (zero-dim, no variance) skip NCC entirely.
 - **ocr_languages** — new tool, native COM (no PowerShell)

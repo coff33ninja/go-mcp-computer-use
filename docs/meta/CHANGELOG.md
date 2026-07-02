@@ -1,5 +1,49 @@
 # Changelog
 
+## [0.2.29] - 2026-07-02
+
+### Added
+
+- **File System tools** — 11 new tools for navigating and manipulating files:
+  - `list_directory` — list files/dirs at path (name, size, is_dir, mod_time, mode)
+  - `read_file` — read file with automatic type detection + native format parsing
+  - `write_file` — write/overwrite files with format-aware creation and editing
+  - `find_files` — recursive glob search (e.g. `*.go`, `**/*.md`)
+  - `copy_file` — copy file or directory (recursive)
+  - `move_file` — move/rename file or directory
+  - `delete_file` — delete file/dir to Recycle Bin via SHFileOperationW (not permanent)
+  - `create_directory` — mkdir -p (recursive directory creation)
+  - `get_file_info` — file/dir metadata (size, mod_time, is_dir, mode)
+  - `set_working_directory` — set working directory for relative path resolution
+  - `get_working_directory` — get current working directory
+- **Format-aware `read_file`** — auto-detects mime type by magic bytes + extension; parses:
+  - Plain text (txt, json, csv, yaml, toml, md, source code, configs, etc.) via `io.ReadAll`
+  - `.docx` via `nguyenthenguyen/docx` library, extracting text from `<w:t>` XML elements
+  - `.xlsx` via `xuri/excelize/v2`, all sheets rendered as TSV
+  - `.pdf` via `ledongthuc/pdf`, all pages with separators
+  - Images (png, jpg, gif, bmp, tiff, webp) via native WinRT COM OCR (`ocrNative`)
+  - Pagination: `page` and `page_size` params (default 8000 chars), returns page/totalPages/truncated
+- **Format-aware `write_file`** — detects target extension and creates/edits:
+  - Plain text — raw write via `os.WriteFile`
+  - `.docx` — new file creates from scratch (ZIP+XML); overwrite preserves existing headers/footers/images by swapping `<w:body>` content, writes to temp + rename
+  - `.xlsx` — new file via `excelize.NewFile()`; overwrite opens existing, repopulates cells from TSV content
+  - `.pdf` — new file creates from text via `go-pdf/fpdf`; overwrite tries `pdfcpu.FillFormFile` with JSON form field data, falls back to `createPdf`
+- **File verification** — `FilePreCheck`/`FilePostVerify` wired into all 5 action file tool handlers (write, copy, move, delete, create_directory) using `ExpConfig` / `VerifyArgs` pattern from v0.2.28
+- **Recycle Bin delete** — `delete_file` uses `SHFileOperationW` with `FOF_ALLOWUNDO` to move items to the Recycle Bin instead of permanent `os.RemoveAll`
+- **Working directory** — all file tools resolve relative paths against a configurable working directory (defaults to process CWD, changeable via `set_working_directory`)
+- **New dependencies** — `nguyenthenguyen/docx`, `ledongthuc/pdf`, `xuri/excelize/v2`, `go-pdf/fpdf`, `pdfcpu/pdfcpu` for native document parsing and creation
+
+### Changed
+
+- `internal/actions/filesystem.go` — Enhanced `ReadFile` with format dispatch + pagination; enhanced `WriteFile` with format-aware creation/editing (docx, xlsx, pdf); file verification helpers; Recycle Bin via SHFileOperationW; working directory support.
+- `internal/server/server.go` — Updated `ReadFileArgs{Path, Page, PageSize}`, updated `write_file` tool description; file verification handlers.
+- `internal/actions/chain.go` — Updated `chainReadFile` with page/page_size params.
+- `VERSION` — bumped to 0.2.29.
+
+### Tool Count
+
+Now at 131 total MCP tools (+11).
+
 ## [0.2.28] - 2026-07-02
 
 ### Added

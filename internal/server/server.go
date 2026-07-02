@@ -1635,6 +1635,58 @@ type SetConfigArgs struct {
 	WatcherIntervalSecs  *int    `json:"watcher_interval_seconds,omitempty"`
 }
 
+type ListDirectoryArgs struct {
+	Path string `json:"path"`
+}
+
+type ReadFileArgs struct {
+	Path     string `json:"path"`
+	Page     int    `json:"page,omitempty"`
+	PageSize int    `json:"page_size,omitempty"`
+}
+
+type WriteFileArgs struct {
+	Path      string `json:"path"`
+	Content   string `json:"content"`
+	Overwrite *bool  `json:"overwrite,omitempty"`
+	VerifyArgs
+}
+
+type FindFilesArgs struct {
+	Path    string `json:"path"`
+	Pattern string `json:"pattern"`
+}
+
+type CopyFileArgs struct {
+	Source      string `json:"source"`
+	Destination string `json:"destination"`
+	VerifyArgs
+}
+
+type MoveFileArgs struct {
+	Source      string `json:"source"`
+	Destination string `json:"destination"`
+	VerifyArgs
+}
+
+type DeleteFileArgs struct {
+	Path string `json:"path"`
+	VerifyArgs
+}
+
+type CreateDirectoryArgs struct {
+	Path string `json:"path"`
+	VerifyArgs
+}
+
+type GetFileInfoArgs struct {
+	Path string `json:"path"`
+}
+
+type SetWorkingDirectoryArgs struct {
+	Path string `json:"path"`
+}
+
 type DataLogQueryArgs struct {
 	Table   string `json:"table"`
 	Source  string `json:"source,omitempty"`
@@ -1942,6 +1994,168 @@ func setConfigHandler(ctx context.Context, req *mcp.CallToolRequest, args SetCon
 		"watcher_interval_secs":  cfg.WatcherIntervalSecs,
 		"saved":                  changed,
 	}, nil
+}
+
+func listDirectoryHandler(ctx context.Context, req *mcp.CallToolRequest, args ListDirectoryArgs) (*mcp.CallToolResult, any, error) {
+	entries, err := actions.ListDirectory(args.Path)
+	if err != nil {
+		return nil, nil, err
+	}
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
+	}, map[string]any{"entries": entries}, nil
+}
+
+func readFileHandler(ctx context.Context, req *mcp.CallToolRequest, args ReadFileArgs) (*mcp.CallToolResult, any, error) {
+	page := args.Page
+	if page <= 0 {
+		page = 1
+	}
+	pageSize := args.PageSize
+	if pageSize <= 0 {
+		pageSize = actions.DefaultPageSize
+	}
+	result, err := actions.ReadFile(args.Path, page, pageSize)
+	if err != nil {
+		return nil, nil, err
+	}
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: result.Content}},
+	}, result, nil
+}
+
+func writeFileHandler(ctx context.Context, req *mcp.CallToolRequest, args WriteFileArgs) (*mcp.CallToolResult, any, error) {
+	if err := actions.FilePreCheck(args.PreExpected, args.Path); err != nil {
+		return nil, nil, err
+	}
+	overwrite := false
+	if args.Overwrite != nil {
+		overwrite = *args.Overwrite
+	}
+	result, err := actions.WriteFile(args.Path, args.Content, overwrite)
+	if err != nil {
+		return nil, nil, err
+	}
+	var vr *actions.FileVerifyResult
+	if shouldVerify(args.AutoVerify, args.Expected) {
+		vr = actions.FilePostVerify(args.Expected, result.Path)
+	}
+	if vr != nil && !vr.Passed {
+		return nil, nil, fmt.Errorf("verify: %s", vr.Reason)
+	}
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
+	}, result, nil
+}
+
+func findFilesHandler(ctx context.Context, req *mcp.CallToolRequest, args FindFilesArgs) (*mcp.CallToolResult, any, error) {
+	matches, err := actions.FindFiles(args.Path, args.Pattern)
+	if err != nil {
+		return nil, nil, err
+	}
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
+	}, map[string]any{"matches": matches}, nil
+}
+
+func copyFileHandler(ctx context.Context, req *mcp.CallToolRequest, args CopyFileArgs) (*mcp.CallToolResult, any, error) {
+	if err := actions.FilePreCheck(args.PreExpected, args.Source); err != nil {
+		return nil, nil, err
+	}
+	if err := actions.CopyFile(args.Source, args.Destination); err != nil {
+		return nil, nil, err
+	}
+	var vr *actions.FileVerifyResult
+	if shouldVerify(args.AutoVerify, args.Expected) {
+		vr = actions.FilePostVerify(args.Expected, args.Destination)
+	}
+	if vr != nil && !vr.Passed {
+		return nil, nil, fmt.Errorf("verify: %s", vr.Reason)
+	}
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
+	}, nil, nil
+}
+
+func moveFileHandler(ctx context.Context, req *mcp.CallToolRequest, args MoveFileArgs) (*mcp.CallToolResult, any, error) {
+	if err := actions.FilePreCheck(args.PreExpected, args.Source); err != nil {
+		return nil, nil, err
+	}
+	if err := actions.MoveFile(args.Source, args.Destination); err != nil {
+		return nil, nil, err
+	}
+	var vr *actions.FileVerifyResult
+	if shouldVerify(args.AutoVerify, args.Expected) {
+		vr = actions.FilePostVerify(args.Expected, args.Destination)
+	}
+	if vr != nil && !vr.Passed {
+		return nil, nil, fmt.Errorf("verify: %s", vr.Reason)
+	}
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
+	}, nil, nil
+}
+
+func deleteFileHandler(ctx context.Context, req *mcp.CallToolRequest, args DeleteFileArgs) (*mcp.CallToolResult, any, error) {
+	if err := actions.FilePreCheck(args.PreExpected, args.Path); err != nil {
+		return nil, nil, err
+	}
+	result, err := actions.DeleteFile(args.Path)
+	if err != nil {
+		return nil, nil, err
+	}
+	var vr *actions.FileVerifyResult
+	if shouldVerify(args.AutoVerify, args.Expected) {
+		vr = actions.FilePostVerify(args.Expected, args.Path)
+	}
+	if vr != nil && !vr.Passed {
+		return nil, nil, fmt.Errorf("verify: %s", vr.Reason)
+	}
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
+	}, result, nil
+}
+
+func createDirectoryHandler(ctx context.Context, req *mcp.CallToolRequest, args CreateDirectoryArgs) (*mcp.CallToolResult, any, error) {
+	if err := actions.FilePreCheck(args.PreExpected, args.Path); err != nil {
+		return nil, nil, err
+	}
+	if err := actions.CreateDirectory(args.Path); err != nil {
+		return nil, nil, err
+	}
+	var vr *actions.FileVerifyResult
+	if shouldVerify(args.AutoVerify, args.Expected) {
+		vr = actions.FilePostVerify(args.Expected, args.Path)
+	}
+	if vr != nil && !vr.Passed {
+		return nil, nil, fmt.Errorf("verify: %s", vr.Reason)
+	}
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
+	}, nil, nil
+}
+
+func getFileInfoHandler(ctx context.Context, req *mcp.CallToolRequest, args GetFileInfoArgs) (*mcp.CallToolResult, any, error) {
+	info, err := actions.GetFileInfo(args.Path)
+	if err != nil {
+		return nil, nil, err
+	}
+	return &mcp.CallToolResult{}, info, nil
+}
+
+func setWorkingDirectoryHandler(ctx context.Context, req *mcp.CallToolRequest, args SetWorkingDirectoryArgs) (*mcp.CallToolResult, any, error) {
+	if err := actions.SetWorkingDirectory(args.Path); err != nil {
+		return nil, nil, err
+	}
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
+	}, map[string]string{"working_directory": actions.GetWorkingDirectory()}, nil
+}
+
+func getWorkingDirectoryHandler(_ context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
+	}, map[string]string{"working_directory": actions.GetWorkingDirectory()}, nil
 }
 
 func New(version string) *mcp.Server {
@@ -2636,6 +2850,61 @@ func New(version string) *mcp.Server {
 		Name:        "set_config",
 		Description: "Update runtime configuration. Accepts any subset of: training_enabled (stop/start background screenshot saving), prior_adjustment (enable/disable ML prior confidence tuning), verify_bounds (toggle coordinate bounds checking), log_level (debug/info/warn/error), watcher_enabled (start/stop the background screenshot watcher), watcher_interval_seconds (change polling frequency while running). Changes persist to disk. Use this to disable data collection or control the tool at runtime.",
 	}, setConfigHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "list_directory",
+		Description: "List directory contents. Returns entries with name, size, is_dir, mod_time, and mode.",
+	}, listDirectoryHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "read_file",
+		Description: "Read a file with automatic type detection. Supports plaintext (txt, json, csv, yaml, etc.), docx, xlsx, pdf, and images (via OCR). Use page and page_size to paginate long content. Default page_size=8000 chars.",
+	}, readFileHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "write_file",
+		Description: "Write content to a file. Supports plaintext, docx (creates from text, preserves structure on overwrite), xlsx (TSV content becomes cells), and PDF (text creates PDF, JSON fills existing form fields). Requires overwrite=true to replace existing files.",
+	}, writeFileHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "find_files",
+		Description: "Recursively search for files matching a glob pattern (e.g. '*.go', '**/*.md').",
+	}, findFilesHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "copy_file",
+		Description: "Copy a file or directory (recursively) from source to destination.",
+	}, copyFileHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "move_file",
+		Description: "Move or rename a file or directory.",
+	}, moveFileHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "delete_file",
+		Description: "Delete a file or directory to the Recycle Bin (uses SHFileOperationW with FOF_ALLOWUNDO).",
+	}, deleteFileHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "create_directory",
+		Description: "Create a directory (recursive, like mkdir -p).",
+	}, createDirectoryHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "get_file_info",
+		Description: "Get file or directory metadata: size, mod_time, is_dir, mode.",
+	}, getFileInfoHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "set_working_directory",
+		Description: "Set the working directory for relative path resolution in file tools.",
+	}, setWorkingDirectoryHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "get_working_directory",
+		Description: "Get the current working directory used for relative path resolution.",
+	}, getWorkingDirectoryHandler)
 
 	return server
 }

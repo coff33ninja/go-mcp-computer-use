@@ -168,6 +168,17 @@ func init() {
 		"wait_for_window":     chainWaitForWindow,
 		"launch_and_wait":     chainLaunchAndWait,
 		"find_window":         chainFindWindow,
+		"list_directory":      chainListDirectory,
+		"read_file":           chainReadFile,
+		"write_file":          chainWriteFile,
+		"find_files":          chainFindFilesTool,
+		"copy_file":           chainCopyFile,
+		"move_file":           chainMoveFile,
+		"delete_file":         chainDeleteFile,
+		"create_directory":    chainCreateDirectory,
+		"get_file_info":          chainGetFileInfo,
+		"set_working_directory":  chainSetWorkingDirectory,
+		"get_working_directory":  chainGetWorkingDirectory,
 	}
 }
 
@@ -1129,6 +1140,117 @@ func chainFindWindow(args map[string]any) (any, error) {
 	}
 	hwnd := FindWindowByTitle(title)
 	return map[string]any{"handle": hwnd, "found": hwnd != 0}, nil
+}
+
+func chainListDirectory(args map[string]any) (any, error) {
+	path, ok := getString(args, "path")
+	if !ok {
+		return nil, fmt.Errorf("list_directory: path required")
+	}
+	return ListDirectory(path)
+}
+
+func chainReadFile(args map[string]any) (any, error) {
+	path, ok := getString(args, "path")
+	if !ok {
+		return nil, fmt.Errorf("read_file: path required")
+	}
+	pf, _ := getFloat(args, "page")
+	sf, _ := getFloat(args, "page_size")
+	pi := int(pf)
+	si := int(sf)
+	if pi <= 0 {
+		pi = 1
+	}
+	if si <= 0 {
+		si = DefaultPageSize
+	}
+	return ReadFile(path, pi, si)
+}
+
+func chainWriteFile(args map[string]any) (any, error) {
+	path, ok := getString(args, "path")
+	if !ok {
+		return nil, fmt.Errorf("write_file: path required")
+	}
+	content, ok := getString(args, "content")
+	if !ok {
+		return nil, fmt.Errorf("write_file: content required")
+	}
+	overwrite, _ := getBool(args, "overwrite")
+	return WriteFile(path, content, overwrite)
+}
+
+func chainFindFilesTool(args map[string]any) (any, error) {
+	path, ok := getString(args, "path")
+	if !ok {
+		return nil, fmt.Errorf("find_files: path required")
+	}
+	pattern, ok := getString(args, "pattern")
+	if !ok {
+		return nil, fmt.Errorf("find_files: pattern required")
+	}
+	return FindFiles(path, pattern)
+}
+
+func chainCopyFile(args map[string]any) (any, error) {
+	src, ok := getString(args, "source")
+	if !ok {
+		return nil, fmt.Errorf("copy_file: source required")
+	}
+	dst, ok := getString(args, "destination")
+	if !ok {
+		return nil, fmt.Errorf("copy_file: destination required")
+	}
+	return nil, CopyFile(src, dst)
+}
+
+func chainMoveFile(args map[string]any) (any, error) {
+	src, ok := getString(args, "source")
+	if !ok {
+		return nil, fmt.Errorf("move_file: source required")
+	}
+	dst, ok := getString(args, "destination")
+	if !ok {
+		return nil, fmt.Errorf("move_file: destination required")
+	}
+	return nil, MoveFile(src, dst)
+}
+
+func chainDeleteFile(args map[string]any) (any, error) {
+	path, ok := getString(args, "path")
+	if !ok {
+		return nil, fmt.Errorf("delete_file: path required")
+	}
+	return DeleteFile(path)
+}
+
+func chainCreateDirectory(args map[string]any) (any, error) {
+	path, ok := getString(args, "path")
+	if !ok {
+		return nil, fmt.Errorf("create_directory: path required")
+	}
+	return nil, CreateDirectory(path)
+}
+
+func chainGetFileInfo(args map[string]any) (any, error) {
+	path, ok := getString(args, "path")
+	if !ok {
+		return nil, fmt.Errorf("get_file_info: path required")
+	}
+	return GetFileInfo(path)
+}
+
+func chainSetWorkingDirectory(args map[string]any) (any, error) {
+	path, ok := getString(args, "path")
+	if !ok {
+		return nil, fmt.Errorf("set_working_directory: path required")
+	}
+	return nil, SetWorkingDirectory(path)
+}
+
+func chainGetWorkingDirectory(_ map[string]any) (any, error) {
+	return GetWorkingDirectory(), nil
 }
 
 // ── ChainFromJSON ──

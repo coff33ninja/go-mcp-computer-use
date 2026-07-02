@@ -5,7 +5,7 @@
 
 ## How to Read
 
-- **HAVE** = implemented (120 tools)
+- **HAVE** = implemented (131 tools)
 - **NEXT** = high-impact, feasible additions
 - **FAR** = possible but lower priority or complex
 - Items within a section ordered roughly by priority
@@ -197,18 +197,21 @@
 - `get_disk_usage` — all drives (total, free, used %)
 - `open_file_explorer` — open Explorer to path
 - `open_file_location` — open Explorer with file selected
+- `list_directory` — list files/subdirs (name, size, is_dir, mod_time, mode)
+- `read_file` — format-aware (txt, docx, xlsx, pdf, images via OCR), pagination
+- `write_file` — format-aware write (txt, docx, xlsx, pdf), requires `overwrite=true` for existing
+- `find_files` — recursive glob search (e.g. `*.go`, `**/*.md`)
+- `copy_file` — copy file or directory recursively
+- `move_file` — move/rename file or directory
+- `delete_file` — move to Recycle Bin (SHFileOperationW)
+- `create_directory` — mkdir -p
+- `get_file_info` — size, mod_time, is_dir, mode
 
 ### NEXT
 | Tool | Why |
 |------|-----|
-| `list_directory` — list files/subdirs | browse files |
-| `read_file` — read file contents (text) | inspect configs, logs |
-| `write_file` — write text to file | create/edit files |
-| `delete_file` — move to recycle bin or permanent | clean up |
-| `copy_file` / `move_file` | file operations |
-| `create_directory` | new folders |
-| `get_file_info` — size, date, attributes | metadata |
-| `find_files` — search by name/pattern | locate files |
+| `append_to_file` — add content to end of file | logging |
+| `read_file_lines` — read specific line range | large file navigation |
 
 ### FAR
 | Tool | Why |
@@ -649,7 +652,23 @@
 
 ---
 
-## 26. DEBUGGING & DIAGNOSTICS
+## 26. VERIFICATION & FEEDBACK
+
+### HAVE
+- `auto_verify` — all 11 action tools support post-action OCR verification
+- `pre_expected` — all 11 action tools support pre-action precondition check
+- `expected` — configurable text/change/not_text criteria
+- chain `verify` step type — retry loop with OCR diff
+
+### NEXT
+| Tool | Why |
+|------|-----|
+| `verify_image_diff` — screenshot comparison verification | visual change detection |
+| `verify_with_timeout` — poll verification until pass/timeout | async UI transitions |
+
+---
+
+## 27. DEBUGGING & DIAGNOSTICS
 
 ### HAVE
 — *none*
@@ -679,7 +698,7 @@
 | Windows | 13 | 9 | 6 | 28 |
 | Virtual Desktops | 0 | 6 | 2 | 8 |
 | Processes | 4 | 7 | 5 | 16 |
-| File System | 3 | 9 | 6 | 18 |
+| File System | 12 | 3 | 6 | 21 |
 | Clipboard | 2 | 4 | 3 | 9 |
 | Audio | 4 | 5 | 6 | 15 |
 | TTS / STT | 0 | 4 | 4 | 8 |
@@ -700,7 +719,7 @@
 | Chained | 10 | 11 | 5 | 26 |
 | Debugging | 0 | 3 | 2 | 5 |
 | Memory & ML | 10 | 5 | 5 | 20 |
-| **TOTAL** | **110** | **117** | **101** | **328** |
+| **TOTAL** | **131** | **111** | **101** | **343** |
 
 ## Strategy
 
