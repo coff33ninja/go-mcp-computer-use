@@ -47,6 +47,10 @@ jobs:
           Expand-Archive -Path $zip -DestinationPath "$env:ProgramFiles" -Force
           echo "$env:ProgramFiles\zig-x86_64-windows-0.16.0" | Out-File -FilePath $env:GITHUB_PATH -Append
 
+      - name: Generate icon resource
+        shell: pwsh
+        run: ./scripts/gen-icons.ps1
+
       - name: Build release (CGO + Zig)
         run: |
           # Pin CPU baseline to x86_64_v2 so binary runs on older CPUs (GHA runner

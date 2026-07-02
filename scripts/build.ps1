@@ -26,6 +26,11 @@ Write-Host "C compiler: Zig cc ($(zig version))" -ForegroundColor Cyan
 Write-Host "CGO_CFLAGS: $env:CGO_CFLAGS" -ForegroundColor Gray
 Write-Host "CGO_LDFLAGS: $env:CGO_LDFLAGS" -ForegroundColor Gray
 
+# Generate icon resource (.syso) for embedding
+Write-Host "Generating icon resource..." -ForegroundColor Gray
+& "$PSScriptRoot\gen-icons.ps1"
+if (-not $?) { exit 1 }
+
 $ldflags = "-s -w -X main.Version=$ver"
 if (-not $Release) {
     $ldflags = "-X main.Version=$ver"

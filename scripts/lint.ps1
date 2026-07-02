@@ -13,6 +13,10 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Host "PASS: go vet clean" -ForegroundColor Green
 
+Write-Host "=== icon resource ===" -ForegroundColor Cyan
+& "$PSScriptRoot\gen-icons.ps1"
+if ($LASTEXITCODE -ne 0) { exit 1 }
+
 Write-Host "=== go build ===" -ForegroundColor Cyan
 $ver = (Get-Content VERSION -Raw).Trim()
 go build -ldflags="-X main.Version=$ver" ./cmd/mcp-server/

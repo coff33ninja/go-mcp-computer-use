@@ -36,3 +36,6 @@ benchmark.exe
 
 # Generated ML datasets (stored in APPDATA, not repo)
 yolo_dataset/
+
+# Generated Windows icon resource (compiled from icons/app.rc via windres)
+cmd/mcp-server/rsrc*.syso

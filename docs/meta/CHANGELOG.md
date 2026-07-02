@@ -2,14 +2,21 @@
 
 ## [0.2.30] - 2026-07-03
 
+### Added
+
+- **Windows icon embedded in mcp-server.exe** — app.ico compiled into a COFF `.syso` resource via `rsrc` (`github.com/akavel/rsrc`), so the binary shows a custom icon in File Explorer, taskbar, and title bar. Icon sizes: 16, 32, 48, 64, 256px with SVG source in `icons/app.svg`.
+- **`icons/` directory** — app.svg source, generated PNGs at 5 sizes, app.ico multi-res icon, app.rc resource script.
+- **`scripts/gen-icons.ps1`** — PowerShell script that runs `rsrc` to compile `app.ico` into `cmd/mcp-server/rsrc_windows.syso`, auto-installing `rsrc` if missing. Called from `build.ps1`, `lint.ps1`, and CI release workflow.
+
 ### Security
 
-- **Bump `golang.org/x/net` v0.54.0 → v0.55.0** — dependency update from Dependabot patching a security vulnerability in the `go_modules` group. Indirect dependency used by `pdfcpu` and `xuri/excelize/v2` transitive chains.
+- **Bump `golang.org/x/net` v0.54.0 → v0.55.0** — dependency update from Dependabot patching a security vulnerability in the `go_modules` group.
+- **`.github/dependabot.yml`** — `package-ecosystem` was empty `""`; set to `"gomod"` so Dependabot properly scans `go.mod` for vulnerabilities.
 
 ### Changed
 
-- **`write_file` — `overwrite` is now optional** — changed `Overwrite bool` to `*Overwrite *bool` with `omitempty` JSON tag. The field is no longer required in the tool schema, defaulting to `false` when omitted. Fixes `validating root: required: missing properties: ["overwrite"]` error when creating new files.
-- **`get_file_info` — returns metadata instead of "ok"** — removed hardcoded `TextContent{Text: "ok"}` from handler. The SDK now auto-populates the response from the structured result, returning the actual file info JSON (`name`, `size`, `is_dir`, `mod_time`, `mode`).
+- **`write_file` — `overwrite` is now optional** — changed `Overwrite bool` to `*Overwrite *bool` with `omitempty`. No longer required in tool schema, defaults to `false` when omitted.
+- **`get_file_info` — returns metadata instead of "ok"** — handler now returns actual file info JSON (`name`, `size`, `is_dir`, `mod_time`, `mode`).
 
 ## [0.2.29] - 2026-07-02
 
