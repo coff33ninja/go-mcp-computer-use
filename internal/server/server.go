@@ -315,7 +315,7 @@ func uiaFindHandler(ctx context.Context, req *mcp.CallToolRequest, args UIAFindA
 	if err != nil {
 		return nil, nil, fmt.Errorf("uia_find: %w", err)
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, map[string]any{"elements": elements}, nil
+	return &mcp.CallToolResult{}, map[string]any{"elements": elements}, nil
 }
 
 func uiaGetTextHandler(ctx context.Context, req *mcp.CallToolRequest, args UIAGetTextArgs) (*mcp.CallToolResult, any, error) {
@@ -323,7 +323,7 @@ func uiaGetTextHandler(ctx context.Context, req *mcp.CallToolRequest, args UIAGe
 	if err != nil {
 		return nil, nil, fmt.Errorf("uia_get_text: %w", err)
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, map[string]string{"text": text}, nil
+	return &mcp.CallToolResult{}, map[string]string{"text": text}, nil
 }
 
 func uiaInvokeHandler(ctx context.Context, req *mcp.CallToolRequest, args UIAInvokeArgs) (*mcp.CallToolResult, any, error) {
@@ -353,7 +353,7 @@ func chainHandler(ctx context.Context, req *mcp.CallToolRequest, args ChainArgs)
 	if err != nil {
 		return nil, nil, fmt.Errorf("chain: %w", err)
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, result, nil
+	return &mcp.CallToolResult{}, result, nil
 }
 
 func screenshotHandler(ctx context.Context, req *mcp.CallToolRequest, args ScreenshotArgs) (*mcp.CallToolResult, any, error) {
@@ -524,9 +524,7 @@ func typeHandler(ctx context.Context, req *mcp.CallToolRequest, args TypeArgs) (
 
 func screenSizeHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
 	w, h := actions.ScreenSize()
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
-	}, ScreenSizeResult{Width: w, Height: h}, nil
+	return &mcp.CallToolResult{}, ScreenSizeResult{Width: w, Height: h}, nil
 }
 
 func cursorPosHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
@@ -534,9 +532,7 @@ func cursorPosHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mc
 	if err != nil {
 		return nil, nil, fmt.Errorf("get_cursor_position failed: %w", err)
 	}
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
-	}, CursorPosResult{X: x, Y: y}, nil
+	return &mcp.CallToolResult{}, CursorPosResult{X: x, Y: y}, nil
 }
 
 func dragHandler(ctx context.Context, req *mcp.CallToolRequest, args DragArgs) (*mcp.CallToolResult, any, error) {
@@ -958,7 +954,7 @@ func launchAndWaitHandler(ctx context.Context, req *mcp.CallToolRequest, args La
 	if err != nil {
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "timeout"}}}, map[string]any{"found": false}, nil
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, map[string]any{"handle": hwnd, "found": true}, nil
+	return &mcp.CallToolResult{}, map[string]any{"handle": hwnd, "found": true}, nil
 }
 
 func screenshotElementHandler(ctx context.Context, req *mcp.CallToolRequest, args ScreenshotElementArgs) (*mcp.CallToolResult, any, error) {
@@ -985,7 +981,7 @@ func waitForTextHandler(ctx context.Context, req *mcp.CallToolRequest, args Wait
 	if err != nil {
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "not_found"}}}, map[string]any{"found": false}, nil
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, result, nil
+	return &mcp.CallToolResult{}, result, nil
 }
 
 func selectAllAndTypeHandler(ctx context.Context, req *mcp.CallToolRequest, args SelectAllAndTypeArgs) (*mcp.CallToolResult, any, error) {
@@ -1036,7 +1032,7 @@ func getUptimeHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mc
 	if err != nil {
 		return nil, nil, fmt.Errorf("get_uptime: %w", err)
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, map[string]any{"uptime_ms": d.Milliseconds()}, nil
+	return &mcp.CallToolResult{}, map[string]any{"uptime_ms": d.Milliseconds()}, nil
 }
 
 func shutdownHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
@@ -1072,7 +1068,7 @@ func getKeyboardLayoutHandler(ctx context.Context, req *mcp.CallToolRequest, _ a
 	if err != nil {
 		return nil, nil, fmt.Errorf("get_keyboard_layout: %w", err)
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, info, nil
+	return &mcp.CallToolResult{}, info, nil
 }
 
 func setKeyboardLayoutHandler(ctx context.Context, req *mcp.CallToolRequest, args SetKeyboardLayoutArgs) (*mcp.CallToolResult, any, error) {
@@ -1087,7 +1083,7 @@ func getDiskUsageHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (
 	if err != nil {
 		return nil, nil, fmt.Errorf("get_disk_usage: %w", err)
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, map[string]any{"disks": disks}, nil
+	return &mcp.CallToolResult{}, map[string]any{"disks": disks}, nil
 }
 
 func openFileExplorerHandler(ctx context.Context, req *mcp.CallToolRequest, args OpenExplorerArgs) (*mcp.CallToolResult, any, error) {
@@ -1117,7 +1113,7 @@ func findImageHandler(ctx context.Context, req *mcp.CallToolRequest, args FindIm
 	if err != nil {
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "no_match"}}}, map[string]any{"found": false}, nil
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, result, nil
+	return &mcp.CallToolResult{}, result, nil
 }
 
 func findAllImagesHandler(ctx context.Context, req *mcp.CallToolRequest, args FindImageArgs) (*mcp.CallToolResult, any, error) {
@@ -1125,7 +1121,7 @@ func findAllImagesHandler(ctx context.Context, req *mcp.CallToolRequest, args Fi
 	if err != nil {
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: err.Error()}}}, map[string]any{"found": false, "matches": []actions.MatchResult{}}, nil
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, map[string]any{"found": len(results) > 0, "matches": results}, nil
+	return &mcp.CallToolResult{}, map[string]any{"found": len(results) > 0, "matches": results}, nil
 }
 
 func listAudioDevicesHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
@@ -1133,7 +1129,7 @@ func listAudioDevicesHandler(ctx context.Context, req *mcp.CallToolRequest, _ an
 	if err != nil {
 		return nil, nil, fmt.Errorf("list_audio_devices: %w", err)
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, map[string]any{"devices": devices}, nil
+	return &mcp.CallToolResult{}, map[string]any{"devices": devices}, nil
 }
 
 func setDefaultAudioDeviceHandler(ctx context.Context, req *mcp.CallToolRequest, args SetAudioDeviceArgs) (*mcp.CallToolResult, any, error) {
@@ -1148,7 +1144,7 @@ func recordScreenHandler(ctx context.Context, req *mcp.CallToolRequest, args Rec
 	if err != nil {
 		return nil, nil, fmt.Errorf("record_screen: %w", err)
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, result, nil
+	return &mcp.CallToolResult{}, result, nil
 }
 
 type LayoutValidateArgs struct {
@@ -1168,7 +1164,7 @@ func layoutValidateHandler(ctx context.Context, req *mcp.CallToolRequest, args L
 	if err != nil {
 		return nil, nil, fmt.Errorf("layout_validate: %w", err)
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, result, nil
+	return &mcp.CallToolResult{}, result, nil
 }
 
 func getScreenDPIHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
@@ -1176,7 +1172,7 @@ func getScreenDPIHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (
 	if err != nil {
 		return nil, nil, fmt.Errorf("get_screen_dpi: %w", err)
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, map[string]any{"monitors": dpi}, nil
+	return &mcp.CallToolResult{}, map[string]any{"monitors": dpi}, nil
 }
 
 type FocusWindowByTitleArgs struct {
@@ -1262,7 +1258,7 @@ type ONNXDetectArgs struct {
 
 func onnxStatusHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
 	status := actions.ONNXStatus()
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, status, nil
+	return &mcp.CallToolResult{}, status, nil
 }
 
 func onnxDetectHandler(ctx context.Context, req *mcp.CallToolRequest, args ONNXDetectArgs) (*mcp.CallToolResult, any, error) {
@@ -1284,7 +1280,7 @@ func onnxDetectHandler(ctx context.Context, req *mcp.CallToolRequest, args ONNXD
 	if err != nil {
 		return nil, nil, fmt.Errorf("onnx_detect: %w", err)
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, result, nil
+	return &mcp.CallToolResult{}, result, nil
 }
 
 func onnxDownloadHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
@@ -1292,7 +1288,7 @@ func onnxDownloadHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (
 	if err != nil {
 		return nil, nil, fmt.Errorf("onnx_download: %w", err)
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, result, nil
+	return &mcp.CallToolResult{}, result, nil
 }
 
 type ONNXWatchStartArgs struct {
@@ -1303,20 +1299,20 @@ func onnxWatchStartHandler(ctx context.Context, req *mcp.CallToolRequest, args O
 	if err := actions.StartWatcher(args.IntervalSeconds); err != nil {
 		return nil, nil, fmt.Errorf("onnx_watch_start: %w", err)
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, actions.GetWatcherStatus(), nil
+	return &mcp.CallToolResult{}, actions.GetWatcherStatus(), nil
 }
 
 func onnxWatchStopHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
 	actions.StopWatcher()
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, actions.GetWatcherStatus(), nil
+	return &mcp.CallToolResult{}, actions.GetWatcherStatus(), nil
 }
 
 func onnxWatchStatusHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, actions.GetWatcherStatus(), nil
+	return &mcp.CallToolResult{}, actions.GetWatcherStatus(), nil
 }
 
 func onnxWatchCacheHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, map[string]any{"detections": actions.GetCachedDetections()}, nil
+	return &mcp.CallToolResult{}, map[string]any{"detections": actions.GetCachedDetections()}, nil
 }
 
 type TemplateStoreArgs struct {
@@ -1358,7 +1354,7 @@ func templateStoreHandler(ctx context.Context, req *mcp.CallToolRequest, args Te
 	if err != nil {
 		return nil, nil, fmt.Errorf("template_store: %w", err)
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, info, nil
+	return &mcp.CallToolResult{}, info, nil
 }
 
 func templateFindHandler(ctx context.Context, req *mcp.CallToolRequest, args TemplateFindArgs) (*mcp.CallToolResult, any, error) {
@@ -1370,7 +1366,7 @@ func templateFindHandler(ctx context.Context, req *mcp.CallToolRequest, args Tem
 	if err != nil {
 		return nil, nil, fmt.Errorf("template_find: %w", err)
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, result, nil
+	return &mcp.CallToolResult{}, result, nil
 }
 
 func templateListHandler(ctx context.Context, req *mcp.CallToolRequest, args TemplateListArgs) (*mcp.CallToolResult, any, error) {
@@ -1384,7 +1380,7 @@ func templateListHandler(ctx context.Context, req *mcp.CallToolRequest, args Tem
 	if results == nil {
 		results = []actions.TemplateInfo{}
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, map[string]any{"templates": results}, nil
+	return &mcp.CallToolResult{}, map[string]any{"templates": results}, nil
 }
 
 func templateForgetHandler(ctx context.Context, req *mcp.CallToolRequest, args TemplateForgetArgs) (*mcp.CallToolResult, any, error) {
@@ -1392,7 +1388,7 @@ func templateForgetHandler(ctx context.Context, req *mcp.CallToolRequest, args T
 	if err != nil {
 		return nil, nil, fmt.Errorf("template_forget: %w", err)
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, map[string]any{"deleted": deleted}, nil
+	return &mcp.CallToolResult{}, map[string]any{"deleted": deleted}, nil
 }
 
 type MemorySetArgs struct {
@@ -1469,7 +1465,7 @@ func memoryGetHandler(ctx context.Context, req *mcp.CallToolRequest, args Memory
 	if fact == nil {
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "not_found"}}}, map[string]any{"found": false}, nil
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, fact, nil
+	return &mcp.CallToolResult{}, fact, nil
 }
 
 func memorySearchHandler(ctx context.Context, req *mcp.CallToolRequest, args MemorySearchArgs) (*mcp.CallToolResult, any, error) {
@@ -1484,7 +1480,7 @@ func memorySearchHandler(ctx context.Context, req *mcp.CallToolRequest, args Mem
 	if results == nil {
 		results = []actions.MemorySearchResult{}
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, map[string]any{"results": results}, nil
+	return &mcp.CallToolResult{}, map[string]any{"results": results}, nil
 }
 
 func memoryListHandler(ctx context.Context, req *mcp.CallToolRequest, args MemoryListArgs) (*mcp.CallToolResult, any, error) {
@@ -1499,7 +1495,7 @@ func memoryListHandler(ctx context.Context, req *mcp.CallToolRequest, args Memor
 	if results == nil {
 		results = []actions.MemorySearchResult{}
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, map[string]any{"results": results}, nil
+	return &mcp.CallToolResult{}, map[string]any{"results": results}, nil
 }
 
 func memoryForgetHandler(ctx context.Context, req *mcp.CallToolRequest, args MemoryForgetArgs) (*mcp.CallToolResult, any, error) {
@@ -1511,7 +1507,7 @@ func memoryForgetHandler(ctx context.Context, req *mcp.CallToolRequest, args Mem
 	if err != nil {
 		return nil, nil, fmt.Errorf("memory_forget: %w", err)
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, map[string]any{"deleted": deleted}, nil
+	return &mcp.CallToolResult{}, map[string]any{"deleted": deleted}, nil
 }
 
 func trainingSaveSampleHandler(ctx context.Context, req *mcp.CallToolRequest, args TrainingSaveSampleArgs) (*mcp.CallToolResult, any, error) {
@@ -1535,7 +1531,7 @@ func trainingSaveSampleHandler(ctx context.Context, req *mcp.CallToolRequest, ar
 	if err != nil {
 		return nil, nil, fmt.Errorf("training_save_sample: %w", err)
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, sample, nil
+	return &mcp.CallToolResult{}, sample, nil
 }
 
 func trainingListSamplesHandler(ctx context.Context, req *mcp.CallToolRequest, args TrainingListSamplesArgs) (*mcp.CallToolResult, any, error) {
@@ -1550,7 +1546,7 @@ func trainingListSamplesHandler(ctx context.Context, req *mcp.CallToolRequest, a
 	if samples == nil {
 		samples = []actions.TrainingSample{}
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, map[string]any{"samples": samples}, nil
+	return &mcp.CallToolResult{}, map[string]any{"samples": samples}, nil
 }
 
 func trainingStatsHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
@@ -1558,14 +1554,14 @@ func trainingStatsHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) 
 	if err != nil {
 		return nil, nil, fmt.Errorf("training_stats: %w", err)
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, stats, nil
+	return &mcp.CallToolResult{}, stats, nil
 }
 
 func trainingMarkUsedHandler(ctx context.Context, req *mcp.CallToolRequest, args TrainingMarkUsedArgs) (*mcp.CallToolResult, any, error) {
 	if err := actions.TrainingMarkUsed(args.ID); err != nil {
 		return nil, nil, fmt.Errorf("training_mark_used: %w", err)
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, map[string]any{"marked": args.ID}, nil
+	return &mcp.CallToolResult{}, map[string]any{"marked": args.ID}, nil
 }
 
 func findUIElementHandler(ctx context.Context, req *mcp.CallToolRequest, args FindUIElementArgs) (*mcp.CallToolResult, any, error) {
@@ -1577,7 +1573,7 @@ func findUIElementHandler(ctx context.Context, req *mcp.CallToolRequest, args Fi
 	if err != nil {
 		return nil, nil, fmt.Errorf("find_ui_element: %w", err)
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, result, nil
+	return &mcp.CallToolResult{}, result, nil
 }
 
 type PriorStatsArgs struct {
@@ -1589,7 +1585,7 @@ func priorStatsHandler(ctx context.Context, req *mcp.CallToolRequest, args Prior
 	if err != nil {
 		return nil, nil, fmt.Errorf("priors_stats: %w", err)
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, stats, nil
+	return &mcp.CallToolResult{}, stats, nil
 }
 
 type ExportYoloDatasetArgs struct {
@@ -1610,7 +1606,7 @@ func exportYoloDatasetHandler(ctx context.Context, req *mcp.CallToolRequest, arg
 	if err != nil {
 		return nil, nil, fmt.Errorf("export_yolo_dataset: %w", err)
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, stats, nil
+	return &mcp.CallToolResult{}, stats, nil
 }
 
 type TrainingCleanupNoiseArgs struct {
@@ -1623,7 +1619,7 @@ func trainingCleanupNoiseHandler(ctx context.Context, req *mcp.CallToolRequest, 
 	if err != nil {
 		return nil, nil, fmt.Errorf("training_cleanup_noise: %w", err)
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, result, nil
+	return &mcp.CallToolResult{}, result, nil
 }
 
 type SetConfigArgs struct {
@@ -1731,7 +1727,7 @@ func datalogStatusHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) 
 	if err != nil {
 		return nil, nil, fmt.Errorf("datalog_status: %w", err)
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, stats, nil
+	return &mcp.CallToolResult{}, stats, nil
 }
 
 func datalogStatsResource(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
@@ -1866,7 +1862,7 @@ func taskBeginHandler(_ context.Context, _ *mcp.CallToolRequest, args TaskBeginA
 	if err != nil {
 		return nil, nil, fmt.Errorf("task_begin: %w", err)
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, info, nil
+	return &mcp.CallToolResult{}, info, nil
 }
 
 func taskEndHandler(_ context.Context, _ *mcp.CallToolRequest, args TaskEndArgs) (*mcp.CallToolResult, any, error) {
@@ -1893,9 +1889,7 @@ func introspectionAnalyzeHandler(_ context.Context, _ *mcp.CallToolRequest, _ an
 
 func bridgeDebugHandler(_ context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
 	info := actions.BridgeDebugInfo()
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
-	}, info, nil
+	return &mcp.CallToolResult{}, info, nil
 }
 
 func setConfigHandler(ctx context.Context, req *mcp.CallToolRequest, args SetConfigArgs) (*mcp.CallToolResult, any, error) {
@@ -1985,7 +1979,7 @@ func setConfigHandler(ctx context.Context, req *mcp.CallToolRequest, args SetCon
 
 	watcherStatus := actions.GetWatcherStatus()
 
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, map[string]any{
+	return &mcp.CallToolResult{}, map[string]any{
 		"training_enabled":       cfg.TrainingEnabled,
 		"prior_adjustment":       cfg.PriorAdjustment,
 		"verify_bounds":          cfg.VerifyBounds,
@@ -2001,9 +1995,7 @@ func listDirectoryHandler(ctx context.Context, req *mcp.CallToolRequest, args Li
 	if err != nil {
 		return nil, nil, err
 	}
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
-	}, map[string]any{"entries": entries}, nil
+	return &mcp.CallToolResult{}, map[string]any{"entries": entries}, nil
 }
 
 func readFileHandler(ctx context.Context, req *mcp.CallToolRequest, args ReadFileArgs) (*mcp.CallToolResult, any, error) {
@@ -2043,9 +2035,7 @@ func writeFileHandler(ctx context.Context, req *mcp.CallToolRequest, args WriteF
 	if vr != nil && !vr.Passed {
 		return nil, nil, fmt.Errorf("verify: %s", vr.Reason)
 	}
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
-	}, result, nil
+	return &mcp.CallToolResult{}, result, nil
 }
 
 func findFilesHandler(ctx context.Context, req *mcp.CallToolRequest, args FindFilesArgs) (*mcp.CallToolResult, any, error) {
@@ -2053,9 +2043,7 @@ func findFilesHandler(ctx context.Context, req *mcp.CallToolRequest, args FindFi
 	if err != nil {
 		return nil, nil, err
 	}
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
-	}, map[string]any{"matches": matches}, nil
+	return &mcp.CallToolResult{}, map[string]any{"matches": matches}, nil
 }
 
 func copyFileHandler(ctx context.Context, req *mcp.CallToolRequest, args CopyFileArgs) (*mcp.CallToolResult, any, error) {
@@ -2111,9 +2099,7 @@ func deleteFileHandler(ctx context.Context, req *mcp.CallToolRequest, args Delet
 	if vr != nil && !vr.Passed {
 		return nil, nil, fmt.Errorf("verify: %s", vr.Reason)
 	}
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
-	}, result, nil
+	return &mcp.CallToolResult{}, result, nil
 }
 
 func createDirectoryHandler(ctx context.Context, req *mcp.CallToolRequest, args CreateDirectoryArgs) (*mcp.CallToolResult, any, error) {
@@ -2147,15 +2133,11 @@ func setWorkingDirectoryHandler(ctx context.Context, req *mcp.CallToolRequest, a
 	if err := actions.SetWorkingDirectory(args.Path); err != nil {
 		return nil, nil, err
 	}
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
-	}, map[string]string{"working_directory": actions.GetWorkingDirectory()}, nil
+	return &mcp.CallToolResult{}, map[string]string{"working_directory": actions.GetWorkingDirectory()}, nil
 }
 
 func getWorkingDirectoryHandler(_ context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
-	}, map[string]string{"working_directory": actions.GetWorkingDirectory()}, nil
+	return &mcp.CallToolResult{}, map[string]string{"working_directory": actions.GetWorkingDirectory()}, nil
 }
 
 func New(version string) *mcp.Server {
