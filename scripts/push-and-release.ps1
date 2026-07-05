@@ -16,7 +16,8 @@ if (-not $version) {
     exit 1
 }
 $tag = "v$version"
-Write-Host "=== Release: $tag ==="
+Write-Host "=== Bumped version to $tag  ==="
+Write-Host "    Read the changelog: docs/meta/CHANGELOG.md"
 
 # ---- Step 2: Read changelog section for commit body ----
 $changelog = Get-Content docs/meta/CHANGELOG.md -Raw
@@ -26,7 +27,7 @@ if ($changelog -match $pattern) {
     $commitBody = $Matches[0].Trim()
 }
 # Write commit message to temp file to avoid multiline quoting issues
-$commitMsg = "release: $tag"
+$commitMsg = "Bumped version to $tag. Read the changelog for details."
 if ($commitBody) {
     $commitMsg += "`n`n$commitBody"
 }
