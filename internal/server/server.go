@@ -345,11 +345,14 @@ func uiaInvokeHandler(ctx context.Context, req *mcp.CallToolRequest, args UIAInv
 // The manual schema also avoids `items: true` and `type: ["null", "array"]`
 // that Gemini MCP schema validator rejects.
 func chainInputSchema() *jsonschema.Schema {
-	subStepArray := &jsonschema.Schema{
-		Type: "array",
-		Items: &jsonschema.Schema{
-			Type: "object",
-		},
+	subStep := func() *jsonschema.Schema {
+		return &jsonschema.Schema{Type: "object"}
+	}
+	subStepArray := func() *jsonschema.Schema {
+		return &jsonschema.Schema{
+			Type:  "array",
+			Items: subStep(),
+		}
 	}
 
 	return &jsonschema.Schema{
@@ -363,7 +366,7 @@ func chainInputSchema() *jsonschema.Schema {
 						"type":         {Type: "string"},
 						"capture":      {Type: "string"},
 						"tool":         {Type: "string"},
-						"args":         {Type: "object", AdditionalProperties: &jsonschema.Schema{}},
+						"args":         {Type: "object", AdditionalProperties: subStep()},
 						"wait_ms":      {Type: "integer"},
 						"focus_window": {Type: "string"},
 						"poll": {
@@ -378,15 +381,15 @@ func chainInputSchema() *jsonschema.Schema {
 							Type: "object",
 							Properties: map[string]*jsonschema.Schema{
 								"ocr_contains": {Type: "string"},
-								"then":         subStepArray,
-								"else":         subStepArray,
+								"then":         subStepArray(),
+								"else":         subStepArray(),
 							},
 						},
 						"loop": {
 							Type: "object",
 							Properties: map[string]*jsonschema.Schema{
 								"times": {Type: "integer"},
-								"steps": subStepArray,
+								"steps": subStepArray(),
 							},
 						},
 						"verify": {
