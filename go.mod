@@ -1,4 +1,4 @@
-module github.com/user/go-mcp-computer-use
+module github.com/coff33ninja/go-mcp-computer-use
 
 go 1.26.4
 

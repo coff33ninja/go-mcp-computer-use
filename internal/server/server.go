@@ -10,8 +10,8 @@ import (
 
 	jsonschema "github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/user/go-mcp-computer-use/internal/actions"
-	"github.com/user/go-mcp-computer-use/internal/config"
+	"github.com/coff33ninja/go-mcp-computer-use/internal/actions"
+	"github.com/coff33ninja/go-mcp-computer-use/internal/config"
 )
 
 func shouldVerify(autoVerify *bool, expected *actions.ExpConfig) bool {

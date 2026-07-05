@@ -9,8 +9,8 @@ import (
 	"syscall"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/user/go-mcp-computer-use/internal/actions"
-	"github.com/user/go-mcp-computer-use/internal/server"
+	"github.com/coff33ninja/go-mcp-computer-use/internal/actions"
+	"github.com/coff33ninja/go-mcp-computer-use/internal/server"
 )
 
 var Version = "dev"

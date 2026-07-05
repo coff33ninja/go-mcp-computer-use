@@ -3,7 +3,7 @@ package actions
 import (
 	"fmt"
 
-	"github.com/user/go-mcp-computer-use/internal/config"
+	"github.com/coff33ninja/go-mcp-computer-use/internal/config"
 )
 
 var ActiveConfig *config.Config

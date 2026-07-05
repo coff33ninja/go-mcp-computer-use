@@ -5,8 +5,8 @@ import (
 	"math"
 	"time"
 
-	"github.com/user/go-mcp-computer-use/internal/actions"
-	"github.com/user/go-mcp-computer-use/internal/config"
+	"github.com/coff33ninja/go-mcp-computer-use/internal/actions"
+	"github.com/coff33ninja/go-mcp-computer-use/internal/config"
 )
 
 func main() {
