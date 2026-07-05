@@ -8,6 +8,15 @@
 - **`get_screen_size`, `get_cursor_position`** — same fix applied (noticed during audit).
 - **`chain` tool schema — no longer rejected by Gemini** — `IfConfig.Then`/`Else` and `LoopConfig.Steps` changed from `[]any` to `[]ChainStep`, which produced `items: true` and `type: ["null", "array"]` in the auto-generated JSON schema (both rejected by Gemini's MCP schema validator). The chain tool now uses a manually crafted `InputSchema` that avoids the recursive type cycle in `jsonschema-go` and produces clean schema output.
 
+### Fixed
+
+- **`chain` tool startup panic — shared sub-schema pointers** — `chainInputSchema()` reused the same `*jsonschema.Schema` for `then`, `else`, and `steps` fields. The MCP SDK's `AddTool()` requires schemas to form a tree (not a DAG) and panics on duplicate pointers. Changed to factory functions that return unique instances per call.
+
+### Added
+
+- **Chain integration tests** — 7 tests build-tagged `//go:build integration` that start the mcp-server binary and validate chain tool end-to-end via stdio MCP protocol. Covers: simple steps, capture, loop, if/else branching, unknown tool error, timeout, and structured data output. Run with `go test -tags=integration -v -count=1 -timeout 120s ./internal/actions/ -run 'TestChain_'`.
+- **CI: `chain-tests` job** — runs chain integration tests after lint in `.github/workflows/ci.yml`.
+
 ## [0.2.30] - 2026-07-03
 
 ### Added

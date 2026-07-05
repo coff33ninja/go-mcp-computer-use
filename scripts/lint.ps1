@@ -34,3 +34,7 @@ if ($Fix) {
     }
     Write-Host "PASS: tests ok" -ForegroundColor Green
 }
+
+Write-Host ""
+Write-Host "Chain integration tests (tags=integration):" -ForegroundColor Yellow
+Write-Host "  go test -tags=integration -v -count=1 -timeout 120s ./internal/actions/ -run 'TestChain_'" -ForegroundColor Gray
