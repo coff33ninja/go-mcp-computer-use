@@ -11,11 +11,13 @@
 ### Fixed
 
 - **`chain` tool startup panic — shared sub-schema pointers** — `chainInputSchema()` reused the same `*jsonschema.Schema` for `then`, `else`, and `steps` fields. The MCP SDK's `AddTool()` requires schemas to form a tree (not a DAG) and panics on duplicate pointers. Changed to factory functions that return unique instances per call.
+- **Module path mismatch** — `go.mod` declared `github.com/user/go-mcp-computer-use` but the repo lives at `github.com/coff33ninja/go-mcp-computer-use`. Updated module path and all 7 import references across the codebase. (User was lazy to update this.)
 
 ### Added
 
 - **Chain integration tests** — 7 tests build-tagged `//go:build integration` that start the mcp-server binary and validate chain tool end-to-end via stdio MCP protocol. Covers: simple steps, capture, loop, if/else branching, unknown tool error, timeout, and structured data output. Run with `go test -tags=integration -v -count=1 -timeout 120s ./internal/actions/ -run 'TestChain_'`.
 - **CI: `chain-tests` job** — runs chain integration tests after lint in `.github/workflows/ci.yml`.
+- **README badges** — Go version, release, CI status, Windows, MCP, last commit, PRs welcome.
 
 ## [0.2.30] - 2026-07-03
 
