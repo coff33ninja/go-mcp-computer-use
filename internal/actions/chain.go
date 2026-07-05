@@ -28,14 +28,14 @@ type PollConfig struct {
 }
 
 type IfConfig struct {
-	OCRContains string `json:"ocr_contains"`
-	Then        []any  `json:"then,omitempty"`
-	Else        []any  `json:"else,omitempty"`
+	OCRContains string      `json:"ocr_contains"`
+	Then        []ChainStep `json:"then,omitempty"`
+	Else        []ChainStep `json:"else,omitempty"`
 }
 
 type LoopConfig struct {
-	Times int   `json:"times"`
-	Steps []any `json:"steps,omitempty"`
+	Times int         `json:"times"`
+	Steps []ChainStep `json:"steps,omitempty"`
 }
 
 // ── Data structures ──
@@ -535,10 +535,10 @@ func execIf(step ChainStep, state *chainState) StepResult {
 	var subSteps []ChainStep
 	if conditionMet {
 		branch = "then"
-		subSteps = rawToSteps(cfg.Then)
+		subSteps = cfg.Then
 	} else {
 		branch = "else"
-		subSteps = rawToSteps(cfg.Else)
+		subSteps = cfg.Else
 	}
 
 	subResults, _ := execSteps(subSteps, state)
@@ -561,7 +561,7 @@ func execLoop(step ChainStep, state *chainState) StepResult {
 		return StepResult{Tool: "loop", Success: true}
 	}
 
-	subSteps := rawToSteps(cfg.Steps)
+	subSteps := cfg.Steps
 	var allResults []StepResult
 	for iter := 0; iter < cfg.Times; iter++ {
 		subResults, _ := execSteps(subSteps, state)
@@ -655,24 +655,6 @@ func resolveVarPath(path string, vars map[string]any) string {
 		}
 	}
 	return path
-}
-
-// rawToSteps converts a []any (from JSON unmarshaling) to []ChainStep.
-// Used to break the circular type chain in IfConfig/LoopConfig (MCP SDK
-// schema generator panics on recursive types).
-func rawToSteps(raw []any) []ChainStep {
-	if raw == nil {
-		return nil
-	}
-	steps := make([]ChainStep, len(raw))
-	for i, r := range raw {
-		b, err := json.Marshal(r)
-		if err != nil {
-			continue
-		}
-		json.Unmarshal(b, &steps[i])
-	}
-	return steps
 }
 
 // ── Arg helpers ──

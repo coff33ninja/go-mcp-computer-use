@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	jsonschema "github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/user/go-mcp-computer-use/internal/actions"
 	"github.com/user/go-mcp-computer-use/internal/config"
@@ -335,6 +336,82 @@ func uiaInvokeHandler(ctx context.Context, req *mcp.CallToolRequest, args UIAInv
 		return nil, nil, fmt.Errorf("uia_invoke: element not found or not invocable")
 	}
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
+}
+
+// chainInputSchema builds a JSON schema for the chain tool's input.
+// We provide this manually because ChainStep contains recursive types
+// (IfConfig → []ChainStep → ChainStep → *IfConfig) which cause the
+// jsonschema-go auto-generator to error with "cycle detected".
+// The manual schema also avoids `items: true` and `type: ["null", "array"]`
+// that Gemini MCP schema validator rejects.
+func chainInputSchema() *jsonschema.Schema {
+	subStepArray := &jsonschema.Schema{
+		Type: "array",
+		Items: &jsonschema.Schema{
+			Type: "object",
+		},
+	}
+
+	return &jsonschema.Schema{
+		Type: "object",
+		Properties: map[string]*jsonschema.Schema{
+			"steps": {
+				Type: "array",
+				Items: &jsonschema.Schema{
+					Type: "object",
+					Properties: map[string]*jsonschema.Schema{
+						"type":         {Type: "string"},
+						"capture":      {Type: "string"},
+						"tool":         {Type: "string"},
+						"args":         {Type: "object", AdditionalProperties: &jsonschema.Schema{}},
+						"wait_ms":      {Type: "integer"},
+						"focus_window": {Type: "string"},
+						"poll": {
+							Type: "object",
+							Properties: map[string]*jsonschema.Schema{
+								"every_ms":     {Type: "integer"},
+								"timeout_ms":   {Type: "integer"},
+								"ocr_contains": {Type: "string"},
+							},
+						},
+						"if": {
+							Type: "object",
+							Properties: map[string]*jsonschema.Schema{
+								"ocr_contains": {Type: "string"},
+								"then":         subStepArray,
+								"else":         subStepArray,
+							},
+						},
+						"loop": {
+							Type: "object",
+							Properties: map[string]*jsonschema.Schema{
+								"times": {Type: "integer"},
+								"steps": subStepArray,
+							},
+						},
+						"verify": {
+							Type: "object",
+							Properties: map[string]*jsonschema.Schema{
+								"expected": {
+									Type: "object",
+									Properties: map[string]*jsonschema.Schema{
+										"text":     {Type: "string"},
+										"not_text": {Type: "string"},
+										"change":   {Type: "boolean"},
+										"wait_ms":  {Type: "integer"},
+									},
+								},
+								"retries": {Type: "integer"},
+								"wait_ms": {Type: "integer"},
+							},
+						},
+					},
+				},
+			},
+			"timeout_ms": {Type: "integer"},
+			"on_error":   {Type: "string"},
+		},
+	}
 }
 
 type ChainArgs struct {
@@ -2624,6 +2701,7 @@ func New(version string) *mcp.Server {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "chain",
 		Description: "Execute a sequence of steps sequentially server-side. Steps can call any tool, wait, capture output, and use {{variable}} substitution.",
+		InputSchema: chainInputSchema(),
 	}, chainHandler)
 
 	mcp.AddTool(server, &mcp.Tool{

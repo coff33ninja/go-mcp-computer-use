@@ -6,6 +6,7 @@
 
 - **All 60+ query/result handlers now return structured data instead of "ok"** — Every handler that returns meaningful data (get_volume, get_battery, list_windows, get_system_info, get_uptime, get_clipboard, get_pixel_color, list_displays, get_disk_usage, get_network_info, ocr, find_image, find_all_images, list_audio_devices, list_processes, uia_find, uia_get_text, memory_get/search/list, template_find/list/store/forget, training_*, onnx_*, datalog_status, chain, launch_and_wait, write_file, delete_file, find_files, list_directory, set/get_working_directory, bridge_debug, set_config, task_begin, and more) now return their structured JSON data instead of the placeholder `"ok"` text. The SDK auto-populates tool results from structured output when no explicit `TextContent` is set, so tools like `get_screen_size` now show `{"width":1920,"height":1080}` instead of `"ok"`.
 - **`get_screen_size`, `get_cursor_position`** — same fix applied (noticed during audit).
+- **`chain` tool schema — no longer rejected by Gemini** — `IfConfig.Then`/`Else` and `LoopConfig.Steps` changed from `[]any` to `[]ChainStep`, which produced `items: true` and `type: ["null", "array"]` in the auto-generated JSON schema (both rejected by Gemini's MCP schema validator). The chain tool now uses a manually crafted `InputSchema` that avoids the recursive type cycle in `jsonschema-go` and produces clean schema output.
 
 ## [0.2.30] - 2026-07-03
 
