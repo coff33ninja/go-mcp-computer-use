@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.2.33] - 2026-07-06
+
+### Fixed
+
+- **`agent_analyze`: timing_stats/success_rates resetting on restart** — Stats were purely in-memory (`map[string]*ToolTiming`, `map[string]*ToolSuccess`), so every server restart wiped them, leaving `agent_analyze` with empty timing_stats/success_rates until new commands arrived. Added `adaptive_stats` SQLite table and `SaveAdaptiveStat()`/`LoadPersistedStats()`/`HydratePersisted()`. On startup, `EnsureAdaptive()` calls `HydratePersisted()` to seed in-memory stats from the durable table, and every `RecordResult()` call persists the aggregate asynchronously via `go SaveAdaptiveStat(...)`.
+
+- **Training token inflation: `uniqueTokens()` dedup** — `tokenize()` on raw OCR text produced duplicate word entries per row (same word appearing multiple times in the OCR dump contributed multiple hits to the (word, command) pair). This caused `Count` in `top_sequences` to exceed `total_commands`/`total_sequences` (which count rows, not word occurrences). Added `uniqueTokens()` to dedupe before insert, so each (word, command) pair gets at most 1 hit per row regardless of how many times the word appears in the OCR context.
+
+- **OCR context scoped to nearby words** — `findRecentOCRBefore()` used to pass the ENTIRE screen's OCR dump as `ocr_before` for every command, so common on-screen words ("the", bullet points, news headlines, unrelated UI labels) all got associated with whatever command followed — producing noise-dominated predictions. Now:
+  - For coordinate-based tools (click, move_mouse, drag, hover), it uses word bounding boxes (`words []OCRWord`) to scope context to words within 200px of the target coordinates, nearest-first, capped at 20 words.
+  - For non-coordinate tools, it falls back to `capAndDedupeText()` which returns at most 40 unique words from the full dump instead of the raw dump.
+
+- **`LogToolCall` no longer double-counts timing/success** — `LogToolCall` previously called `Adaptive.RecordResult(tool, 0, errVal == nil)` with a phantom 0ms duration. Callers (Click, TypeText, etc.) already call `Adaptive.RecordResult` with the real elapsed duration. Removed the call from `LogToolCall` to avoid every action being double-counted with a fake 0ms sample alongside the real one.
+
+### Changed
+
+- **`pushRecentOCR()` signature** — Now accepts `*OCRResult` (with word bounding boxes) instead of just `string`, enabling spatial scoping in `findRecentOCRBefore`.
+- **`findRecentOCRBefore()` signature** — Now takes `tool string, argsJSON string` to enable tool-specific OCR scoping.
+- **Datalog query limit relaxed** — From clamped 50–200 range to 1–5000 range (default 50).
+
 ## [0.2.32] - 2026-07-05
 
 ### Fixed

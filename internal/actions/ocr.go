@@ -112,7 +112,7 @@ func OCRScreen(language string) (*OCRResult, error) {
 	}
 	result, err := ocrFromBase64(b64, language)
 	if err == nil && result != nil {
-		pushRecentOCR(result.Text)
+		pushRecentOCR(result)
 		tryCompletePair(result.Text, "")
 		go LogOCRSnapshot("tool", "ocr_screen", "", result)
 	}
@@ -126,7 +126,7 @@ func OCRRegion(x, y, w, h int32, language string) (*OCRResult, error) {
 	}
 	result, err := ocrFromBase64(b64, language)
 	if err == nil && result != nil {
-		pushRecentOCR(result.Text)
+		pushRecentOCR(result)
 		tryCompletePair(result.Text, "")
 		go LogOCRSnapshot("tool", "ocr_region", "", result)
 	}

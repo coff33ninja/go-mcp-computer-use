@@ -138,12 +138,25 @@ type EngineAnalysis struct {
 	LastTrained     string                     `json:"last_trained"`
 }
 
+// PersistedStat is the durable per-tool aggregate stored in the
+// adaptive_stats table. It lets timing_stats/success_rates survive a
+// server restart, since ToolTiming/ToolSuccess only live in memory.
+type PersistedStat struct {
+	SuccessCount  int
+	FailCount     int
+	DurationCount int
+	DurationSum   float64
+	DurationMin   float64
+	DurationMax   float64
+}
+
 type AdaptiveEngine struct {
 	timings    map[string]*ToolTiming
 	successes  map[string]*ToolSuccess
 	sequences  []SequenceExample
 	wordToCmds map[string]map[string]*cmdFreq
 	coordIndex map[string]map[string]*coordSample
+	persisted  map[string]*PersistedStat
 	totalCmds  int
 	totalSeqs  int
 	lastTrain  time.Time
@@ -166,6 +179,7 @@ func NewAdaptiveEngine() *AdaptiveEngine {
 		successes:  make(map[string]*ToolSuccess),
 		wordToCmds: make(map[string]map[string]*cmdFreq),
 		coordIndex: make(map[string]map[string]*coordSample),
+		persisted:  make(map[string]*PersistedStat),
 	}
 }
 
@@ -194,6 +208,9 @@ func (e *AdaptiveEngine) RecordSuccess(tool string, success bool) {
 func (e *AdaptiveEngine) RecordResult(tool string, durationMs float64, success bool) {
 	e.RecordTiming(tool, durationMs)
 	e.RecordSuccess(tool, success)
+	// Persist to the datalog DB asynchronously so timing_stats/success_rates
+	// survive a server restart instead of resetting to {} every time.
+	go SaveAdaptiveStat(tool, durationMs, success)
 }
 
 func (e *AdaptiveEngine) GetTiming(tool string) *TimingStat {
@@ -260,6 +277,22 @@ func tokenize(text string) []string {
 		}
 	}
 	return tokens
+}
+
+// uniqueTokens removes duplicate words, preserving first-seen order, so
+// repeated words within a single OCR context don't inflate frequency
+// counts beyond the number of rows actually processed.
+func uniqueTokens(tokens []string) []string {
+	seen := make(map[string]bool, len(tokens))
+	out := make([]string, 0, len(tokens))
+	for _, t := range tokens {
+		if seen[t] {
+			continue
+		}
+		seen[t] = true
+		out = append(out, t)
+	}
+	return out
 }
 
 var coordTools = map[string]bool{
@@ -370,7 +403,13 @@ func (e *AdaptiveEngine) TrainFromDatalog() error {
 		}
 
 		argsRaw := extractArgsFromJSON(cmdJSON)
-		tokens := tokenize(ocrBefore)
+		// Dedupe tokens so a single logged row (whose OCR context may
+		// contain the same word several times) contributes at most one
+		// occurrence per (word, command) pair. Without this, counts in
+		// top_sequences could exceed total_commands/total_sequences,
+		// since those totals count rows while this counted every word
+		// occurrence within a row.
+		tokens := uniqueTokens(tokenize(ocrBefore))
 		coords := extractCoordsFromArgs(tool, argsRaw)
 		e.mu.Lock()
 		for _, tok := range tokens {
@@ -688,6 +727,26 @@ func (e *AdaptiveEngine) Analyze() *EngineAnalysis {
 	for tool, ts := range e.successes {
 		analysis.SuccessRates[tool] = ts.Rate()
 	}
+	// Fill in from the durable persisted aggregate for any tool that has
+	// no live in-memory samples yet in this process (e.g. right after a
+	// restart, before new commands arrive). Live samples take priority
+	// since they carry real stddev/min/max for the current session.
+	for tool, p := range e.persisted {
+		if _, ok := analysis.TimingStats[tool]; !ok && p.DurationCount > 0 {
+			analysis.TimingStats[tool] = &TimingStat{
+				Mean:  p.DurationSum / float64(p.DurationCount),
+				Min:   p.DurationMin,
+				Max:   p.DurationMax,
+				Count: p.DurationCount,
+			}
+		}
+		if _, ok := analysis.SuccessRates[tool]; !ok {
+			total := p.SuccessCount + p.FailCount
+			if total > 0 {
+				analysis.SuccessRates[tool] = float64(p.SuccessCount) / float64(total)
+			}
+		}
+	}
 	return analysis
 }
 
@@ -699,9 +758,24 @@ func (e *AdaptiveEngine) RecordCommand(tool, argsJSON string, success bool, dura
 	LogCommand(tool, argsJSON, success, "", "", durationMs)
 }
 
+// HydratePersisted loads the durable per-tool stat aggregates from the
+// datalog DB into memory so agent_analyze can report timing_stats/
+// success_rates immediately after a restart, before any new commands
+// have run in this process.
+func (e *AdaptiveEngine) HydratePersisted() {
+	stats, err := LoadPersistedStats()
+	if err != nil {
+		return
+	}
+	e.mu.Lock()
+	e.persisted = stats
+	e.mu.Unlock()
+}
+
 func EnsureAdaptive() {
 	adaptiveOnce.Do(func() {
 		go func() {
+			Adaptive.HydratePersisted()
 			if err := Adaptive.TrainFromDatalog(); err != nil {
 				return
 			}

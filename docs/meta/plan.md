@@ -131,7 +131,19 @@ internal/actions/introspection.go
 ### 2. Keylogger Rewrite (COMPLETED — v0.2.19)
 Replaced `WH_MOUSE_LL` + `WH_KEYBOARD_LL` hooks with `GetAsyncKeyState` polling loop (50ms ticker). Eliminates system-wide input lag. Polling runs in a goroutine — no locked OS thread, no Windows message loop.
 
-### 3. Chain Interruption (MEDIUM)
+### 3. Test Validation of Recent Fixes (HIGH)
+
+The v0.2.33 changes introduced several correctness-sensitive behaviors that need unit test coverage:
+
+- **`uniqueTokens` dedup** — verify token deduplication works (duplicates, empty strings, case handling) and that `TrainFromDatalog` counts never exceed `total_commands`.
+- **`nearbyOCRText` spatial scoping** — verify words within radius are returned, words outside are excluded, ordering by distance, dedup, empty/edge cases.
+- **`capAndDedupeText` fallback** — verify max word cap, dedup, empty input, strings with mixed whitespace.
+- **`SaveAdaptiveStat`/`LoadPersistedStats` round-trip** — verify aggregates persist to `adaptive_stats` table and reload correctly, including concurrent writes and MIN/MAX accumulation.
+- **`Analyze()` persisted fallback** — verify timing_stats/success_rates fall through to `e.persisted` when no live samples exist.
+
+Test files: `internal/actions/adaptive_test.go`, `internal/actions/datalog_test.go` (unit tests, no build tag; integration tests via `//go:build integration`).
+
+### 4. Chain Interruption (MEDIUM)
 Ability to stop mid-chain on error/state change — `on_error: "stop"` already exists, needs `interrupt` signaling.
 
 ### 4. Cross-platform Interface (LOW)
