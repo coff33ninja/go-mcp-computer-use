@@ -48,9 +48,30 @@ jobs:
           git add -A
           git commit -m "chore(deps): weekly go module update"
           git push origin $branch --force
-          gh pr create `
-            --title "chore(deps): weekly go module update" `
-            --body "Automated weekly Go module dependency update via \`go get -u ./...\` followed by \`go mod tidy\`." `
-            --base v0.2.x
+          
+          $prPayload = @{
+            title = "chore(deps): weekly go module update"
+            head = $branch
+            base = "v0.2.x"
+            body = "Automated weekly Go module dependency update via ``go get -u ./...`` followed by ``go mod tidy``."
+          } | ConvertTo-Json
+          
+          $response = Invoke-WebRequest `
+            -Method POST `
+            -Uri "https://api.github.com/repos/coff33ninja/go-mcp-computer-use/pulls" `
+            -Headers @{
+              "Authorization" = "token $env:GH_TOKEN"
+              "Accept" = "application/vnd.github+json"
+              "User-Agent" = "GitHub-Actions"
+            } `
+            -Body $prPayload `
+            -ContentType "application/json"
+          
+          if ($response.StatusCode -eq 201) {
+            Write-Host "Pull request created successfully"
+          } else {
+            Write-Host "Failed to create pull request: $($response.StatusCode)"
+            exit 1
+          }
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
