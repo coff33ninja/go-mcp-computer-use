@@ -25,6 +25,11 @@ jobs:
         run: |
           go get -u ./...
           go mod tidy
+          # Revert onnxruntime_go — pinned version, dependabot blocked.
+          # v1.13.0 is the last known-compatible version with our usage.
+          # Major jumps (v1.31.0) need manual API compatibility review.
+          go get github.com/yalue/onnxruntime_go@v1.13.0
+          go mod tidy
 
       - name: Check for changes
         id: check
