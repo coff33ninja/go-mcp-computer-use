@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.2.32] - 2026-07-05
+
+### Fixed
+
+- **`chain` tool startup panic — shared sub-schema pointers** — `chainInputSchema()` reused the same `*jsonschema.Schema` for `then`, `else`, and `steps` fields. The MCP SDK's `AddTool()` requires schemas to form a tree (not a DAG) and panics on duplicate pointers. Changed to factory functions that return unique instances per call.
+- **Module path mismatch** — `go.mod` declared `github.com/user/go-mcp-computer-use` but the repo lives at `github.com/coff33ninja/go-mcp-computer-use`. Updated module path and all 7 import references across the codebase. (User was lazy to update this.)
+- **Adaptive engine: `timing_stats` and `success_rates` never populated** — `RecordCommand` (which calls `RecordResult` → `RecordTiming` + `RecordSuccess`) was defined but never called. Added `Adaptive.RecordResult(tool, 0, errVal == nil)` to `LogToolCall` so runtime success/failure is tracked per tool. Previously `agent_analyze` always showed empty `timing_stats: {}` and `success_rates: {}`.
+- **Adaptive engine: `rebuildSequences` merge corrupts `Count` and never updates `Freq`** — When merging duplicate (word, command) entries, Count was overwritten instead of accumulated, and Freq (success ratio) was set at creation and never recalculated on merge. Added internal `SuccessCount`/`FailCount` fields to `SequenceExample`, fixed merge to accumulate correctly and recalculate `Freq`.
+
+### Added
+
+- **Chain integration tests** — 7 tests build-tagged `//go:build integration` that start the mcp-server binary and validate chain tool end-to-end via stdio MCP protocol. Covers: simple steps, capture, loop, if/else branching, unknown tool error, timeout, and structured data output. Run with `go test -tags=integration -v -count=1 -timeout 120s ./internal/actions/ -run 'TestChain_'`.
+- **CI: `chain-tests` job** — runs chain integration tests after lint in `.github/workflows/ci.yml`.
+- **README badges** — Go version, release, CI status, Windows, MCP, last commit, PRs welcome.
+
 ## [0.2.31] - 2026-07-05
 
 ### Changed
@@ -7,17 +22,6 @@
 - **All 60+ query/result handlers now return structured data instead of "ok"** — Every handler that returns meaningful data (get_volume, get_battery, list_windows, get_system_info, get_uptime, get_clipboard, get_pixel_color, list_displays, get_disk_usage, get_network_info, ocr, find_image, find_all_images, list_audio_devices, list_processes, uia_find, uia_get_text, memory_get/search/list, template_find/list/store/forget, training_*, onnx_*, datalog_status, chain, launch_and_wait, write_file, delete_file, find_files, list_directory, set/get_working_directory, bridge_debug, set_config, task_begin, and more) now return their structured JSON data instead of the placeholder `"ok"` text. The SDK auto-populates tool results from structured output when no explicit `TextContent` is set, so tools like `get_screen_size` now show `{"width":1920,"height":1080}` instead of `"ok"`.
 - **`get_screen_size`, `get_cursor_position`** — same fix applied (noticed during audit).
 - **`chain` tool schema — no longer rejected by Gemini** — `IfConfig.Then`/`Else` and `LoopConfig.Steps` changed from `[]any` to `[]ChainStep`, which produced `items: true` and `type: ["null", "array"]` in the auto-generated JSON schema (both rejected by Gemini's MCP schema validator). The chain tool now uses a manually crafted `InputSchema` that avoids the recursive type cycle in `jsonschema-go` and produces clean schema output.
-
-### Fixed
-
-- **`chain` tool startup panic — shared sub-schema pointers** — `chainInputSchema()` reused the same `*jsonschema.Schema` for `then`, `else`, and `steps` fields. The MCP SDK's `AddTool()` requires schemas to form a tree (not a DAG) and panics on duplicate pointers. Changed to factory functions that return unique instances per call.
-- **Module path mismatch** — `go.mod` declared `github.com/user/go-mcp-computer-use` but the repo lives at `github.com/coff33ninja/go-mcp-computer-use`. Updated module path and all 7 import references across the codebase. (User was lazy to update this.)
-
-### Added
-
-- **Chain integration tests** — 7 tests build-tagged `//go:build integration` that start the mcp-server binary and validate chain tool end-to-end via stdio MCP protocol. Covers: simple steps, capture, loop, if/else branching, unknown tool error, timeout, and structured data output. Run with `go test -tags=integration -v -count=1 -timeout 120s ./internal/actions/ -run 'TestChain_'`.
-- **CI: `chain-tests` job** — runs chain integration tests after lint in `.github/workflows/ci.yml`.
-- **README badges** — Go version, release, CI status, Windows, MCP, last commit, PRs welcome.
 
 ## [0.2.30] - 2026-07-03
 

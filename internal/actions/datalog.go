@@ -192,6 +192,12 @@ func LogToolCall(tool string, argsJSON string, err error) {
 	}
 	errVal := err
 
+	// Record runtime timing/success stats for the adaptive engine.
+	// These populate success_rates and timing_stats in agent_analyze.
+	// Duration is 0 here (callers don't pass it yet), but success/fail
+	// is critical for frequency calculations and sequence confidence.
+	Adaptive.RecordResult(tool, 0, errVal == nil)
+
 	// Bridge: find recent OCR and set pending command synchronously
 	// so the next OCR call will find the pending pair immediately.
 	ocrBefore := findRecentOCRBefore()

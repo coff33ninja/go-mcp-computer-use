@@ -93,11 +93,13 @@ type WordIndex struct {
 }
 
 type SequenceExample struct {
-	OCRBefore string `json:"ocr_before"`
-	Command   string `json:"command"`
-	Success   bool   `json:"success"`
-	Count     int    `json:"count"`
-	Freq      float64 `json:"freq"`
+	OCRBefore    string  `json:"ocr_before"`
+	Command      string  `json:"command"`
+	Success      bool    `json:"success"`
+	Count        int     `json:"count"`
+	Freq         float64 `json:"freq"`
+	SuccessCount int     `json:"-"`
+	FailCount    int     `json:"-"`
 }
 
 type PredictedCoord struct {
@@ -454,20 +456,25 @@ func (e *AdaptiveEngine) rebuildSequences() {
 		for cmd, cf := range cmds {
 			key := aggKey{ocr: word, cmd: cmd}
 			if existing, ok := agg[key]; ok {
-				existing.Count += cf.success + cf.fail
-				if cf.success > 0 {
-					existing.Count = cf.success + cf.fail
+				existing.SuccessCount += cf.success
+				existing.FailCount += cf.fail
+				existing.Count = existing.SuccessCount + existing.FailCount
+				existing.Success = existing.SuccessCount > existing.FailCount
+				if existing.Count > 0 {
+					existing.Freq = float64(existing.SuccessCount) / float64(existing.Count)
 				}
 			} else {
 				total := cf.success + cf.fail
 				freq := float64(cf.success) / float64(total)
-				agg[key] = &SequenceExample{
-					OCRBefore: word,
-					Command:   cmd,
-					Success:   cf.success > cf.fail,
-					Count:     total,
-					Freq:      freq,
-				}
+			agg[key] = &SequenceExample{
+				OCRBefore:    word,
+				Command:      cmd,
+				Success:      cf.success > cf.fail,
+				Count:        total,
+				Freq:         freq,
+				SuccessCount: cf.success,
+				FailCount:    cf.fail,
+			}
 			}
 		}
 	}
