@@ -50,10 +50,8 @@ func verifiedResult(extra any, vr *actions.VerifyResult) (*mcp.CallToolResult, a
 	if extra != nil {
 		out["extra"] = extra
 	}
-	status := "ok"
-	if vr.Passed {
-		status = "ok (verified)"
-	} else {
+	status := "ok (verified)"
+	if !vr.Passed {
 		status = "ok (unverified: " + vr.Reason + ")"
 	}
 	return &mcp.CallToolResult{
@@ -301,6 +299,12 @@ type UIAGetTextArgs struct {
 	AutomationID string `json:"automation_id,omitempty"`
 }
 
+type UIASetTextArgs struct {
+	Name         string `json:"name,omitempty"`
+	AutomationID string `json:"automation_id,omitempty"`
+	Value        string `json:"value"`
+}
+
 type UIAInvokeArgs struct {
 	Name         string `json:"name,omitempty"`
 	AutomationID string `json:"automation_id,omitempty"`
@@ -325,6 +329,16 @@ func uiaGetTextHandler(ctx context.Context, req *mcp.CallToolRequest, args UIAGe
 		return nil, nil, fmt.Errorf("uia_get_text: %w", err)
 	}
 	return &mcp.CallToolResult{}, map[string]string{"text": text}, nil
+}
+
+func uiaSetTextHandler(ctx context.Context, req *mcp.CallToolRequest, args UIASetTextArgs) (*mcp.CallToolResult, any, error) {
+	if args.Value == "" {
+		return nil, nil, fmt.Errorf("uia_set_text: value is required")
+	}
+	if err := actions.UIASetText(args.Name, args.AutomationID, args.Value); err != nil {
+		return nil, nil, fmt.Errorf("uia_set_text: %w", err)
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
 }
 
 func uiaInvokeHandler(ctx context.Context, req *mcp.CallToolRequest, args UIAInvokeArgs) (*mcp.CallToolResult, any, error) {
@@ -2721,6 +2735,11 @@ func New(version string) *mcp.Server {
 		Name:        "uia_invoke",
 		Description: "Click or invoke a UI element by name or automation_id using UI Automation.",
 	}, uiaInvokeHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "uia_set_text",
+		Description: "Set text in a UI element by name or automation_id using UI Automation.",
+	}, uiaSetTextHandler)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "onnx_status",

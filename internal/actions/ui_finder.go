@@ -2,6 +2,7 @@ package actions
 
 import (
 	"fmt"
+	"log"
 	"strings"
 )
 
@@ -19,6 +20,30 @@ type FindUIElementResult struct {
 	OCRText     string           `json:"ocr_text,omitempty"`
 }
 
+func memoryToElement(key string) *DetectedElement {
+	fact, err := MemoryGet(key, "ui")
+	if err != nil || fact == nil {
+		return nil
+	}
+	el, ok := fact.Value.(map[string]any)
+	if !ok {
+		return nil
+	}
+	x, xok := el["x"].(float64)
+	y, yok := el["y"].(float64)
+	w, wok := el["w"].(float64)
+	h, hok := el["h"].(float64)
+	if !xok || !yok || !wok || !hok {
+		return nil
+	}
+	return &DetectedElement{
+		X: int32(x),
+		Y: int32(y),
+		W: int32(w),
+		H: int32(h),
+	}
+}
+
 func FindUIElement(in FindUIElementInput) (*FindUIElementResult, error) {
 	winTitle := in.WindowTitle
 	if winTitle == "" {
@@ -29,30 +54,25 @@ func FindUIElement(in FindUIElementInput) (*FindUIElementResult, error) {
 
 	// 1. Check memory first
 	memKey := fmt.Sprintf("ui:%s:%s", winTitle, in.Label)
-	fact, err := MemoryGet(memKey, "ui")
-	if err == nil && fact != nil {
-		if el, ok := fact.Value.(map[string]any); ok {
-			if x, xok := el["x"].(float64); xok {
-				if y, yok := el["y"].(float64); yok {
-					if w, wok := el["w"].(float64); wok {
-						if h, hok := el["h"].(float64); hok {
-							return &FindUIElementResult{
-								Found:       true,
-								Source:      "memory",
-								WindowTitle: winTitle,
-								Element: &DetectedElement{
-									Class:      in.Label,
-									X:          int32(x),
-									Y:          int32(y),
-									W:          int32(w),
-									H:          int32(h),
-								},
-							}, nil
-						}
-					}
-				}
-			}
-		}
+	if el := memoryToElement(memKey); el != nil {
+		el.Class = in.Label
+		return &FindUIElementResult{
+			Found:       true,
+			Source:      "memory",
+			WindowTitle: winTitle,
+			Element:     el,
+		}, nil
+	}
+
+	// 1.5. Check priors for stable, high-frequency elements
+	if el, ok := FindPriorPrediction(winTitle, in.Label); ok {
+		el.Class = in.Label
+		return &FindUIElementResult{
+			Found:       true,
+			Source:      "prior",
+			WindowTitle: winTitle,
+			Element:     el,
+		}, nil
 	}
 
 	// 2. Run ONNX detection
@@ -62,6 +82,9 @@ func FindUIElement(in FindUIElementInput) (*FindUIElementResult, error) {
 	}
 
 	detResult, err := ONNXDetect(DetectionInput{ImageB64: b64})
+	if err != nil {
+		log.Printf("[ui_finder] ONNX detection failed: %v — falling back to OCR", err)
+	}
 	if err == nil {
 		labelLower := strings.ToLower(in.Label)
 		for _, el := range detResult.Elements {
@@ -84,10 +107,16 @@ func FindUIElement(in FindUIElementInput) (*FindUIElementResult, error) {
 		}
 	}
 
-	// 3. Fallback: try OCR if text-based search
+	// 3. Fallback: try OCR if text-based search (reuses ONNX screenshot)
 	if in.UseOCR || in.Label != "" {
-		ocrResult, err := OCRScreen("")
+		ocrResult, err := ocrFromBase64(b64, "")
+		if err != nil {
+			log.Printf("[ui_finder] OCR failed: %v", err)
+		}
 		if err == nil {
+			pushRecentOCR(ocrResult)
+			tryCompletePair(ocrResult.Text, "")
+			go LogOCRSnapshot("tool", "ocr_screen", "", ocrResult)
 			labelLower := strings.ToLower(in.Label)
 			for _, word := range ocrResult.Words {
 				if strings.Contains(strings.ToLower(word.Text), labelLower) {

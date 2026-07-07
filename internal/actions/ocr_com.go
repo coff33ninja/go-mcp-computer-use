@@ -30,6 +30,12 @@ func ensureRo() error {
 	return roErr
 }
 
+func CloseWinRT() {
+	if roInited {
+		roUninitialize()
+	}
+}
+
 func newHString(s string) (HSTRING, error) {
 	return windowsCreateString(s)
 }

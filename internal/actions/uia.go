@@ -280,6 +280,61 @@ func UIAGetText(name, automationID string) (string, error) {
 	return text, nil
 }
 
+// ── UIASetText ──
+func UIASetText(name, automationID, value string) error {
+	if name == "" && automationID == "" {
+		return fmt.Errorf("uia_set_text: name or automation_id required")
+	}
+
+	ensureCOM()
+	if comInitErr != nil {
+		return fmt.Errorf("uia_set_text com: %w", comInitErr)
+	}
+
+	au, err := newUIA()
+	if err != nil {
+		return fmt.Errorf("uia_set_text: %w", err)
+	}
+	defer au.release()
+
+	root, err := au.getRootElement()
+	if err != nil {
+		return fmt.Errorf("uia_set_text root: %w", err)
+	}
+	defer root.release()
+
+	var cond *uiaCondition
+	if automationID != "" {
+		v := varString(automationID)
+		c, err := au.createPropertyCondition(UIA_AutomationIdPropertyId, v)
+		varFree(v)
+		if err != nil {
+			return fmt.Errorf("uia_set_text cond: %w", err)
+		}
+		cond = c
+	} else {
+		v := varString(name)
+		c, err := au.createPropertyCondition(UIA_NamePropertyId, v)
+		varFree(v)
+		if err != nil {
+			return fmt.Errorf("uia_set_text cond: %w", err)
+		}
+		cond = c
+	}
+	defer cond.release()
+
+	elem, err := root.findFirst(TreeScope_Descendants, uintptr(cond.p))
+	if err != nil {
+		return fmt.Errorf("uia_set_text find: %w", err)
+	}
+	if elem == nil {
+		return fmt.Errorf("uia_set_text: element not found")
+	}
+	defer elem.release()
+
+	return elem.setValue(value)
+}
+
 // ── UIAInvoke ──
 func UIAInvoke(name, automationID string) (bool, error) {
 	if name == "" && automationID == "" {

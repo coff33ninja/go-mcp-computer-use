@@ -366,7 +366,7 @@ func execTool(step ChainStep, args map[string]any, _ *chainState) StepResult {
 
 // ── Verify step ──
 
-func execVerify(step ChainStep, args map[string]any, state *chainState) StepResult {
+func execVerify(step ChainStep, args map[string]any, _ *chainState) StepResult {
 	cfg := step.Verify
 	if cfg == nil {
 		return StepResult{Tool: "verify", Success: false, Error: "missing verify config"}
@@ -445,7 +445,7 @@ func execVerify(step ChainStep, args map[string]any, state *chainState) StepResu
 
 // ── Poll step ──
 
-func execPoll(step ChainStep, state *chainState) StepResult {
+func execPoll(step ChainStep, _ *chainState) StepResult {
 	cfg := step.Poll
 	if cfg == nil {
 		return StepResult{Tool: "poll", Success: false, Error: "missing poll config"}

@@ -465,6 +465,46 @@ names: [%s]
 	}, nil
 }
 
+func FindPriorPrediction(windowTitle, className string) (*DetectedElement, bool) {
+	elementPriors.mu.RLock()
+	if !elementPriors.loaded {
+		elementPriors.mu.RUnlock()
+		loadPriorsFromDB()
+		elementPriors.mu.RLock()
+	}
+	priors := elementPriors.priors
+	elementPriors.mu.RUnlock()
+
+	normalized := normalizeWindowTitle(windowTitle)
+	var best *ElementPrior
+	for i := range priors {
+		if priors[i].Class == className && priors[i].WindowTitle == normalized {
+			best = &priors[i]
+			break
+		}
+	}
+	if best == nil {
+		return nil, false
+	}
+
+	if best.Frequency < 0.7 || best.SampleCount < 5 || best.StdX > 2.0 || best.StdY > 2.0 {
+		return nil, false
+	}
+
+	cx := int32(best.AvgX * 100)
+	cy := int32(best.AvgY * 100)
+	w := int32(best.AvgW * 100)
+	h := int32(best.AvgH * 100)
+
+	return &DetectedElement{
+		Class: className,
+		X:     cx - w/2,
+		Y:     cy - h/2,
+		W:     w,
+		H:     h,
+	}, true
+}
+
 func clamp(v, min, max float64) float64 {
 	if v < min {
 		return min

@@ -363,13 +363,13 @@ func readXlsx(p string) (string, error) {
 
 	var buf bytes.Buffer
 	for _, sheet := range f.GetSheetList() {
-		buf.WriteString("=== " + sheet + " ===\n")
+		fmt.Fprintf(&buf, "=== %s ===\n", sheet)
 		rows, err := f.GetRows(sheet)
 		if err != nil {
 			continue
 		}
 		for _, row := range rows {
-			buf.WriteString(strings.Join(row, "\t") + "\n")
+			fmt.Fprintf(&buf, "%s\n", strings.Join(row, "\t"))
 		}
 		buf.WriteString("\n")
 	}
@@ -392,7 +392,7 @@ func readPdf(p string) (string, error) {
 			continue
 		}
 		if i > 1 {
-			buf.WriteString("\n--- page " + fmt.Sprintf("%d", i) + " ---\n")
+			fmt.Fprintf(&buf, "\n--- page %d ---\n", i)
 		}
 		buf.WriteString(text)
 	}

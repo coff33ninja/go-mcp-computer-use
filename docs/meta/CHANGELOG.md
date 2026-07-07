@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.2.35] - 2026-07-07
+
+### Fixed
+
+- **`roUninitialize` never called on shutdown** — COM WinRT apartment initialized by `ensureRo()` was never cleaned up. Added `CloseWinRT()` in `ocr_com.go` wired into `main.go`'s signal handler so `RoUninitialize` runs on graceful shutdown.
+- **`status` initializer unreachable in `verifiedResult`** — `status := "ok"` was always overwritten by the if/else branches before use. Changed to single default `status := "ok (verified)"` with negation on `!vr.Passed`.
+- **`klMouseDown` and `winEventHookProc` dead code** — leftover scaffolding from keylogger refactor. `winEventHookProc` type was unused (callback uses `syscall.NewCallback` inline); `klMouseDown` was shadowed by local vars in `pollLoop`. Removed.
+- **Unused `state` params in `execVerify` and `execPoll`** — both functions received `*chainState` but never used it. Renamed to `_ *chainState` to match the pattern already used by `execWait` and `execTool`. Keeps call-site interface compatibility with `execIf`/`execLoop` which do need state.
+- **Inefficient string concatenation in `WriteString` calls** — three spots in `readXlsx` and `readPdf` concatenated strings before passing to `buf.WriteString(...)`, allocating intermediate strings. Changed to `fmt.Fprintf(&buf, ...)` which avoids the extra allocation.
+
+### Added
+
+- **`uia_set_text` MCP tool** — writes text into a UI element via UI Automation's `ValuePattern.SetValue`. The COM plumbing (`uiaElement.setValue`) existed but was never wired. Added `UIASetText()` in `uia.go`, handler and registration in `server.go`. Fills a backlog item from `docs/meta/backlog.md`.
+- **Prior-based coordinate prediction in `FindUIElement`** — `priors.go` tracked element frequency and position per window but `FindUIElement` never consulted them. Added `FindPriorPrediction()` that returns predicted coordinates for high-confidence priors (frequency >= 70%, sample_count >= 5, StdX/StdY <= 2.0). Inserted as step 1.5 in the cascade: memory → **prior** → ONNX → OCR. A prior hit avoids ONNX (no GPU/CPU inference) and OCR (no PowerShell launch).
+- **ONNX/OCR failure logging in `FindUIElement`** — when ONNX detection failed, the function silently fell through to OCR with no trace of the error. Same for OCR failure. Added `log.Printf` calls in both paths so server logs record when these subsystems are unavailable, distinguishing "not found" from "can't detect."
+
+### Fixed
+
+- **Double screenshot in `FindUIElement` OCR fallback** — when ONNX failed, `OCRScreen("")` captured the screen again even though `CaptureScreen()` had already been called at step 2. Changed OCR fallback to call `ocrFromBase64(b64, "")` directly, reusing the existing screenshot. Also performs `pushRecentOCR`/`tryCompletePair`/`LogOCRSnapshot` side effects that `OCRScreen` normally handles.
+- **Fragile memory deserialization in `FindUIElement`** — the memory fast path used 4 levels of nested type assertions (`any → map → float64 → int32`) with silent fall-through on any mismatch. Extracted into `memoryToElement()` helper that returns `nil` on any parse failure, keeping it clear and testable.
+
 ## [0.2.34] - 2026-07-07
 
 ### Fixed

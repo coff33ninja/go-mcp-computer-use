@@ -33,8 +33,6 @@ type recordedEvent struct {
 	timestamp        time.Time
 }
 
-type winEventHookProc func(hWinEventHook uintptr, event uint32, hwnd uintptr, idObject int32, idChild int32, dwEventThread uint32, dwmsEventTime uint32) uintptr
-
 var (
 	klMu              sync.Mutex
 	klActive          bool
@@ -45,11 +43,6 @@ var (
 	klDownKeys        map[uint32]bool
 	klStartWindow     string
 	klEndWindow       string
-	klMouseDown       struct {
-		left, right       bool
-		startTime         time.Time
-		startX, startY    int32
-	}
 	klLastMove        struct {
 		x, y int32
 		time time.Time

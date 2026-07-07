@@ -37,6 +37,7 @@ func main() {
 	go func() {
 		<-ctx.Done()
 		slog.Info("shutting down")
+		actions.CloseWinRT()
 		os.Exit(0)
 	}()
 
