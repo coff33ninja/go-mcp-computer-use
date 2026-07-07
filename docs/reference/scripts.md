@@ -1,6 +1,6 @@
 # Scripts Reference
 
-9 scripts in `scripts/`, each serving one purpose. Listed by invocation category.
+8 scripts in `scripts/`, each serving one purpose. Listed by invocation category.
 
 ## Discovery & Audit
 
@@ -10,9 +10,8 @@
 | `verify-iid-usage.go` | `go run ./scripts/verify-iid-usage.go [-update]` | Scans `winrt.go` for IID definitions, traces references, reports used/internal/unused. `-update` rewrites the Status column in `com-patterns.md` |
 | `verify-vtable-docs.go` | `go run ./scripts/verify-vtable-docs.go` | Parses all 36 `vtblMethod()` call sites, cross-references indices against doc tables and test annotations |
 | `gen-tools-doc.go` | `go run ./scripts/gen-tools-doc.go` | AST-based extraction of all 120 MCP tool definitions, generates `docs/reference/tools.md` sorted by category |
-| `gen-wiki.go` | `go run ./scripts/gen-wiki.go` | Compiles all project docs into 13 wiki pages in `wiki/` — synced to [GitHub Wiki](https://github.com/coff33ninja/go-mcp-computer-use/wiki) via `publish-wiki.yml` workflow |
 
-**Uniqueness chain:** `discover-winrt-iids.ps1` discovers IIDs from the running Windows build → `verify-iid-usage.go` audits which are actually used in Go code → `verify-vtable-docs.go` validates the vtable dispatch indices are correct → `gen-tools-doc.go` keeps the tool reference in sync → `gen-wiki.go` aggregates everything into a single wiki document. All five scripts exist because the WinRT COM surface has no central documentation and the codebase makes many raw vtable-indexed calls that would silently corrupt memory if wrong.
+**Uniqueness chain:** `discover-winrt-iids.ps1` discovers IIDs from the running Windows build → `verify-iid-usage.go` audits which are actually used in Go code → `verify-vtable-docs.go` validates the vtable dispatch indices are correct → `gen-tools-doc.go` keeps the tool reference in sync. All four scripts exist because the WinRT COM surface has no central documentation and the codebase makes many raw vtable-indexed calls that would silently corrupt memory if wrong.
 
 ## Build & Quality
 
@@ -39,8 +38,7 @@
 | `docs/reference/com-patterns.md` | `discover-winrt-iids.ps1`, `verify-iid-usage.go` |
 | `docs/reference/vtable-verification.md` | `verify-vtable-docs.go` |
 | `docs/reference/tools.md` | `gen-tools-doc.go` |
-| `wiki/` | `gen-wiki.go` |
-| `scripts/push-and-release.ps1` | `gen-tools-doc.go`, `gen-wiki.go` |
+| `scripts/push-and-release.ps1` | `gen-tools-doc.go` |
 | `.github/workflows/ci.yml` | `verify-vtable-docs.go`, `discover-winrt-iids.ps1`, `verify-iid-usage.go` |
 
 ---
