@@ -1,0 +1,7 @@
+title: go-mcp-computer-use
+description: MCP server for Windows desktop computer use
+remote_theme: pages-themes/hacker@v0.2.0
+plugins:
+  - jekyll-remote-theme
+logo: https://raw.githubusercontent.com/coff33ninja/go-mcp-computer-use/v0.2.x/app.ico
+show_downloads: true

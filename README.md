@@ -1,17 +1,15 @@
-<div align="center">
-
 # go-mcp-computer-use
 
-[![Go version](https://img.shields.io/github/go-mod/go-version/coff33ninja/go-mcp-computer-use?logo=go&labelColor=2d333b)](https://go.dev)
-[![Release](https://img.shields.io/github/v/release/coff33ninja/go-mcp-computer-use?logo=github&labelColor=2d333b&color=orange)](https://github.com/coff33ninja/go-mcp-computer-use/releases)
-[![CI](https://img.shields.io/github/actions/workflow/status/coff33ninja/go-mcp-computer-use/ci.yml?branch=v0.2.x&logo=github&labelColor=2d333b)](https://github.com/coff33ninja/go-mcp-computer-use/actions)
-[![Windows](https://img.shields.io/badge/Windows-0078D6?logo=windows&logoColor=white&labelColor=2d333b)](https://github.com/coff33ninja/go-mcp-computer-use)
-[![MCP](https://img.shields.io/badge/MCP-Server-5B5BD6?logoColor=white&labelColor=2d333b)](https://modelcontextprotocol.io)
-[![Last commit](https://img.shields.io/github/last-commit/coff33ninja/go-mcp-computer-use?labelColor=2d333b&color=yellowgreen)](https://github.com/coff33ninja/go-mcp-computer-use/commits/v0.2.x)
-[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?labelColor=2d333b)](https://github.com/coff33ninja/go-mcp-computer-use/pulls)
-[![Docs](https://img.shields.io/badge/docs-gh--pages-blue?labelColor=2d333b&logo=github)](https://coff33ninja.github.io/go-mcp-computer-use/)
-
-</div>
+<p align="center">
+  <a href="https://go.dev"><img src="https://img.shields.io/github/go-mod/go-version/coff33ninja/go-mcp-computer-use?logo=go&labelColor=2d333b" alt="Go version"></a>
+  <a href="https://github.com/coff33ninja/go-mcp-computer-use/releases"><img src="https://img.shields.io/github/v/release/coff33ninja/go-mcp-computer-use?logo=github&labelColor=2d333b&color=orange" alt="Release"></a>
+  <a href="https://github.com/coff33ninja/go-mcp-computer-use/actions"><img src="https://img.shields.io/github/actions/workflow/status/coff33ninja/go-mcp-computer-use/ci.yml?branch=v0.2.x&logo=github&labelColor=2d333b" alt="CI"></a>
+  <a href="https://github.com/coff33ninja/go-mcp-computer-use"><img src="https://img.shields.io/badge/Windows-0078D6?logo=windows&logoColor=white&labelColor=2d333b" alt="Windows"></a>
+  <a href="https://modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP-Server-5B5BD6?logoColor=white&labelColor=2d333b" alt="MCP"></a>
+  <a href="https://github.com/coff33ninja/go-mcp-computer-use/commits/v0.2.x"><img src="https://img.shields.io/github/last-commit/coff33ninja/go-mcp-computer-use?labelColor=2d333b&color=yellowgreen" alt="Last commit"></a>
+  <a href="https://github.com/coff33ninja/go-mcp-computer-use/pulls"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen?labelColor=2d333b" alt="PRs welcome"></a>
+  <a href="https://coff33ninja.github.io/go-mcp-computer-use/"><img src="https://img.shields.io/badge/docs-gh--pages-blue?labelColor=2d333b&logo=github" alt="Docs"></a>
+</p>
 
 > **Built iteratively** across AI-assisted development sessions, with [`v0.1.x`](https://github.com/coff33ninja/go-mcp-computer-use/tree/v0.1.x) covering 70+ bug-fixed Win32/COM tools and [`v0.2.x`](https://github.com/coff33ninja/go-mcp-computer-use/tree/v0.2.x) (default branch) adding the chained automation pipeline, SQLite memory store, ONNX ML detection, introspection engine, adaptive ML, and the training data pipeline for user-specific model fine-tuning.
 > The AI agent was guided by a curated set of quality-enforcement skills from [coff33ninja/ai-skills](https://github.com/coff33ninja/ai-skills) — anti-hallucination, anti-slop, safe-code-modifications, anti-sycophancy, code-simplification, context-engineering, don't-kill-tokens, os-awareness, anti-tool-sprawl, follow-existing-patterns, no-dead-code-removal, universal-format-lint, self-validate, verify-and-cite, and others.
