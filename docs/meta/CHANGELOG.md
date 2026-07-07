@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.36] - 2026-07-07
+
+### Fixed
+
+- **All handlers now return structured JSON instead of hardcoded `"ok"`** — `verifiedResult()` helper and ~50+ handler functions set `Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}` which blocked the MCP SDK from auto-populating with the structured second return value. When `Content == nil`, the SDK marshals the second value and sets both `StructuredContent` and `Content` (as JSON text). Fixed `verifiedResult()` to return `nil` Content when extra data is present, and changed every handler that returned explicit `"ok"` Content to return `&mcp.CallToolResult{}, map[string]any{"ok": true}, nil` (no-data tools) or `&mcp.CallToolResult{}, result, nil` (data tools). Verified live post-reboot: `list_windows`, `get_system_info`, `get_active_window`, `ocr` all return their structured JSON payloads instead of `"ok"`.
+
 ## [0.2.35] - 2026-07-07
 
 ### Fixed

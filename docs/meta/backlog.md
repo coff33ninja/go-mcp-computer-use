@@ -685,7 +685,9 @@
 ## 27. DEBUGGING & DIAGNOSTICS
 
 ### HAVE
-— *none*
+| Tool | Why |
+|------|-----|
+| `structured_logging` — per-module structured logging to `%APPDATA%\go-mcp-computer-use\logs\` via `slog` with rotation | debug & audit trail |
 
 ### NEXT
 | Tool | Why |
@@ -833,12 +835,12 @@
 | Screen (HW) | 6 | 3 | 3 | 12 |
 | Windows Shell | 3 | 5 | 3 | 11 |
 | Chained | 10 | 11 | 5 | 26 |
-| Debugging | 0 | 3 | 2 | 5 |
+| Debugging | 1 | 3 | 2 | 6 |
 | Memory & ML | 10 | 3 | 4 | 17 |
 | Transport & Server | 0 | 6 | 3 | 9 |
 | Browser Automation | 3 | 6 | 6 | 15 |
 | Linux & Container | 0 | 2 | 4 | 6 |
-| **TOTAL** | **134** | **128** | **122** | **384** |
+| **TOTAL** | **135** | **128** | **122** | **385** |
 
 ## Strategy
 

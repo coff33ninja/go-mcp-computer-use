@@ -81,6 +81,7 @@ See [`docs/architecture.md`](docs/architecture.md) for the agent stack diagram a
 
 ## Documentation
 
+- [`WIKI.md`](WIKI.md) — auto-generated comprehensive wiki from all project docs (run `go run ./scripts/gen-wiki.go` to regenerate)
 - [`docs/reference/codebase-map.md`](docs/reference/codebase-map.md) — complete tool→handler→action→file mapping for all 96 tools
 - [`docs/reference/windows-dll-ref.md`](docs/reference/windows-dll-ref.md) — Windows DLL, COM, and WinRT API reference — every syscall proc, DLL, and COM interface used
 - [`docs/reference/uipi.md`](docs/reference/uipi.md) — UIPI elevation detection logic, call sites, and error semantics

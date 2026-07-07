@@ -37,6 +37,8 @@ $commitMsg | Set-Content -Path $msgFile -Encoding UTF8
 # ---- Step 3: Commit and tag ----
 Write-Host "Regenerating tools.md..."
 go run ./scripts/gen-tools-doc.go
+Write-Host "Regenerating WIKI.md..."
+go run ./scripts/gen-wiki.go
 Write-Host "Committing..."
 git add -A
 git commit -F $msgFile
