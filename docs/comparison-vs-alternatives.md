@@ -1,10 +1,158 @@
-# Comparison: go-mcp-computer-use vs Microsoft Windows Recall
+# Comparison: go-mcp-computer-use vs Alternatives
 
-Both projects capture screenshots, run local AI, and store data on disk — but they serve fundamentally different purposes. This document compares them across architecture, security, privacy, and threat models.
+A survey of the computer-use agent landscape as of mid-2026, with detailed deep-dive comparisons against the most relevant projects.
 
 ---
 
-## 1. Core Purpose
+## 1. Landscape Overview
+
+| Project | Lang | MCP | Desktop | ONNX/ML | Training | Memory | Tools | Stars | Open Source |
+|---------|------|-----|---------|---------|---------|--------|-------|-------|-------------|
+| **[go-mcp-computer-use](https://github.com/coff33ninja/go-mcp-computer-use)** | Go | ✅ | ✅ Win | ✅ YOLO11+MobileNet | ✅ auto-collect | ✅ SQLite FTS | 132 | — | ✅ MIT |
+| **[Cua](https://github.com/trycua/cua)** | Py/HTML | ✅ | ✅ Win/Mac/Linux | ❌ | ❌ | ❌ | SDK | 19.4k | ✅ |
+| **[Agent-S](https://github.com/simular-ai/Agent-S)** | Python | ❌ | ✅ Win/Mac/Linux | ❌ | ❌ | ✅ in-context RL | SDK | 12k | ✅ |
+| **[Bytebot](https://github.com/bytebot-ai/bytebot)** | TypeScript | ❌ | ❌ Linux container | ❌ | ❌ | ❌ | SDK | 11.1k | ✅ |
+| **[MS Magentic-UI](https://github.com/microsoft/magentic-ui)** | C# | ❌ | ✅ Win | ❌ | ❌ | ❌ | SDK | 9.9k | ✅ |
+| **[Windows-MCP](https://github.com/CursorTouch/Windows-MCP)** | Python | ✅ | ✅ Win | ❌ | ❌ | ❌ | ~30 | 6k | ✅ MIT |
+| **[DesktopCtl](https://github.com/yaroshevych/desktopctl)** | Rust | ❌ | ✅ Win/Mac/Linux | ✅ GPU OCR | ❌ | ❌ | CLI | — | ✅ MIT |
+| **[Windows MCP Server](https://github.com/sbroenne/mcp-windows)** | C# | ✅ | ✅ Win | ❌ | ❌ | ❌ | ~15 | 57 | ✅ MIT |
+| **[Computer Control MCP](https://github.com/AB498/computer-control-mcp)** | Python | ✅ | ✅ Win/Mac/Linux | ✅ RapidOCR+ONNX | ❌ | ❌ | ~10 | 150 | ✅ MIT |
+| **[Anthropic Computer Use](https://docs.anthropic.com/en/docs/agents-and-tools/computer-use)** | — | ❌ | ❌ cloud VM | ✅ Claude vision | ❌ | ❌ | API | — | ❌ |
+| **[OpenAI CUA](https://openai.com/index/computer-using-agent/)** | — | ❌ | ❌ cloud VM | ✅ GPT-4o vision | ❌ | ❌ | API | — | ❌ |
+| **[Browser Use](https://github.com/browser-use/browser-use)** | Python | ❌ | ❌ browser only | ❌ | ❌ | ❌ | SDK | — | ✅ |
+
+---
+
+## 2. vs Other MCP Servers for Windows
+
+### go-mcp-computer-use vs [Windows-MCP](https://github.com/CursorTouch/Windows-MCP) (CursorTouch)
+
+Windows-MCP is the closest direct competitor — both are MCP servers for Windows automation. Key differences:
+
+| Dimension | go-mcp-computer-use | Windows-MCP |
+|-----------|-------------------|-------------|
+| **Language** | Go (static binary, ~16 MB) | Python (requires Python + deps) |
+| **OCR** | Native WinRT COM (2-8x faster than PowerShell) + PowerShell fallback | PowerShell OCR via pyautogui |
+| **ML detection** | YOLO11n + MobileNetV3 ONNX inference | None |
+| **Memory cache** | SQLite FTS5 with TTL | None |
+| **Training pipeline** | Auto-screenshots per action, categorized, YOLO export | None |
+| **UI Automation** | Native COM UIAutomation (IUIAutomation) | UIA via Python |
+| **Tool count** | 132 | ~30 |
+| **Chained automation** | if/else, loops, polling, verify, error handling | None |
+| **Browser automation** | No (basic find_text_and_click) | Snapshot + DOM mode for Chrome/Edge/Firefox |
+| **Security** | None (stdio/local only) | Bearer token, IP allowlist, TLS, OAuth 2.0 + PKCE, CORS, per-tool enable/disable |
+| **Network transport** | stdio | stdio, SSE, streamable HTTP |
+| **State management** | Reflection engine, adaptive engine, statistical priors | None |
+
+**Verdict**: Windows-MCP has better security and network support. go-mcp-computer-use wins on ML/memory/training depth. They're complementary — Windows-MCP for secure remote access, go-mcp-computer-use for agent learning and adaptation.
+
+### go-mcp-computer-use vs [Windows MCP Server](https://github.com/sbroenne/mcp-windows) (sbroenne)
+
+Windows MCP Server uses a fundamentally different approach: **UI Automation tree access** instead of pixel-based interaction. It finds buttons by automation name/ID, not by screenshot/OCR. This makes it faster and more reliable for standard Windows apps, but useless for games, custom controls, or any app without UIA metadata.
+
+| Approach | go-mcp-computer-use | Windows MCP Server |
+|----------|-------------------|-------------------|
+| **Element finding** | Pixels (screenshot → ONNX/OCR) | UIA tree (name/ID/type) |
+| **Screenshot needed?** | Yes (every action) | No (for UIA elements) |
+| **Works with games** | ✅ Yes (pixel-based) | ❌ No |
+| **DPI independence** | ❌ Requires DPI normalization | ✅ Automatic |
+| **Theme independence** | ❌ Retrains on theme change | ✅ Automatic |
+| **Fallback** | Memory → ONNX → OCR | UIA → mouse/keyboard (coordinates) |
+
+**Verdict**: go-mcp-computer-use covers the full spectrum (pixel + UIA + OCR). Windows MCP Server is more reliable for standard apps but has no fallback for apps without UIA metadata.
+
+### go-mcp-computer-use vs [DesktopCtl](https://github.com/yaroshevych/desktopctl)
+
+DesktopCtl is a Rust CLI tool for desktop control, not an MCP server. It uses GPU-accelerated text recognition and exposes a deterministic CLI interface. Like go-mcp-computer-use, it supports "bring your own AI."
+
+| Feature | go-mcp-computer-use | DesktopCtl |
+|---------|-------------------|------------|
+| **Interface** | MCP protocol (132 tools) | CLI commands |
+| **Vision** | ONNX YOLO11 + MobileNetV3 | GPU-accelerated OCR (no object detection) |
+| **Privacy** | Screenshots shared with AI agent | Screenshots stay local by default |
+| **Transport** | stdio (TCP optional) | CLI pipes |
+| **Language** | Go | Rust |
+| **Unique** | Training pipeline, memory, priors, 132 tools | `screen tokenize` for structured UI tokens |
+
+**Verdict**: DesktopCtl prioritizes privacy (screenshots not shared by default) and structured token output. go-mcp-computer-use prioritizes depth (training, memory, 132 tools).
+
+---
+
+## 3. vs Agent Frameworks
+
+### go-mcp-computer-use vs [Cua](https://github.com/trycua/cua) (trycua, 19.4k★)
+
+Cua is the largest open-source computer-use project. It provides sandboxes (VM/container images) for any OS plus drivers for background desktop control. It includes Cua Bench for standardized benchmarks and Lume for macOS VM management.
+
+| Dimension | go-mcp-computer-use | Cua |
+|-----------|-------------------|-----|
+| **Scope** | Single-server MCP toolset | Full infrastructure: sandboxes + SDK + benchmarks + drivers |
+| **OS support** | Windows only | Linux, macOS, Windows, Android (via VM/container) |
+| **Background control** | Foreground only (cursor capture) | ✅ Background (no cursor steal) via Cua Drivers |
+| **Sandboxing** | None (runs on host OS) | QEMU VMs + Docker containers, local or cloud |
+| **Benchmarks** | None published | Cua Bench (standardized eval suite) |
+| **RL training** | None | RL environments for model training |
+| **MCP support** | Native MCP server | Cua Drivers expose MCP server |
+| **Memory** | SQLite FTS5 with TTL | None |
+| **Training pipeline** | Auto-collected screenshots, YOLO export | None (RL-focused instead) |
+| **Install size** | ~16 MB binary + ~11 MB model | Multi-GB VMs + Python SDK |
+
+**Verdict**: Cua is an infrastructure platform for building and evaluating computer-use agents. go-mcp-computer-use is a focused MCP tool server for Windows. Cua's background control and VM sandboxing are features go-mcp-computer-use lacks entirely. go-mcp-computer-use's memory cache and training pipeline have no Cua equivalent.
+
+### go-mcp-computer-use vs [Agent-S](https://github.com/simular-ai/Agent-S) (simular-ai, 12k★)
+
+Agent-S is an open agentic framework focused on in-context reinforcement learning — it learns from past mistakes within a session. It supports all major OS platforms.
+
+| Feature | go-mcp-computer-use | Agent-S |
+|---------|-------------------|---------|
+| **Learning approach** | Statistical priors (cross-session) + memory cache | In-context RL (within session) |
+| **Memory** | SQLite persistent (FTS5, TTL) | Episodic (session-scoped) |
+| **Platform** | Windows only | Multi-platform |
+| **MCP** | Native MCP server | Not MCP-native |
+| **GUI agent** | MCP tool interface | Agent framework with planning/grounding |
+
+**Verdict**: Agent-S's in-context RL is orthogonal to go-mcp-computer-use's persistent priors. An agent using go-mcp-computer-use could theoretically implement Agent-S-style RL at the LLM layer while benefiting from go-mcp-computer-use's persistent memory.
+
+---
+
+## 4. vs Cloud APIs
+
+### go-mcp-computer-use vs [Anthropic Computer Use](https://docs.anthropic.com/en/docs/agents-and-tools/computer-use) / [OpenAI CUA](https://openai.com/index/computer-using-agent/)
+
+Both Anthropic and OpenAI offer computer-use as cloud APIs — the AI model sees screenshots and returns mouse/keyboard commands. No local ML, no training pipeline, no memory.
+
+| Feature | go-mcp-computer-use | Anthropic / OpenAI CUA |
+|---------|-------------------|----------------------|
+| **Where AI runs** | Client-side (your LLM via MCP) | Cloud (Anthropic/OpenAI servers) |
+| **Screenshots** | Stay local (sent to your LLM) | Sent to cloud API |
+| **ML detection** | Local ONNX (YOLO11) | Cloud vision model |
+| **Latency** | OCR: 500-2000ms, ONNX: 100-200ms | API round-trip: 2-10s |
+| **Training** | Auto-collect + export for fine-tuning | None exposed |
+| **Memory** | Persistent SQLite | None |
+| **Offline capable** | Yes (all inference local) | No (requires API) |
+| **Cost** | Free (own compute) | Per-token API pricing |
+| **Model choice** | Any LLM (bring your own) | Vendor-locked |
+
+**Verdict**: Cloud APIs give you a built-in vision model but lock you into their ecosystem. go-mcp-computer-use gives you local infrastructure and lets you choose any LLM — but you need to provide the model.
+
+### go-mcp-computer-use vs [Browser Use](https://github.com/browser-use/browser-use)
+
+Browser Use is the leading open-source browser automation framework. It achieves 89.1% on WebVoyager but is browser-only — no desktop app control.
+
+| Feature | go-mcp-computer-use | Browser Use |
+|---------|-------------------|-------------|
+| **Scope** | Full desktop (any app) | Browser only |
+| **Integration** | MCP protocol | Python SDK + Playwright |
+| **Element finding** | ONNX + OCR + UIA + template match | DOM selectors + accessibility tree |
+| **Desktop apps** | ✅ All Win32/UWP apps | ❌ Browser only |
+| **Benchmark** | None published | 89.1% on WebVoyager (586 tasks) |
+| **CAPTCHA** | Not handled | Manual configuration |
+
+**Verdict**: Not direct competitors. Browser Use is better at web tasks (DOM access is faster and more reliable than pixel-based). go-mcp-computer-use is the only option for non-browser desktop apps.
+
+---
+
+## 5. vs Microsoft Windows Recall
 
 | Dimension | Windows Recall | go-mcp-computer-use |
 |-----------|---------------|---------------------|
@@ -20,7 +168,7 @@ See [`guides/accessibility.md`](guides/accessibility.md) for the assistive techn
 
 ---
 
-## 2. Snapshot Collection
+## 7. Snapshot Collection
 
 | Aspect | Windows Recall | go-mcp-computer-use |
 |--------|---------------|---------------------|
@@ -39,7 +187,7 @@ Recall captures ~720-1200 screenshots per hour of user activity. go-mcp-computer
 
 ---
 
-## 3. AI / ML Pipeline
+## 8. AI / ML Pipeline
 
 | Component | Windows Recall | go-mcp-computer-use |
 |-----------|---------------|---------------------|
@@ -55,7 +203,7 @@ Recall's AI pipeline is dramatically more sophisticated — it builds a full sem
 
 ---
 
-## 4. Security Architecture
+## 9. Security Architecture
 
 | Layer | Windows Recall | go-mcp-computer-use |
 |-------|---------------|---------------------|
@@ -75,7 +223,7 @@ go-mcp-computer-use has **no encryption, no isolation, no access control**. It's
 
 ---
 
-## 5. Privacy Controls
+## 10. Privacy Controls
 
 | Control | Windows Recall | go-mcp-computer-use |
 |---------|---------------|---------------------|
@@ -95,7 +243,7 @@ go-mcp-computer-use's controls are **basic but functional** — `set_config` to 
 
 ---
 
-## 6. Storage Comparison (Real-World Estimates)
+## 11. Storage Comparison (Real-World Estimates)
 
 ### Recall (1 hour of active use)
 
@@ -121,7 +269,7 @@ go-mcp-computer-use's controls are **basic but functional** — `set_config` to 
 
 ---
 
-## 7. Threat Model Comparison
+## 12. Threat Model Comparison
 
 ### Windows Recall threat model
 
@@ -153,7 +301,7 @@ Recall is designed to **survive a compromised OS** (VBS Enclave isolates from ke
 
 ---
 
-## 8. Summary
+## 13. Summary
 
 | | Windows Recall | go-mcp-computer-use |
 |---|---------------|---------------------|
@@ -173,7 +321,7 @@ Recall is designed to **survive a compromised OS** (VBS Enclave isolates from ke
 
 ---
 
-## 9. What Each Can Learn From the Other
+## 14. What Each Can Learn From the Other
 
 ### go-mcp-computer-use could adopt from Recall
 
@@ -198,7 +346,7 @@ Recall is designed to **survive a compromised OS** (VBS Enclave isolates from ke
 
 ---
 
-## 10. Verdict
+## 15. Verdict
 
 **Windows Recall** is a polished, enterprise-grade memory prosthesis for humans. It trades hardware requirements (NPU, TPM 2.0, Windows 11) for deep integration, semantic search, and defense-in-depth security. The re-architecture after the June 2024 disclosure was thorough — the cryptography and VBS isolation are genuinely well-designed. The remaining attack surface (TotalRecall Reloaded extracting data from `aihost.exe` post-auth) is a fundamental tension between usability and security that no system has fully solved.
 

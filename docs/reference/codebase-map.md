@@ -24,7 +24,7 @@ go-mcp-computer-use/
 │   ├── architecture.md           # Agent stack architecture
 │   ├── ci-cd-pipeline.md         # CI/CD workflow reference
 │   ├── security.md               # Data collection, privacy controls
-│   ├── comparison-vs-windows-recall.md
+│   ├── comparison-vs-alternatives.md
 │   ├── adr/                      # Architecture Decision Records
 │   ├── reference/                # Tools, config, versioning, MCP clients, codebase map
 │   ├── guides/                   # Build, accessibility, agent guides, CUA guide
@@ -353,7 +353,7 @@ Vtable index stability model and CI/CD verification: [`vtable-verification.md`](
 | `docs/architecture.md` | Agent stack layers (LLM→MCP→Controller/Perception/Memory/Training) |
 | `docs/ci-cd-pipeline.md` | CI/release workflows, branching, local build steps |
 | `docs/security.md` | Data collection, `set_config` controls, watcher management, `training_cleanup_noise` |
-| `docs/comparison-vs-windows-recall.md` | Vs. Microsoft Recall — architecture, privacy, accessibility |
+| `docs/comparison-vs-alternatives.md` | Vs. Cua, Windows-MCP, DesktopCtl, Anthropic, OpenAI CUA, Browser Use, Microsoft Recall — landscape overview and detailed deep-dives |
 | `docs/guides/build.md` | Build requirements, Zig cc + CGO, cross-compilation |
 | `docs/guides/agent-guides.md` | Tool subsets per task type, prompt patterns, agent workflows |
 | `docs/guides/accessibility.md` | Assistive technology use cases, hands-free operation |

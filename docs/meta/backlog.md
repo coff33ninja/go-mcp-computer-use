@@ -5,7 +5,7 @@
 
 ## How to Read
 
-- **HAVE** = implemented (131 tools)
+- **HAVE** = implemented (134 tools)
 - **NEXT** = high-impact, feasible additions
 - **FAR** = possible but lower priority or complex
 - Items within a section ordered roughly by priority
@@ -42,6 +42,8 @@
 | `real_time_stream` | WebSocket stream of frames for live agent view |
 | `color_detection` | find all pixels of a given color on screen |
 | `snap_diff` | compare screenshot to a reference "golden" image |
+| `ocr_gpu_accelerated` — GPU-backed OCR backend | 10x faster text extraction (from DesktopCtl) |
+| `screen_tokenize` — structured UI token output | deterministic CLI-style UI description (from DesktopCtl) |
 
 ---
 
@@ -71,6 +73,8 @@
 | `right_click_menu` — right-click + get menu items | context menu interaction |
 | `multi_touch` — simulate touch gestures (pinch, swipe) | tablet/touch scenarios |
 | `pen_stylus` — WinRT pen simulation | drawing, handwriting |
+| `background_click` — click without stealing cursor | non-disruptive automation (from Cua) |
+| `background_type` — type without focusing target window | invisible input (from Cua) |
 
 ---
 
@@ -188,6 +192,9 @@
 | `get_process_threads` — list threads | diagnostics |
 | `run_as_user` — impersonation | different user context |
 | `create_process_group` / `kill_process_tree` | manage process families |
+| `vm_sandbox_create` — launch QEMU/Docker sandbox | isolated execution (from Cua) |
+| `vm_sandbox_destroy` — tear down sandbox | cleanup (from Cua) |
+| `sandbox_exec` — run command inside sandbox | safe testing (from Cua) |
 
 ---
 
@@ -555,6 +562,10 @@
 | `get_username` — current user | identity |
 | `get_user_sid` — user security identifier | identity |
 | `get_user_groups` — group membership | permission awareness |
+| `list_tools` — list all MCP tools with metadata | tool discovery |
+| `enable_tool` / `disable_tool` — per-tool allow/deny | granular security (from Windows-MCP) |
+| `set_auth_token` — configure bearer token for TCP transport | transport security (from Windows-MCP) |
+| `set_tls` — configure TLS cert for TCP transport | transport encryption (from Windows-MCP) |
 
 ### FAR
 | Tool | Why |
@@ -563,6 +574,8 @@
 | `get_logged_in_users` — active users | multi-user |
 | `get_bitlocker_status` — drive encryption | security status |
 | `get_defender_status` — antivirus status | security awareness |
+| `set_cors_origin` — restrict MCP clients by origin | remote access control |
+| `set_ip_allowlist` / `set_ip_denylist` — IP-based access control | network security |
 
 ---
 
@@ -579,6 +592,7 @@
 |------|-----|
 | `get_display_orientation` — landscape/portrait | rotation |
 | `get_virtual_screen_bounds` — total spanning rect | multi-monitor layout |
+| `dpi_normalize_coordinates` — transform coords between monitors with different DPI | mixed-DPI setups (from Windows MCP Server) |
 
 ### FAR
 | Tool | Why |
@@ -688,16 +702,118 @@
 
 ---
 
+## 28. MEMORY & ML — Learn and Adapt
+
+### HAVE
+- `memory_set` / `memory_get` / `memory_search` / `memory_list` / `memory_forget` — SQLite FTS5 persistent fact store with TTL
+- `agent_analyze` / `agent_suggest` / `agent_train` — adaptive engine (timing stats, success rates, coordinate prediction)
+- `training_save_sample` / `training_list_samples` / `training_stats` / `training_mark_used` / `training_cleanup_noise` / `export_yolo_dataset` — auto-collect + export pipeline
+- `datalog_query` / `datalog_status` / `datalog_export` — action/OCR/chain/pair datalog
+- Statistical priors — element frequency + position per window
+- `introspection_analyze` / `task_begin` / `task_end` — post-task mining
+
+### NEXT
+| Tool | Why |
+|------|-----|
+| `set_retention_policy` — auto-prune training samples older than N days | bound disk usage (from Recall) |
+| `set_sensitive_content_filter` — regex patterns to redact before saving | privacy guard (from Recall) |
+| `training_set_category_prompt` — per-category task prompt | richer training context |
+
+### FAR
+| Tool | Why |
+|------|-----|
+| `in_context_rl` — session-scoped outcome buffer for within-session learning | adaptive on-the-fly (from Agent-S) |
+| `semantic_search_screenshots` — vector embedding index over past screenshots | find-by-content (from Recall) |
+| `rl_training_environment` — simulated desktop for reinforcement learning | RL pipeline (from Cua) |
+| `model_fine_tune` — trigger local fine-tuning of ONNX model | self-improving vision |
+
+---
+
+## 29. TRANSPORT & SERVER — Connectivity
+
+### HAVE
+- stdio transport only
+
+### NEXT
+| Feature | Why |
+|---------|-----|
+| SSE transport | run as standalone server, support remote MCP clients (from Windows-MCP) |
+| Streamable HTTP transport | modern MCP transport, bidirectional streaming |
+| Bearer token auth | authenticate MCP clients (from Windows-MCP) |
+| TLS support | encrypt transport layer (from Windows-MCP) |
+| CORS support | restrict browser-based MCP clients (from Windows-MCP) |
+| `set_transport` / `get_transport_config` — runtime transport switching | flexible deployment |
+
+### FAR
+| Feature | Why |
+|---------|-----|
+| OAuth 2.0 + PKCE | enterprise auth (from Windows-MCP) |
+| WebSocket transport | real-time bidirectional streaming |
+| Unix domain socket transport | local high-performance IPC |
+
+---
+
+## 30. BROWSER AUTOMATION — Web Tasks
+
+### HAVE
+- `open_url` — open URL in default browser
+- `find_text_and_click` — basic OCR-based browser interaction
+- `wait_for_text` — poll OCR until text appears
+
+### NEXT
+| Tool | Why |
+|------|-----|
+| `browser_snapshot` — capture DOM snapshot of current page | structured page data (from Windows-MCP) |
+| `browser_dom_get` — query DOM elements by CSS selector | fast element access (from Windows-MCP) |
+| `browser_dom_get_text` — get text content of DOM element | read page content (from Windows-MCP) |
+| `browser_dom_invoke` — click/submit DOM element | reliable browser interaction (from Windows-MCP) |
+| `browser_dom_get_attributes` — get element attributes | page structure analysis |
+| `browser_execute_js` — run JavaScript in page context | advanced page scripting |
+
+### FAR
+| Tool | Why |
+|------|-----|
+| `browser_new_tab` / `browser_close_tab` — tab management | multi-page workflows |
+| `browser_get_cookies` / `browser_set_cookies` — session management | authenticated browsing |
+| `browser_wait_for_page_load` — wait until page fully loaded | reliable navigation |
+| `browser_get_console_logs` — capture console output | debugging |
+| `browser_fill_form` — auto-fill form fields by label | form automation (from Browser Use) |
+| `browser_download_file` — capture download from browser | file acquisition |
+| CAPTCHA solving | farm out to third-party service (from Browser Use) |
+
+---
+
+## 31. LINUX & CONTAINER — Cross-Platform Desktop
+
+### HAVE
+— *none*
+
+### NEXT
+| Tool | Why |
+|------|-----|
+| `container_list` — list running containers | container awareness |
+| `container_exec` — run command inside container | cross-platform execution (from Bytebot) |
+
+### FAR
+| Tool | Why |
+|------|-----|
+| `linux_x_desktop_control` — control Linux X11/Wayland desktops | Linux support (from Bytebot) |
+| `macos_a11y_control` — control macOS via Accessibility API | macOS support |
+| `container_desktop_launch` — launch desktop app inside container | isolated Linux desktop (from Bytebot) |
+| `cross_platform_interface` — abstract Windows/Linux/macOS behind common API | portable agent tasks |
+
+---
+
 ## Summary
 
 | Domain | HAVE | NEXT | FAR | Total Possible |
 |--------|------|------|-----|---------------|
-| Vision | 10 | 5 | 7 | 20 |
-| Mouse | 6 | 6 | 5 | 17 |
+| Vision | 10 | 5 | 9 | 24 |
+| Mouse | 6 | 6 | 7 | 19 |
 | Keyboard | 10 | 5 | 6 | 21 |
 | Windows | 13 | 9 | 6 | 28 |
 | Virtual Desktops | 0 | 6 | 2 | 8 |
-| Processes | 4 | 7 | 5 | 16 |
+| Processes | 4 | 7 | 8 | 19 |
 | File System | 12 | 3 | 6 | 21 |
 | Clipboard | 2 | 4 | 3 | 9 |
 | Audio | 4 | 5 | 6 | 15 |
@@ -713,18 +829,23 @@
 | Time & Date | 0 | 2 | 2 | 4 |
 | Accessibility | 0 | 3 | 2 | 5 |
 | Remote Session | 0 | 2 | 2 | 4 |
-| Security & Identity | 0 | 4 | 4 | 8 |
-| Screen (HW) | 6 | 2 | 3 | 11 |
+| Security & Identity | 0 | 8 | 6 | 14 |
+| Screen (HW) | 6 | 3 | 3 | 12 |
 | Windows Shell | 3 | 5 | 3 | 11 |
 | Chained | 10 | 11 | 5 | 26 |
 | Debugging | 0 | 3 | 2 | 5 |
-| Memory & ML | 10 | 5 | 5 | 20 |
-| **TOTAL** | **131** | **111** | **101** | **343** |
+| Memory & ML | 10 | 3 | 4 | 17 |
+| Transport & Server | 0 | 6 | 3 | 9 |
+| Browser Automation | 3 | 6 | 6 | 15 |
+| Linux & Container | 0 | 2 | 4 | 6 |
+| **TOTAL** | **134** | **128** | **122** | **384** |
 
 ## Strategy
 
-1. **Build out NEXT items** — these are straightforward and high value (another ~117 tools)
+1. **Build out NEXT items** — these are straightforward and high value (another ~128 tools)
 2. **Error wrapping audit** — remaining Slice 4 item for consistent error feedback across all tools
-3. **Cross-platform interface** — Linux/macOS stubs for portable task definitions
-4. **User-configurable tool subsets** — allow users to load only the tool groups they need per agent
-5. **ML model improvement** — fix YOLO11n opset 22 incompatibility, explore UI-specific fine-tuning
+3. **Security + Transport** — per-tool enable/disable + TLS + SSE are prerequisites for remote deployment
+4. **Browser DOM mode** — CDP/Playwright integration for 10x faster web tasks (steal from Windows-MCP)
+5. **Background control** — SendInput/UIA for non-disruptive clicks (steal from Cua)
+6. **Cross-platform interface** — Linux/macOS stubs + container support (steal from Bytebot)
+7. **ML model improvement** — fix YOLO11n opset 22 incompatibility, explore UI-specific fine-tuning

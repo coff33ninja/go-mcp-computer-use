@@ -163,6 +163,39 @@ Ability to stop mid-chain on error/state change — `on_error: "stop"` already e
 
 See [`docs/reference/versioning-strategy.md`](../reference/versioning-strategy.md) for the full versioning scheme, bump rules, tagging policy, and release process.
 
+---
+
+## Competitive Intelligence — Features Worth Stealing
+
+High-impact features from competing projects that fill gaps in go-mcp-computer-use, ordered by effort:
+
+### Quick Wins (low effort, high value)
+
+| Steal From | Feature | What It Does | Where to Implement |
+|-----------|---------|-------------|-------------------|
+| **Windows-MCP** | Per-tool enable/disable | Config map allow/deny list per MCP tool | `server.go` — filter registration |
+| **Recall** | Retention policy | Auto-prune training samples older than N days | `training/cleanup.go` — add TTL config + background goroutine |
+| **Windows MCP Server** | DPI normalization | Scale coordinates per-monitor DPI | `actions/verify.go` — `SmartRegionAround` / coordinate transforms |
+
+### Medium Effort
+
+| Steal From | Feature | What It Does | Where to Implement |
+|-----------|---------|-------------|-------------------|
+| **Windows-MCP** | Bearer token + TLS | Auth for TCP transport (needed before SSE) | New `transport/` package |
+| **Windows-MCP** | SSE transport | Switchable from stdio so server can run standalone | New `transport/` + MCP SSE support |
+| **Windows-MCP** | Browser DOM mode | CDP/Playwright integration for Chrome/Edge DOM snapshots | New `internal/browser/` package |
+| **Agent-S** | In-context RL | Track last-N action outcomes per session, surface as reflection context | `actions/introspection.go` — session-scoped outcome buffer |
+| **Recall** | Sensitive content filtering | Regex PII/password detection on OCR text before saving training samples | `training/save.go` — filter hook |
+
+### High Effort (architectural)
+
+| Steal From | Feature | What It Does | Where to Implement |
+|-----------|---------|-------------|-------------------|
+| **Cua** | Background control | `SendInput`/UIA instead of cursor-steal for clicks | `actions/click.go` — new input backend |
+| **Cua** | VM sandboxing | QEMU/Docker target instead of host OS | New `sandbox/` package |
+| **Recall** | Semantic indexing | Vector embeddings for screenshot search | New `memory/vector/` package + embedding model |
+| **DesktopCtl** | GPU-accelerated OCR | Swap WinRT OCR for GPU-backed | `ocr/` — new backend |
+
 ## Constraints
 
 - Windows 10/11 only

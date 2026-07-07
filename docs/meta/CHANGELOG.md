@@ -15,6 +15,7 @@
 - **`uia_set_text` MCP tool** — writes text into a UI element via UI Automation's `ValuePattern.SetValue`. The COM plumbing (`uiaElement.setValue`) existed but was never wired. Added `UIASetText()` in `uia.go`, handler and registration in `server.go`. Fills a backlog item from `docs/meta/backlog.md`.
 - **Prior-based coordinate prediction in `FindUIElement`** — `priors.go` tracked element frequency and position per window but `FindUIElement` never consulted them. Added `FindPriorPrediction()` that returns predicted coordinates for high-confidence priors (frequency >= 70%, sample_count >= 5, StdX/StdY <= 2.0). Inserted as step 1.5 in the cascade: memory → **prior** → ONNX → OCR. A prior hit avoids ONNX (no GPU/CPU inference) and OCR (no PowerShell launch).
 - **ONNX/OCR failure logging in `FindUIElement`** — when ONNX detection failed, the function silently fell through to OCR with no trace of the error. Same for OCR failure. Added `log.Printf` calls in both paths so server logs record when these subsystems are unavailable, distinguishing "not found" from "can't detect."
+- **Competitive intelligence gathered from landscape survey** — cross-referenced 12 open-source and commercial projects in `docs/comparison-vs-alternatives.md` and extracted features worth adopting. Added a "Competitive Intelligence" section to `docs/meta/plan.md` with prioritized steals (quick wins → medium → high effort). Fleshed out `docs/meta/backlog.md` with 3 new sections (Memory & ML, Transport & Server, Browser Automation, Linux & Container) and enhanced Security & Identity, Vision, Mouse, Screen, and Processes sections — totaling ~41 new backlog items. Shout out to [Cua](https://github.com/trycua/cua), [Agent-S](https://github.com/simular-ai/Agent-S), [Bytebot](https://github.com/bytebot-ai/bytebot), [MS Magentic-UI](https://github.com/microsoft/magentic-ui), [Windows-MCP](https://github.com/CursorTouch/Windows-MCP), [DesktopCtl](https://github.com/yaroshevych/desktopctl), [Windows MCP Server](https://github.com/sbroenne/mcp-windows), [Computer Control MCP](https://github.com/AB498/computer-control-mcp), [Browser Use](https://github.com/browser-use/browser-use), and Microsoft Windows Recall for the reference implementations and design inspiration.
 
 ### Fixed
 
@@ -468,7 +469,7 @@ Now at 131 total MCP tools (+11).
 ### Documentation
 
 - **README split** — large sections moved into focused docs for maintainability.
-- **All NoCGO references removed** — across `plan.md`, `adr-002`, `comparison-vs-windows-recall.md`, `ci-cd-pipeline.md`, `build.md`, `README.md`.
+- **All NoCGO references removed** — across `plan.md`, `adr-002`, `comparison-vs-alternatives.md (formerly comparison-vs-windows-recall.md)`, `ci-cd-pipeline.md`, `build.md`, `README.md`.
 
 ## [0.2.10] - 2026-06-29
 
