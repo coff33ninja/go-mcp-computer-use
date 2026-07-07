@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.2.34] - 2026-07-07
+
+### Fixed
+
+- **Training pair pipeline died permanently after a single missed OCR window** — `LogToolCall` only called `OCRScreen("")` (the auto-capture that completes a pending pair *and* refreshes `recentOCR` for the next action) inside the `if ocrBefore != ""` branch. If one action's `findRecentOCRBefore` call missed the `bridgeWindow` — entirely plausible under normal agent round-trip latency between an explicit `ocr()` call and the action that follows it — the buffer never refreshed again. Every subsequent action would also find nothing, permanently starving `training_pairs` until something called an OCR tool manually to re-seed it. Moved the `OCRScreen("")` auto-capture out of the conditional so it now runs after every action regardless of whether that action found a prior snapshot, making the bridge self-healing instead of a single point of failure.
+
+### Changed
+
+- **`bridgeWindow` widened 30s → 60s** — 30s was tight for realistic agent-driven latency between an OCR call and the action that follows it. Combined with the self-healing refresh above, 60s gives headroom without letting stale context linger indefinitely.
+
+### Verification
+
+Live end-to-end test through the MCP server (`ocr` → `click` → `type` → `key_press` → `click` → `type`): before this fix, 5 real actions produced 0 `training_pairs` rows (the bridge had already gone dark from an earlier missed window). After the fix and a rebuild/restart, the same kind of sequence produced 5/5 pairs, with `agent_train`/`agent_analyze` showing populated `timing_stats`, `success_rates`, and `top_sequences` with counts correctly bounded by `total_commands`.
+
 ## [0.2.33] - 2026-07-06
 
 ### Fixed
