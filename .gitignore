@@ -39,3 +39,7 @@ yolo_dataset/
 
 # Generated Windows icon resource (compiled from icons/app.rc via windres)
 cmd/mcp-server/rsrc*.syso
+
+# ChatGPT technical analysis (accidental commit, not for repo)
+TECHNICAL_DEEP_DIVE.md
+TECHNICAL_DEEP_DIVE.txt
