@@ -9,6 +9,7 @@
 [![MCP](https://img.shields.io/badge/MCP-Server-5B5BD6?logoColor=white&labelColor=2d333b)](https://modelcontextprotocol.io)
 [![Last commit](https://img.shields.io/github/last-commit/coff33ninja/go-mcp-computer-use?labelColor=2d333b&color=yellowgreen)](https://github.com/coff33ninja/go-mcp-computer-use/commits/v0.2.x)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?labelColor=2d333b)](https://github.com/coff33ninja/go-mcp-computer-use/pulls)
+[![Docs](https://img.shields.io/badge/docs-gh--pages-blue?labelColor=2d333b&logo=github)](https://coff33ninja.github.io/go-mcp-computer-use/)
 
 </div>
 
@@ -81,7 +82,8 @@ See [`docs/architecture.md`](docs/architecture.md) for the agent stack diagram a
 
 ## Documentation
 
-- [`wiki/`](wiki/) — auto-generated wiki pages synced to the [GitHub Wiki](https://github.com/coff33ninja/go-mcp-computer-use/wiki) (run `go run ./scripts/gen-wiki.go` to regenerate)
+- [**GitHub Pages**](https://coff33ninja.github.io/go-mcp-computer-use/) — rendered README with all project links
+- [**GitHub Wiki**](https://github.com/coff33ninja/go-mcp-computer-use/wiki) — 13-page wiki auto-synced from `wiki/`
 - [`docs/reference/codebase-map.md`](docs/reference/codebase-map.md) — complete tool→handler→action→file mapping for all 96 tools
 - [`docs/reference/windows-dll-ref.md`](docs/reference/windows-dll-ref.md) — Windows DLL, COM, and WinRT API reference — every syscall proc, DLL, and COM interface used
 - [`docs/reference/uipi.md`](docs/reference/uipi.md) — UIPI elevation detection logic, call sites, and error semantics

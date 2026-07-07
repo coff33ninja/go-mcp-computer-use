@@ -2,13 +2,13 @@
 
 # Security
 
-[Home](Home.md) ← 
+[Home](Home.md) ← ## Security
+
 **⚠️ This server can fully control your Windows machine.** See [`docs/security.md`](docs/security.md) for:
 - Security warning and dangerous capabilities
 - Elevation & UIPI (Admin vs Non-Admin)
 - Data collection & privacy controls
 - Agent configuration
-
 
 
 This executable can **fully control the Windows machine it runs on**. It exposes these capabilities to any connected AI agent:

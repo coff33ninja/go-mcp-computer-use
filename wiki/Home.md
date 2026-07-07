@@ -12,6 +12,7 @@
 [![MCP](https://img.shields.io/badge/MCP-Server-5B5BD6?logoColor=white&labelColor=2d333b)](https://modelcontextprotocol.io)
 [![Last commit](https://img.shields.io/github/last-commit/coff33ninja/go-mcp-computer-use?labelColor=2d333b&color=yellowgreen)](https://github.com/coff33ninja/go-mcp-computer-use/commits/v0.2.x)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?labelColor=2d333b)](https://github.com/coff33ninja/go-mcp-computer-use/pulls)
+[![Docs](https://img.shields.io/badge/docs-gh--pages-blue?labelColor=2d333b&logo=github)](https://coff33ninja.github.io/go-mcp-computer-use/)
 
 </div>
 
@@ -20,10 +21,10 @@
 >
 > **Status:** v0.2.32 — 120 tools including statistical prior model, training pipeline, memory-backed UI element cache, ONNX detection, runtime privacy controls, key hold/release, input recording, set_config, YOLO dataset export, introspection engine, adaptive ML engine, OCR→command training bridge, and ONNX cascade fallback for template matching. See [`docs/reference/tools.md`](docs/reference/tools.md) for the full listing.
 
-
 ---
 
 ## Features
+
 
 ## Features
 
@@ -51,13 +52,12 @@
 - **`find_ui_element` tool** — cascading lookup: memory → ONNX → OCR. Self-learning: saves findings to memory + training store.
 - **120 MCP tools** — see [`docs/reference/tools.md`](docs/reference/tools.md) for the full listing
 
-
 ## Tools
+
 
 Auto-generated reference at [`docs/reference/tools.md`](docs/reference/tools.md) — always in sync with `internal/server/server.go`. Run `go run ./scripts/gen-tools-doc.go` to regenerate.
 
 Categories: Screenshot & Vision, Mouse, Keyboard, Window Management, Chained / Composite, Chain Automation, UI Automation, Browser Automation, File Explorer, Audio, Memory & Templates, ONNX ML, Priors & Statistics, Training Pipeline, Data Export, Data Logging, Adaptive Agent, Introspection & Debugging, Runtime Config, System, Process Management.
-
 
 ## Quick Links
 
@@ -76,8 +76,10 @@ Categories: Screenshot & Vision, Mouse, Keyboard, Window Management, Chained / C
 
 ## Documentation
 
+## Documentation
 
-- [`WIKI.md`](WIKI.md) — auto-generated comprehensive wiki from all project docs (run `go run ./scripts/gen-wiki.go` to regenerate)
+- [**GitHub Pages**](https://coff33ninja.github.io/go-mcp-computer-use/) — rendered README with all project links
+- [**GitHub Wiki**](https://github.com/coff33ninja/go-mcp-computer-use/wiki) — 13-page wiki auto-synced from `wiki/`
 - [`docs/reference/codebase-map.md`](docs/reference/codebase-map.md) — complete tool→handler→action→file mapping for all 96 tools
 - [`docs/reference/windows-dll-ref.md`](docs/reference/windows-dll-ref.md) — Windows DLL, COM, and WinRT API reference — every syscall proc, DLL, and COM interface used
 - [`docs/reference/uipi.md`](docs/reference/uipi.md) — UIPI elevation detection logic, call sites, and error semantics
@@ -91,8 +93,6 @@ Categories: Screenshot & Vision, Mouse, Keyboard, Window Management, Chained / C
 - [`docs/guides/computer-use-guide-for-ai-agents.md`](docs/guides/computer-use-guide-for-ai-agents.md) — full layered agent architecture guide
 - [`docs/meta/plan.md`](docs/meta/plan.md) — project plan, progress, and prioritized work items
 - [`docs/meta/backlog.md`](docs/meta/backlog.md) — 326-tool roadmap covering every desktop ability a human has on Windows
-- [`docs/meta/known-issues.md`](docs/meta/known-issues.md) — known issues and workarounds
-- [`docs/meta/CHANGELOG.md`](docs/meta/CHANGELOG.md) — release history
 
 
 
