@@ -149,7 +149,7 @@ Auto-generated from `internal/server/server.go`. Total: **132 tools**.
 
 ## Runtime Config (1)
 
-- `set_config` — Update runtime configuration. Accepts any subset of: training_enabled (stop/start background screenshot saving), prior_adjustment (enable/disable ML prior confidence tuning), verify_bounds (toggle coordinate bounds checking), log_level (debug/info/warn/error), watcher_enabled (start/stop the background screenshot watcher), watcher_interval_seconds (change polling frequency while running). Changes persist to disk. Use this to disable data collection or control the tool at runtime.
+- `set_config` — Update runtime configuration. Accepts any subset of: training_enabled (stop/start background screenshot saving), prior_adjustment (enable/disable ML prior confidence tuning), verify_bounds (toggle coordinate bounds checking), log_level (debug/info/warn/error), watcher_enabled (start/stop the background screenshot watcher), watcher_interval_seconds (change polling frequency while running), tool_denylist (list of tool names to disable, e.g. ["shutdown","restart"]), retention_days (auto-prune training samples older than N days, 0=disabled). Changes persist to disk.
 
 ## System (25)
 

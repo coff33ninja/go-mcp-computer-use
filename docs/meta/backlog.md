@@ -5,7 +5,7 @@
 
 ## How to Read
 
-- **HAVE** = implemented (134 tools)
+- **HAVE** = implemented (134 tools as of v0.2.37)
 - **NEXT** = high-impact, feasible additions
 - **FAR** = possible but lower priority or complex
 - Items within a section ordered roughly by priority
@@ -563,7 +563,7 @@
 | `get_user_sid` — user security identifier | identity |
 | `get_user_groups` — group membership | permission awareness |
 | `list_tools` — list all MCP tools with metadata | tool discovery |
-| `enable_tool` / `disable_tool` — per-tool allow/deny | granular security (from Windows-MCP) |
+| ~~`enable_tool` / `disable_tool` — per-tool allow/deny~~ | **done v0.2.37** — delivered as `tool_denylist` config field (server-level denylist) |
 | `set_auth_token` — configure bearer token for TCP transport | transport security (from Windows-MCP) |
 | `set_tls` — configure TLS cert for TCP transport | transport encryption (from Windows-MCP) |
 
@@ -717,7 +717,7 @@
 ### NEXT
 | Tool | Why |
 |------|-----|
-| `set_retention_policy` — auto-prune training samples older than N days | bound disk usage (from Recall) |
+| ~~`set_retention_policy` — auto-prune training samples older than N days~~ | **done v0.2.37** — delivered as `retention_days` config field + background pruner every 6 hours |
 | `set_sensitive_content_filter` — regex patterns to redact before saving | privacy guard (from Recall) |
 | `training_set_category_prompt` — per-category task prompt | richer training context |
 
@@ -846,7 +846,7 @@
 
 1. **Build out NEXT items** — these are straightforward and high value (another ~128 tools)
 2. **Error wrapping audit** — remaining Slice 4 item for consistent error feedback across all tools
-3. **Security + Transport** — per-tool enable/disable + TLS + SSE are prerequisites for remote deployment
+3. **Security + Transport** — TLS + SSE are prerequisites for remote deployment (per-tool denylist delivered in v0.2.37)
 4. **Browser DOM mode** — CDP/Playwright integration for 10x faster web tasks (steal from Windows-MCP)
 5. **Background control** — SendInput/UIA for non-disruptive clicks (steal from Cua)
 6. **Cross-platform interface** — Linux/macOS stubs + container support (steal from Bytebot)

@@ -173,8 +173,8 @@ High-impact features from competing projects that fill gaps in go-mcp-computer-u
 
 | Steal From | Feature | What It Does | Where to Implement |
 |-----------|---------|-------------|-------------------|
-| **Windows-MCP** | Per-tool enable/disable | Config map allow/deny list per MCP tool | `server.go` — filter registration |
-| **Recall** | Retention policy | Auto-prune training samples older than N days | `training/cleanup.go` — add TTL config + background goroutine |
+| **Windows-MCP** | Per-tool enable/disable | Config map allow/deny list per MCP tool | `server.go` — filter registration — **done v0.2.37** (`tool_denylist` config + `server.RemoveTools`) |
+| **Recall** | Retention policy | Auto-prune training samples older than N days | `training/cleanup.go` — **done v0.2.37** (`retention_days` config + `StartRetentionPruner`) |
 | **Windows MCP Server** | DPI normalization | Scale coordinates per-monitor DPI | `actions/verify.go` — `SmartRegionAround` / coordinate transforms |
 
 ### Medium Effort

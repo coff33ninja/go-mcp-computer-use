@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
@@ -440,4 +441,86 @@ func joinWhere(conditions []string) string {
 		result += " AND " + conditions[i]
 	}
 	return result
+}
+
+var (
+	retentionStop chan struct{}
+	retentionOnce sync.Once
+)
+
+func PruneOldSamples(retentionDays int) (map[string]int, error) {
+	if trainDB == nil {
+		if err := InitTrainingStore(); err != nil {
+			return nil, err
+		}
+	}
+	result := map[string]int{"deleted": 0, "freed_bytes": 0}
+	if retentionDays <= 0 {
+		return result, nil
+	}
+	maxAge := fmt.Sprintf("-%d days", retentionDays)
+	rows, err := trainDB.Query(`SELECT id, image_path FROM training_samples
+		WHERE created_at < datetime('now', ?) LIMIT 500`, maxAge)
+	if err != nil {
+		return nil, fmt.Errorf("query old samples: %w", err)
+	}
+	defer rows.Close()
+	var ids []int64
+	var paths []string
+	for rows.Next() {
+		var id int64
+		var path string
+		if err := rows.Scan(&id, &path); err != nil {
+			continue
+		}
+		ids = append(ids, id)
+		paths = append(paths, path)
+	}
+	if len(ids) == 0 {
+		return result, nil
+	}
+	for _, path := range paths {
+		if info, err := os.Stat(path); err == nil {
+			result["freed_bytes"] += int(info.Size())
+		}
+		os.Remove(path)
+	}
+	for _, id := range ids {
+		trainDB.Exec("DELETE FROM training_samples WHERE id = ?", id)
+	}
+	result["deleted"] = len(ids)
+	return result, nil
+}
+
+func StartRetentionPruner(retentionDays int) {
+	if retentionDays <= 0 {
+		return
+	}
+	retentionOnce.Do(func() {
+		retentionStop = make(chan struct{})
+		go func() {
+			ticker := time.NewTicker(6 * time.Hour)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ticker.C:
+					if ActiveConfig != nil && ActiveConfig.RetentionDays > 0 {
+						if _, err := PruneOldSamples(ActiveConfig.RetentionDays); err != nil {
+							slog.Warn("retention pruner failed", "error", err)
+						}
+					}
+				case <-retentionStop:
+					return
+				}
+			}
+		}()
+	})
+}
+
+func StopRetentionPruner() {
+	if retentionStop != nil {
+		close(retentionStop)
+		retentionStop = nil
+		retentionOnce = sync.Once{}
+	}
 }

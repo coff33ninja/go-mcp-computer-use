@@ -344,7 +344,7 @@ Vtable index stability model and CI/CD verification: [`vtable-verification.md`](
 
 | Doc | Covers |
 |-----|--------|
-| `docs/reference/tools.md` | Auto-generated from `server.go`, lists all 120+ tools with descriptions |
+| `docs/reference/tools.md` | Auto-generated from `server.go`, lists all 134 tools with descriptions |
 | `docs/reference/codebase-map.md` | (this file) tool→handler→action→file mapping |
 | `docs/reference/configuration.md` | `config.json` schema, set_config tool |
 | `docs/reference/versioning-strategy.md` | VERSION file, bump rules, release process, changelog convention |

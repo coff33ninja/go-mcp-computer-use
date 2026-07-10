@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 
 	jsonschema "github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -1638,12 +1639,14 @@ func trainingCleanupNoiseHandler(ctx context.Context, req *mcp.CallToolRequest, 
 }
 
 type SetConfigArgs struct {
-	TrainingEnabled      *bool   `json:"training_enabled,omitempty"`
-	PriorAdjustment      *bool   `json:"prior_adjustment,omitempty"`
-	VerifyBounds         *bool   `json:"verify_bounds,omitempty"`
-	LogLevel             string  `json:"log_level,omitempty"`
-	WatcherEnabled       *bool   `json:"watcher_enabled,omitempty"`
-	WatcherIntervalSecs  *int    `json:"watcher_interval_seconds,omitempty"`
+	TrainingEnabled      *bool    `json:"training_enabled,omitempty"`
+	PriorAdjustment      *bool    `json:"prior_adjustment,omitempty"`
+	VerifyBounds         *bool    `json:"verify_bounds,omitempty"`
+	LogLevel             string   `json:"log_level,omitempty"`
+	WatcherEnabled       *bool    `json:"watcher_enabled,omitempty"`
+	WatcherIntervalSecs  *int     `json:"watcher_interval_seconds,omitempty"`
+	ToolDenylist         []string `json:"tool_denylist,omitempty"`
+	RetentionDays        *int     `json:"retention_days,omitempty"`
 }
 
 type ListDirectoryArgs struct {
@@ -1983,10 +1986,27 @@ func setConfigHandler(ctx context.Context, req *mcp.CallToolRequest, args SetCon
 		}
 	}
 
+	if args.ToolDenylist != nil {
+		cfg.ToolDenylist = args.ToolDenylist
+		changed = true
+	}
+
+	if args.RetentionDays != nil {
+		val := *args.RetentionDays
+		if val < 0 {
+			val = 0
+		}
+		if cfg.RetentionDays != val {
+			cfg.RetentionDays = val
+			changed = true
+		}
+	}
+
 	if changed {
 		slog.Info("config updated", "training_enabled", cfg.TrainingEnabled,
 			"prior_adjustment", cfg.PriorAdjustment, "verify_bounds", cfg.VerifyBounds,
-			"log_level", cfg.LogLevel)
+			"log_level", cfg.LogLevel, "tool_denylist", cfg.ToolDenylist,
+			"retention_days", cfg.RetentionDays)
 		if err := cfg.Save(); err != nil {
 			slog.Warn("failed to save config", "error", err)
 		}
@@ -2001,6 +2021,8 @@ func setConfigHandler(ctx context.Context, req *mcp.CallToolRequest, args SetCon
 		"log_level":              cfg.LogLevel,
 		"watcher_running":        watcherStatus.Running,
 		"watcher_interval_secs":  cfg.WatcherIntervalSecs,
+		"tool_denylist":          cfg.ToolDenylist,
+		"retention_days":         cfg.RetentionDays,
 		"saved":                  changed,
 	}, nil
 }
@@ -2190,6 +2212,11 @@ func New(version string) *mcp.Server {
 		}()
 	} else if cfg.WatcherAutoStart && !cfg.TrainingEnabled {
 		slog.Info("watcher auto-start skipped: training disabled")
+	}
+
+	if cfg.RetentionDays > 0 && cfg.TrainingEnabled {
+		actions.StartRetentionPruner(cfg.RetentionDays)
+		slog.Info("retention pruner started", "retention_days", cfg.RetentionDays)
 	}
 
 	server := mcp.NewServer(&mcp.Implementation{
@@ -2845,7 +2872,7 @@ func New(version string) *mcp.Server {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "set_config",
-		Description: "Update runtime configuration. Accepts any subset of: training_enabled (stop/start background screenshot saving), prior_adjustment (enable/disable ML prior confidence tuning), verify_bounds (toggle coordinate bounds checking), log_level (debug/info/warn/error), watcher_enabled (start/stop the background screenshot watcher), watcher_interval_seconds (change polling frequency while running). Changes persist to disk. Use this to disable data collection or control the tool at runtime.",
+		Description: "Update runtime configuration. Accepts any subset of: training_enabled (stop/start background screenshot saving), prior_adjustment (enable/disable ML prior confidence tuning), verify_bounds (toggle coordinate bounds checking), log_level (debug/info/warn/error), watcher_enabled (start/stop the background screenshot watcher), watcher_interval_seconds (change polling frequency while running), tool_denylist (list of tool names to disable, e.g. [\"shutdown\",\"restart\"]), retention_days (auto-prune training samples older than N days, 0=disabled). Changes persist to disk.",
 	}, setConfigHandler)
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -2902,6 +2929,15 @@ func New(version string) *mcp.Server {
 		Name:        "get_working_directory",
 		Description: "Get the current working directory used for relative path resolution.",
 	}, getWorkingDirectoryHandler)
+
+	if len(cfg.ToolDenylist) > 0 {
+		var denied []string
+		for _, name := range cfg.ToolDenylist {
+			denied = append(denied, strings.ToLower(name))
+		}
+		server.RemoveTools(denied...)
+		slog.Info("tool denylist applied", "denied", denied)
+	}
 
 	return server
 }

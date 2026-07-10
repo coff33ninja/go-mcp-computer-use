@@ -16,7 +16,7 @@ New in v0.2.7:
 | **`training_cleanup_noise`** | Code complete | Deletes signal_level=0 samples older than N hours. Supports dry_run. |
 | **`training_enabled` config** | Code complete | When `false`, disables all auto-save snapshots (actions + watcher). Default: `true`. |
 | Element priors not yet verified with real accumulated data | Untested | Priors are updated asynchronously; first detections in a session have no priors loaded until the first `loadPriorsFromDB` call. |
-| No periodic auto-cleanup of noise | Not implemented | `training_cleanup_noise` is manual. Could add auto-prune background goroutine later. |
+| ~~No periodic auto-cleanup of noise~~ | **Done v0.2.37** | `retention_days` config auto-prunes samples older than N days. Background pruner runs every 6 hours. |
 
 ## Test Session: v0.1.2 — 2026-06-27
 

@@ -29,6 +29,8 @@
 | `prior_adjustment` | `true` | Apply learned element frequency/position priors to ONNX detection scores. Set `false` for raw YOLO output only. |
 | `watcher_auto_start` | `false` | Auto-start the background watcher on server boot. Watcher polls screen every N seconds and saves frames for training. |
 | `watcher_interval_seconds` | `5` | How often the watcher captures and analyzes the screen (if running). Also used as default when starting via `set_config`. |
+| `tool_denylist` | `[]` | Array of tool names to remove from the MCP server entirely (case-insensitive). Denied tools are invisible to the AI agent. Configurable at runtime via `set_config`. |
+| `retention_days` | `0` | Auto-prune training samples older than N days. Deletes both database rows and image files. Background pruner runs every 6 hours. Set `0` to disable (default). Requires `training_enabled: true`. Configurable at runtime via `set_config`. |
 
 ## Privacy Controls
 

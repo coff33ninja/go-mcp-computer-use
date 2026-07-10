@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.2.37] - 2026-07-08
+
+### Added
+
+- **Per-tool enable/disable** — `tool_denylist` config field (array of tool names) removes tools from the MCP server entirely so the AI never sees them. Uses `server.RemoveTools()` after registration — zero changes to existing handler code. Case-insensitive matching. Example: `"tool_denylist": ["shutdown", "restart", "hibernate"]`. Configurable at runtime via `set_config`.
+- **Retention policy** — `retention_days` config field (integer, 0=disabled) auto-prunes training samples older than N days. Background pruner runs every 6 hours. Deletes both database rows and image files. Starts automatically on boot when `retention_days > 0` and `training_enabled` is true. Configurable at runtime via `set_config`.
+- **Unit tests for v0.2.33 behaviors** — 25 new tests across `internal/actions/adaptive_test.go` and `internal/actions/datalog_test.go`: `uniqueTokens` dedup, `nearbyOCRText` spatial scoping, `capAndDedupeText` fallback, `SaveAdaptiveStat`/`LoadPersistedStats` round-trip, `Analyze()` persisted fallback. 5 new tests in `internal/config/config_test.go` for `ToolEnabled` helper.
+- **`ToolEnabled` helper** (`config.go`) — case-insensitive denylist check with empty-string safety.
+
+### Changed
+
+- **`set_config` tool** — accepts new fields: `tool_denylist` (string array), `retention_days` (integer). Description updated to document both.
+- **`Config` struct** — added `ToolDenylist []string` and `RetentionDays int` fields.
+
 ## [0.2.36] - 2026-07-07
 
 ### Fixed

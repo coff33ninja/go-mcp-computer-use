@@ -43,6 +43,8 @@ The server has **no telemetry, no network calls, no data exfiltration**. All col
 | **Start the background watcher** | `set_config` with `watcher_enabled: true` — uses interval from config or `watcher_interval_seconds` |
 | **Change watcher frequency** | `set_config` with `watcher_interval_seconds: 10` — restarts watcher with new interval if running |
 | **Disable ML prior learning** | `set_config` with `prior_adjustment: false` |
+| **Hide dangerous tools from AI** | `set_config` with `tool_denylist: ["shutdown", "restart", "hibernate"]` — removes tools entirely so the AI never sees them |
+| **Auto-prune old training data** | `set_config` with `retention_days: 30` — background pruner runs every 6 hours, deletes samples older than N days |
 | **Delete noise samples** | `training_cleanup_noise` with `max_age_hours: 0` — purges low-quality frames |
 | **Clear cached element data** | `memory_forget` with `scope: ui` — removes cached ONNX detection positions |
 | **Inspect collected data** | `training_stats` — see counts, sources, disk usage |

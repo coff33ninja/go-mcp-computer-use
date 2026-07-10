@@ -8,7 +8,7 @@ A survey of the computer-use agent landscape as of mid-2026, with detailed deep-
 
 | Project | Lang | MCP | Desktop | ONNX/ML | Training | Memory | Tools | Stars | Open Source |
 |---------|------|-----|---------|---------|---------|--------|-------|-------|-------------|
-| **[go-mcp-computer-use](https://github.com/coff33ninja/go-mcp-computer-use)** | Go | ✅ | ✅ Win | ✅ YOLO11+MobileNet | ✅ auto-collect | ✅ SQLite FTS | 132 | — | ✅ MIT |
+| **[go-mcp-computer-use](https://github.com/coff33ninja/go-mcp-computer-use)** | Go | ✅ | ✅ Win | ✅ YOLO11+MobileNet | ✅ auto-collect | ✅ SQLite FTS | 134 | — | ✅ MIT |
 | **[Cua](https://github.com/trycua/cua)** | Py/HTML | ✅ | ✅ Win/Mac/Linux | ❌ | ❌ | ❌ | SDK | 19.4k | ✅ |
 | **[Agent-S](https://github.com/simular-ai/Agent-S)** | Python | ❌ | ✅ Win/Mac/Linux | ❌ | ❌ | ✅ in-context RL | SDK | 12k | ✅ |
 | **[Bytebot](https://github.com/bytebot-ai/bytebot)** | TypeScript | ❌ | ❌ Linux container | ❌ | ❌ | ❌ | SDK | 11.1k | ✅ |
@@ -40,7 +40,7 @@ Windows-MCP is the closest direct competitor — both are MCP servers for Window
 | **Tool count** | 132 | ~30 |
 | **Chained automation** | if/else, loops, polling, verify, error handling | None |
 | **Browser automation** | No (basic find_text_and_click) | Snapshot + DOM mode for Chrome/Edge/Firefox |
-| **Security** | None (stdio/local only) | Bearer token, IP allowlist, TLS, OAuth 2.0 + PKCE, CORS, per-tool enable/disable |
+| **Security** | `tool_denylist` config-based enable/disable (stdio/local only) | Bearer token, IP allowlist, TLS, OAuth 2.0 + PKCE, CORS, per-tool enable/disable |
 | **Network transport** | stdio | stdio, SSE, streamable HTTP |
 | **State management** | Reflection engine, adaptive engine, statistical priors | None |
 
@@ -158,7 +158,7 @@ Browser Use is the leading open-source browser automation framework. It achieves
 |-----------|---------------|---------------------|
 | **Why it exists** | User's "photographic memory" — find anything you've seen on your PC via semantic search | MCP server — gives AI agents mouse, keyboard, screen, and system control |
 | **Who uses it** | End users (opt-in on Copilot+ PCs) | AI agents/developers via MCP protocol |
-| **Primary interaction** | GUI app with timeline + natural-language search box | Function calls (103 MCP tools) from an AI agent |
+| **Primary interaction** | GUI app with timeline + natural-language search box | Function calls (134 MCP tools) from an AI agent |
 | **Snapshot consumer** | The user themselves, later | An AI model, in real-time during task execution |
 | **Captures because** | Time passes (periodic, every ~3-5 seconds) | The AI does something (click, type, navigate) or watcher polls |
 
@@ -177,7 +177,7 @@ See [`guides/accessibility.md`](guides/accessibility.md) for the assistive techn
 | **Storage format** | AVIF (≈170-220 KB per frame) encrypted with AES-256-GCM | PNG (unencrypted) in categorized folders |
 | **Storage location** | `%LOCALAPPDATA%\CoreAIPlatform\UKP\Recall\V1\` | `%APPDATA%\go-mcp-computer-use\training\raw\{category}\` |
 | **Metadata DB** | SQLite SEE (`ukg.db`) with AES-256-GCM encryption (VBS Enclave) | SQLite (`samples.db`) with WAL mode, no encryption |
-| **Retention** | Configurable (30/60/90/180 days) | No automatic retention (manual cleanup via `training_cleanup_noise`) |
+| **Retention** | Configurable (30/60/90/180 days) | Configurable via `retention_days` (0=disabled, auto-prunes samples older than N days) |
 | **Collection rate** | Continuous — every ~3-5s, 24/7 while user is active | On-demand — only when AI acts or watcher is enabled |
 | **Per-action context** | Window title, PID, monitor ID, dwell time | Task prompt, window title, ONNX detections, OCR text, signal level |
 
@@ -233,13 +233,13 @@ go-mcp-computer-use has **no encryption, no isolation, no access control**. It's
 | **App/website filtering** | Per-app and per-website exclusion list | None |
 | **Sensitive content filtering** | Purview-based: credit cards, passwords, PII detected and excluded | None |
 | **Private browsing** | Excluded by default (supported browser detection) | None |
-| **Delete data** | Settings → delete snapshots, configurable retention | `training_cleanup_noise` (manual) |
+| **Delete data** | Settings → delete snapshots, configurable retention | `training_cleanup_noise` (manual) or `retention_days` auto-prune |
 | **Export data** | No built-in export | `export_yolo_dataset` to dump all images + labels |
 | **Audit** | Windows Event Log + diagnostic data | `training_stats` for counts and disk usage |
 
 Recall's privacy controls are **mature and granular** — app filtering, sensitive content redaction, private browsing detection, configurable retention. Microsoft learned from the June 2024 privacy backlash.
 
-go-mcp-computer-use's controls are **basic but functional** — `set_config` to stop collection, cleanup to delete noise, export to inspect data. No content filtering, no app exclusions, no retention policies.
+go-mcp-computer-use's controls are **basic but functional** — `set_config` to stop collection, `tool_denylist` to restrict tools, `retention_days` for auto-pruning, cleanup to delete noise, export to inspect data. No content filtering, no app exclusions.
 
 ---
 
@@ -313,7 +313,7 @@ Recall is designed to **survive a compromised OS** (VBS Enclave isolates from ke
 | **Purpose** | Memory augmentation for humans | Remote control for AI agents |
 | **Data sensitivity** | FULL RECORD of everything you do | Screenshots of AI actions + detected objects |
 | **Encryption** | Enterprise-grade (TPM + VBS + AES-256-GCM) | None |
-| **Granularity of control** | Per-app, per-website, content filtering, retention | Global on/off, watcher on/off/interval, noise cleanup |
+| **Granularity of control** | Per-app, per-website, content filtering, retention | Global on/off, watcher on/off/interval, tool denylist, retention pruning |
 | **Semantic search** | Yes — natural language across all history | No — only 80-class YOLO labels |
 | **Open source** | No (proprietary Microsoft) | Yes (MIT) |
 | **Portability** | Windows 11 Copilot+ only | Any Windows 10/11, Go cross-compilable |
@@ -330,7 +330,7 @@ Recall is designed to **survive a compromised OS** (VBS Enclave isolates from ke
 | **Sensitive content filtering** | Prevent AI from capturing passwords, financial data, PII in training data |
 | **Encryption at rest** | Basic DPAPI- or AES-based file encryption for stored screenshots |
 | **App/URL filtering** | Exclude known sensitive apps (browsers in private mode, password managers) from auto-save |
-| **Retention policies** | Auto-prune samples older than N days to bound disk usage |
+| ~~**Retention policies**~~ | ~~Auto-prune samples older than N days to bound disk usage~~ — **done v0.2.37** (`retention_days`) |
 | **Semantic indexing** | Enable the AI to search past screenshots for context ("what did I see in that window earlier?") |
 | **Lock-on-auth** | Require Windows Hello or a session token to access training data |
 

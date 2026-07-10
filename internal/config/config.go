@@ -5,19 +5,22 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 type Config struct {
-	LogLevel         string `json:"log_level"`
-	MouseSpeed       int    `json:"mouse_speed"`
-	ClickDelay       int    `json:"click_delay_ms"`
-	VerifyBounds     bool   `json:"verify_bounds"`
-	ActionTimeoutMs  int    `json:"action_timeout_ms"`
-	UIAWarmup        bool   `json:"uia_warmup"`
-	TrainingEnabled     bool `json:"training_enabled"`
-	PriorAdjustment     bool `json:"prior_adjustment"`
-	WatcherAutoStart    bool `json:"watcher_auto_start"`
-	WatcherIntervalSecs int  `json:"watcher_interval_seconds"`
+	LogLevel            string   `json:"log_level"`
+	MouseSpeed          int      `json:"mouse_speed"`
+	ClickDelay          int      `json:"click_delay_ms"`
+	VerifyBounds        bool     `json:"verify_bounds"`
+	ActionTimeoutMs     int      `json:"action_timeout_ms"`
+	UIAWarmup           bool     `json:"uia_warmup"`
+	TrainingEnabled     bool     `json:"training_enabled"`
+	PriorAdjustment     bool     `json:"prior_adjustment"`
+	WatcherAutoStart    bool     `json:"watcher_auto_start"`
+	WatcherIntervalSecs int      `json:"watcher_interval_seconds"`
+	ToolDenylist        []string `json:"tool_denylist,omitempty"`
+	RetentionDays       int      `json:"retention_days,omitempty"`
 }
 
 func Default() *Config {
@@ -33,6 +36,18 @@ func Default() *Config {
 		WatcherAutoStart:    false,
 		WatcherIntervalSecs: 5,
 	}
+}
+
+func (c *Config) ToolEnabled(name string) bool {
+	if name == "" {
+		return true
+	}
+	for _, d := range c.ToolDenylist {
+		if d != "" && strings.EqualFold(d, name) {
+			return false
+		}
+	}
+	return true
 }
 
 func (c *Config) LogLevelSlog() int {
