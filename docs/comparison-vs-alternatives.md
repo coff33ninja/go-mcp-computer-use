@@ -230,16 +230,16 @@ go-mcp-computer-use has **no encryption, no isolation, no access control**. It's
 | **Opt-in required** | Yes — off by default, user must enable | No — starts collecting when AI agent connects |
 | **Disable collection** | Settings toggle or GPO (`DisableSnapshots = 1`) | `set_config training_enabled: false` or config file |
 | **Disable watcher** | N/A (always-on when enabled) | `set_config watcher_enabled: false` or `onnx_watch_stop` |
-| **App/website filtering** | Per-app and per-website exclusion list | None |
-| **Sensitive content filtering** | Purview-based: credit cards, passwords, PII detected and excluded | None |
-| **Private browsing** | Excluded by default (supported browser detection) | None |
+| **App/website filtering** | Per-app and per-website exclusion list | **P2** — `set_app_exclusion` / `set_url_exclusion` planned |
+| **Sensitive content filtering** | Purview-based: credit cards, passwords, PII detected and excluded | **P1** — `set_sensitive_content_filter` planned (regex PII detection) |
+| **Private browsing** | Excluded by default (supported browser detection) | **P3** — planned |
 | **Delete data** | Settings → delete snapshots, configurable retention | `training_cleanup_noise` (manual) or `retention_days` auto-prune |
 | **Export data** | No built-in export | `export_yolo_dataset` to dump all images + labels |
 | **Audit** | Windows Event Log + diagnostic data | `training_stats` for counts and disk usage |
 
 Recall's privacy controls are **mature and granular** — app filtering, sensitive content redaction, private browsing detection, configurable retention. Microsoft learned from the June 2024 privacy backlash.
 
-go-mcp-computer-use's controls are **basic but functional** — `set_config` to stop collection, `tool_denylist` to restrict tools, `retention_days` for auto-pruning, cleanup to delete noise, export to inspect data. No content filtering, no app exclusions.
+go-mcp-computer-use's controls are **growing** — `set_config` to stop collection, `tool_denylist` to restrict tools, `retention_days` for auto-pruning, cleanup to delete noise, export to inspect data. Sensitive content filtering (P1) and app/URL exclusions (P2) are next.
 
 ---
 

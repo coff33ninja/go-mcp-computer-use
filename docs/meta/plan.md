@@ -46,6 +46,61 @@ Post-Task Introspection — NEXT SLICE
      └── Generalize into reusable skills
 ```
 
+## Personal Security System
+
+Five-layer defense for protecting user data during AI-driven automation:
+
+### Layer 1: Identity Awareness (who am I, what can I do)
+- `is_admin` — check elevation status (affects what actions are safe)
+- `get_username` / `get_user_sid` — identity for audit trails
+- `get_user_groups` — permission groups (admin, user, guests)
+- `list_tools` — available tools (respects `tool_denylist`)
+
+### Layer 2: Input Sanitization (what gets captured)
+- **OCR text redaction** — scan for PII before training DB write:
+  Credit cards, SSNs, emails, passwords/auth tokens, phone numbers
+- **Screenshot region masking** — blank detected sensitive areas
+- **Clipboard sanitization** — clear clipboard after AI copies sensitive data
+
+### Layer 3: Source Filtering (what gets captured from where)
+- **App exclusion list** — `set_config excluded_apps: ["password-manager"]`
+- **URL exclusion list** — `set_config excluded_urls: ["*.bank.com"]`
+- **Private browsing detection** — skip capture in incognito mode
+- **Window title patterns** — skip "Login", "Enter Password", "Two-Factor"
+
+### Layer 4: Storage Security (what happens after capture)
+- **Encryption at rest** — DPAPI or AES for stored screenshots
+- **Access control** — auth token to access training data directory
+- **Audit log** — who accessed what, when (SQLite table)
+
+### Layer 5: Retention & Cleanup (data lifecycle)
+- `retention_days` — auto-prune old samples ✅ done v0.2.37
+- `training_cleanup_noise` — manual noise cleanup ✅
+- **Auto-redact on retention** — re-scan old samples with updated filter patterns
+
+### Data flow
+```
+Screenshot taken
+  → [L3] App/URL exclusion check → skip if excluded
+  → [L2] OCR text extracted → PII regex scan → redact matches
+  → [L2] Screenshot region masking → blank detected areas
+  → [L4] Encrypt before write to disk
+  → Training DB + image file saved
+```
+
+### What's done vs. what's next
+| Layer | Feature | Status |
+|-------|---------|--------|
+| L1 | `tool_denylist` | ✅ v0.2.37 |
+| L5 | `retention_days` | ✅ v0.2.37 |
+| L5 | `training_cleanup_noise` | ✅ manual |
+| L1 | `is_admin` / `get_username` / `list_tools` | NEXT — P0 |
+| L2 | `set_sensitive_content_filter` (PII regex) | NEXT — P1 |
+| L3 | App/URL exclusion list | NEXT — P2 |
+| L3 | Private browsing detection | NEXT — P3 |
+| L4 | Encryption at rest | FAR — P4 |
+| L4 | Audit log | FAR — P5 |
+
 ## Design Principles
 
 - **No overlap in responsibility** — each layer does one job well
@@ -175,6 +230,8 @@ High-impact features from competing projects that fill gaps in go-mcp-computer-u
 |-----------|---------|-------------|-------------------|
 | **Windows-MCP** | Per-tool enable/disable | Config map allow/deny list per MCP tool | `server.go` — filter registration — **done v0.2.37** (`tool_denylist` config + `server.RemoveTools`) |
 | **Recall** | Retention policy | Auto-prune training samples older than N days | `training/cleanup.go` — **done v0.2.37** (`retention_days` config + `StartRetentionPruner`) |
+| **Builtin** | Security tools | `is_admin`, `get_username`, `list_tools` — identity & permission awareness | `internal/actions/system.go` — Win32 API calls (GetTokenInformation, GetUserNameW) |
+| **Builtin** | Sensitive content filter | Regex PII/password detection on OCR text before saving training samples | `internal/actions/training.go` — filter hook in save pipeline |
 
 ### Medium Effort
 
@@ -184,7 +241,6 @@ High-impact features from competing projects that fill gaps in go-mcp-computer-u
 | **Windows-MCP** | SSE transport | Switchable from stdio so server can run standalone | New `transport/` + MCP SSE support |
 | **Windows-MCP** | Browser DOM mode | CDP/Playwright integration for Chrome/Edge/Firefox DOM snapshots | Start in `actions/browseruse.go`; extract to `internal/browser/` if it outgrows a single file. Chrome/Edge use native CDP; Firefox via Playwright driver. |
 | **Agent-S** | In-context RL | Track last-N action outcomes per session, surface as reflection context | `actions/introspection.go` — session-scoped outcome buffer |
-| **Recall** | Sensitive content filtering | Regex PII/password detection on OCR text before saving training samples | `training/save.go` — filter hook |
 
 ### High Effort (architectural)
 

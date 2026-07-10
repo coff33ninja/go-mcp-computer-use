@@ -558,11 +558,11 @@
 ### NEXT
 | Tool | Why |
 |------|-----|
-| `is_admin` — check if running as admin | permission awareness |
-| `get_username` — current user | identity |
+| **P0** `is_admin` — check if running as admin | permission awareness |
+| **P0** `get_username` — current user | identity |
 | `get_user_sid` — user security identifier | identity |
 | `get_user_groups` — group membership | permission awareness |
-| `list_tools` — list all MCP tools with metadata | tool discovery |
+| **P0** `list_tools` — list all MCP tools with metadata | tool discovery |
 | ~~`enable_tool` / `disable_tool` — per-tool allow/deny~~ | **done v0.2.37** — delivered as `tool_denylist` config field (server-level denylist) |
 | `set_auth_token` — configure bearer token for TCP transport | transport security (from Windows-MCP) |
 | `set_tls` — configure TLS cert for TCP transport | transport encryption (from Windows-MCP) |
@@ -717,7 +717,9 @@
 | Tool | Why |
 |------|-----|
 | ~~`set_retention_policy` — auto-prune training samples older than N days~~ | **done v0.2.37** — delivered as `retention_days` config field + background pruner every 6 hours |
-| `set_sensitive_content_filter` — regex patterns to redact before saving | privacy guard (from Recall) |
+| **P1** `set_sensitive_content_filter` — regex patterns to redact before saving | privacy guard (from Recall) |
+| **P2** `set_app_exclusion` — exclude apps from auto-capture | source filtering (from Recall) |
+| **P2** `set_url_exclusion` — exclude URLs from auto-capture | source filtering (from Recall) |
 | `training_set_category_prompt` — per-category task prompt | richer training context |
 
 ### FAR
