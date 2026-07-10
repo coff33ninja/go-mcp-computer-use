@@ -175,7 +175,6 @@ High-impact features from competing projects that fill gaps in go-mcp-computer-u
 |-----------|---------|-------------|-------------------|
 | **Windows-MCP** | Per-tool enable/disable | Config map allow/deny list per MCP tool | `server.go` — filter registration — **done v0.2.37** (`tool_denylist` config + `server.RemoveTools`) |
 | **Recall** | Retention policy | Auto-prune training samples older than N days | `training/cleanup.go` — **done v0.2.37** (`retention_days` config + `StartRetentionPruner`) |
-| **Windows MCP Server** | DPI normalization | Scale coordinates per-monitor DPI | `actions/verify.go` — `SmartRegionAround` / coordinate transforms |
 
 ### Medium Effort
 
@@ -183,7 +182,7 @@ High-impact features from competing projects that fill gaps in go-mcp-computer-u
 |-----------|---------|-------------|-------------------|
 | **Windows-MCP** | Bearer token + TLS | Auth for TCP transport (needed before SSE) | New `transport/` package |
 | **Windows-MCP** | SSE transport | Switchable from stdio so server can run standalone | New `transport/` + MCP SSE support |
-| **Windows-MCP** | Browser DOM mode | CDP/Playwright integration for Chrome/Edge DOM snapshots | New `internal/browser/` package |
+| **Windows-MCP** | Browser DOM mode | CDP/Playwright integration for Chrome/Edge/Firefox DOM snapshots | Start in `actions/browseruse.go`; extract to `internal/browser/` if it outgrows a single file. Chrome/Edge use native CDP; Firefox via Playwright driver. |
 | **Agent-S** | In-context RL | Track last-N action outcomes per session, surface as reflection context | `actions/introspection.go` — session-scoped outcome buffer |
 | **Recall** | Sensitive content filtering | Regex PII/password detection on OCR text before saving training samples | `training/save.go` — filter hook |
 

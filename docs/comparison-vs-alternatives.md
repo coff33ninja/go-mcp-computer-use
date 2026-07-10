@@ -55,7 +55,7 @@ Windows MCP Server uses a fundamentally different approach: **UI Automation tree
 | **Element finding** | Pixels (screenshot → ONNX/OCR) | UIA tree (name/ID/type) |
 | **Screenshot needed?** | Yes (every action) | No (for UIA elements) |
 | **Works with games** | ✅ Yes (pixel-based) | ❌ No |
-| **DPI independence** | ❌ Requires DPI normalization | ✅ Automatic |
+| **DPI independence** | ✅ Physical-pixel coordinates (BitBlt + DPI-aware process) | ✅ Automatic |
 | **Theme independence** | ❌ Retrains on theme change | ✅ Automatic |
 | **Fallback** | Memory → ONNX → OCR | UIA → mouse/keyboard (coordinates) |
 

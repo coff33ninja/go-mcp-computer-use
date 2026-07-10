@@ -592,7 +592,6 @@
 |------|-----|
 | `get_display_orientation` — landscape/portrait | rotation |
 | `get_virtual_screen_bounds` — total spanning rect | multi-monitor layout |
-| `dpi_normalize_coordinates` — transform coords between monitors with different DPI | mixed-DPI setups (from Windows MCP Server) |
 
 ### FAR
 | Tool | Why |
@@ -761,11 +760,13 @@
 - `open_url` — open URL in default browser
 - `find_text_and_click` — basic OCR-based browser interaction
 - `wait_for_text` — poll OCR until text appears
+- `browser_focus_url_bar` / `browser_new_tab` / `browser_navigate` / `browser_search` — keyboard-shortcut browser control in `browseruse.go`
 
 ### NEXT
 | Tool | Why |
 |------|-----|
-| `browser_snapshot` — capture DOM snapshot of current page | structured page data (from Windows-MCP) |
+| `browser_dom_connect` — connect to browser via CDP (Chrome/Edge/Brave) or Playwright (Firefox) | enable DOM-level access; start in `browseruse.go`, extract to `internal/browser/` if needed |
+| `browser_dom_snapshot` — capture DOM snapshot of current page | structured page data (from Windows-MCP) |
 | `browser_dom_get` — query DOM elements by CSS selector | fast element access (from Windows-MCP) |
 | `browser_dom_get_text` — get text content of DOM element | read page content (from Windows-MCP) |
 | `browser_dom_invoke` — click/submit DOM element | reliable browser interaction (from Windows-MCP) |
@@ -850,4 +851,4 @@
 4. **Browser DOM mode** — CDP/Playwright integration for 10x faster web tasks (steal from Windows-MCP)
 5. **Background control** — SendInput/UIA for non-disruptive clicks (steal from Cua)
 6. **Cross-platform interface** — Linux/macOS stubs + container support (steal from Bytebot)
-7. **ML model improvement** — fix YOLO11n opset 22 incompatibility, explore UI-specific fine-tuning
+7. **ML model improvement** — explore UI-specific fine-tuning of ONNX models

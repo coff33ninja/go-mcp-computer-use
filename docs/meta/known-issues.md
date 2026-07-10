@@ -240,15 +240,9 @@ Firefox Multi-Account Containers changes the new-tab `+` behavior — instead of
 
 **Status:** Documented in v0.2.x. Not a bug — by design.
 
-## B14. ONNX YOLO11n model uses unsupported opset 22
+## ~~B14. ONNX YOLO11n model uses unsupported opset 22~~
 
-**Observation:** `onnx_download` pulls YOLO11n from Ultralytics v8.3.0, which exports to opset 22. `onnxruntime_go` linked against ORT 1.20.x supports only opset 21 max. Detection fails silently when running `onnx_detect`.
-
-**Root cause:** Upstream model format drift — Ultralytics incrementally bumps ONNX opset with releases. ORT 1.20.x predates opset 22 support. The `yalue/onnxruntime_go` v1.13.0 is pinned to ORT 1.20.x API.
-
-**Workaround:** None — MobileNetV3-small still works for UI element classification, but YOLO object detection is offline.
-
-**Planned fix:** Either download an older YOLO11n export (opset 21) from an earlier Ultralytics release, or update ORT to 1.21+ when `onnxruntime_go` releases a compatible version.
+**Done v0.2.13** — ONNX Runtime DLL updated to v1.26.0 which supports opset 22. Detection works.
 
 ## B15. No action verification — tools return "ok" for API call success, not for real-world effect
 
