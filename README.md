@@ -94,6 +94,7 @@ See [`docs/architecture.md`](docs/architecture.md) for the agent stack diagram a
 - [`docs/guides/computer-use-guide-for-ai-agents.md`](docs/guides/computer-use-guide-for-ai-agents.md) — full layered agent architecture guide
 - [`docs/meta/plan.md`](docs/meta/plan.md) — project plan, progress, and prioritized work items
 - [`docs/meta/backlog.md`](docs/meta/backlog.md) — 326-tool roadmap covering every desktop ability a human has on Windows
+- [`docs/meta/credit-audit-report.json`](docs/meta/credit-audit-report.json) — per-tool token cost measurements (regenerate via `.\scripts\run-credit-audit.ps1`)
 - [`docs/meta/known-issues.md`](docs/meta/known-issues.md) — known issues and workarounds
 - [`docs/meta/CHANGELOG.md`](docs/meta/CHANGELOG.md) — release history
 - [`docs/ci-cd-pipeline.md`](docs/ci-cd-pipeline.md) — CI/CD workflow documentation

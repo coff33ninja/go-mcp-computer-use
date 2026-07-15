@@ -1,6 +1,22 @@
 # Changelog
 
-## [0.2.39] - 2026-07-15
+## [0.2.40] - 2026-07-15
+
+### Added
+
+- **`cmd/credit-audit` — MCP tool credit audit** — new Go tool that measures JSON payload size and estimated token cost of every read-only MCP tool. Covers 66 probes across 14 groups (System, Display, Audio, Window, File, Perception, ONNX, UIA, Memory, Template, Training, Datalog, Agent, Layout). Features per-probe 60s goroutine timeout to survive hanging probes, `-json` flag for machine-readable output, and `-sessions N` to project hog-tool costs across N calls. Identifies the top credit hogs: `training_list_samples` (4.2 MB — base64 screenshots in training DB), `record_screen` (1.1 MB), `screenshot_full` (580 kB), `priors_stats` (121 kB).
+
+### Fixed
+
+- **`loadPriorsFromDB` reentrant mutex deadlock** — `UpdatePriorsFromDetections` and `UpdatePriorsForNegative` held `elementPriors.mu.Lock()` then called `loadPriorsFromDB()` which tried to `Lock()` the same non-reentrant mutex. Split into `loadPriorsFromDB()` (acquires lock) and `loadPriorsFromDBLocked()` (assumes caller holds lock). The two write-path callers now use the locked variant directly.
+- **Fragile `RLock→RUnlock→Lock→RLock` lazy-init pattern** — `AdjustConfidenceWithPriors`, `GetPriorStats`, and `FindPriorPrediction` each manually dropped the read lock, acquired the write lock, then re-acquired the read lock. Replaced with `sync.Once` for the initial load, eliminating the lock-dance and preventing future reentrant deadlocks if anyone adds a code path between the drop and re-acquire.
+- **`TaskBegin` nested lock ordering** — held `taskMu.Lock()` while acquiring `dlogMu.Lock()`, creating a `taskMu→dlogMu` ordering dependency. Restructured to release `taskMu` before acquiring `dlogMu`, matching `TaskEnd`'s pattern.
+- **`Analyze` held `e.mu.RLock` across external lock acquisitions** — `Analyze()` called `tt.Stat()` and `ts.Rate()` while holding `e.mu.RLock()`. If `Stat()` or `Rate()` ever acquired `e.mu`, this would deadlock. Fix: snapshot all maps under RLock, deep-copy `PersistedStat` values (not just pointers), release RLock, then compute stats.
+- **`LogToolCall` implicit `pairMu` dependency in log parameter** — `bridgeBufferSize()` (which acquires `pairMu`) was called as an argument to `slog.Warn`, evaluated in the parameter list before the explicit `pairMu.Lock()` later in the function. Extracted to a variable before the log call to decouple lock acquisition ordering.
+
+### VERSION
+
+`0.2.39` → `0.2.40`
 
 ### Added
 

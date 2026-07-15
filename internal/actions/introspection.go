@@ -81,15 +81,14 @@ var (
 
 func TaskBegin(in TaskInput) (*TaskInfo, error) {
 	taskMu.Lock()
-	defer taskMu.Unlock()
+	taskActive = true
+	taskDesc = in.Description
+	taskStart = time.Now()
+	taskMu.Unlock()
 
 	if err := InitDataLog(); err != nil {
 		return nil, fmt.Errorf("task_begin: %w", err)
 	}
-
-	taskActive = true
-	taskDesc = in.Description
-	taskStart = time.Now()
 
 	now := taskStart.UTC().Format(time.RFC3339)
 	dlogMu.Lock()

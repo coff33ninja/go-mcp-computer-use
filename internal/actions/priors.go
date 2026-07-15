@@ -29,10 +29,12 @@ type ElementPrior struct {
 type priorCache struct {
 	mu     sync.RWMutex
 	priors []ElementPrior
-	loaded bool
 }
 
-var elementPriors priorCache
+var (
+	elementPriors   priorCache
+	loadPriorsOnce  sync.Once
+)
 
 func normalizeWindowTitle(title string) string {
 	t := strings.ToLower(strings.TrimSpace(title))
@@ -99,7 +101,11 @@ func InitPriors() error {
 func loadPriorsFromDB() {
 	elementPriors.mu.Lock()
 	defer elementPriors.mu.Unlock()
+	loadPriorsFromDBLocked()
+}
 
+// loadPriorsFromDBLocked assumes caller already holds elementPriors.mu.Lock()
+func loadPriorsFromDBLocked() {
 	if trainDB == nil {
 		return
 	}
@@ -131,7 +137,6 @@ func loadPriorsFromDB() {
 		priors = append(priors, p)
 	}
 	elementPriors.priors = priors
-	elementPriors.loaded = true
 }
 
 func UpdatePriorsFromDetections(windowTitle string, elements []DetectedElement) {
@@ -191,7 +196,7 @@ func UpdatePriorsFromDetections(windowTitle string, elements []DetectedElement) 
 		return
 	}
 
-	loadPriorsFromDB()
+	loadPriorsFromDBLocked()
 }
 
 func UpdatePriorsForNegative(windowTitle string) {
@@ -213,7 +218,7 @@ func UpdatePriorsForNegative(windowTitle string) {
 		return
 	}
 
-	loadPriorsFromDB()
+	loadPriorsFromDBLocked()
 }
 
 func AdjustConfidenceWithPriors(className, windowTitle string, confidence float64, x, y float64) float64 {
@@ -221,12 +226,8 @@ func AdjustConfidenceWithPriors(className, windowTitle string, confidence float6
 		return confidence
 	}
 
+	loadPriorsOnce.Do(loadPriorsFromDB)
 	elementPriors.mu.RLock()
-	if !elementPriors.loaded {
-		elementPriors.mu.RUnlock()
-		loadPriorsFromDB()
-		elementPriors.mu.RLock()
-	}
 	priors := elementPriors.priors
 	elementPriors.mu.RUnlock()
 
@@ -288,12 +289,8 @@ func GetPriorStats(minCount int) (*PriorStatsOutput, error) {
 		minCount = 1
 	}
 
+	loadPriorsOnce.Do(loadPriorsFromDB)
 	elementPriors.mu.RLock()
-	if !elementPriors.loaded {
-		elementPriors.mu.RUnlock()
-		loadPriorsFromDB()
-		elementPriors.mu.RLock()
-	}
 	priors := elementPriors.priors
 	elementPriors.mu.RUnlock()
 
@@ -466,12 +463,8 @@ names: [%s]
 }
 
 func FindPriorPrediction(windowTitle, className string) (*DetectedElement, bool) {
+	loadPriorsOnce.Do(loadPriorsFromDB)
 	elementPriors.mu.RLock()
-	if !elementPriors.loaded {
-		elementPriors.mu.RUnlock()
-		loadPriorsFromDB()
-		elementPriors.mu.RLock()
-	}
 	priors := elementPriors.priors
 	elementPriors.mu.RUnlock()
 

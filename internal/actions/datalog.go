@@ -223,7 +223,8 @@ func LogToolCall(tool string, argsJSON string, err error) {
 	// when available, instead of the entire screen, so generic on-screen
 	// words don't dominate the learned associations.
 	ocrBefore := findRecentOCRBefore(tool, argsJSON)
-	slog.Warn("LogToolCall bridge", "tool", tool, "found_ocr", ocrBefore != "", "buffer_size", bridgeBufferSize())
+	bufSize := bridgeBufferSize()
+	slog.Warn("LogToolCall bridge", "tool", tool, "found_ocr", ocrBefore != "", "buffer_size", bufSize)
 	if ocrBefore != "" {
 		cmdJSON := argsJSON
 		if tool != "" {

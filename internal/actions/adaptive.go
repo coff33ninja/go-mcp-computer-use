@@ -708,10 +708,7 @@ func (e *AdaptiveEngine) LearnFromCommandWithContext(tool, argsJSON, ocrBefore s
 
 func (e *AdaptiveEngine) Analyze() *EngineAnalysis {
 	e.mu.RLock()
-	defer e.mu.RUnlock()
 	analysis := &EngineAnalysis{
-		TimingStats:    make(map[string]*TimingStat),
-		SuccessRates:   make(map[string]float64),
 		TotalCommands:  e.totalCmds,
 		TotalSequences: e.totalSeqs,
 		TopSequences:   e.sequences,
@@ -719,19 +716,31 @@ func (e *AdaptiveEngine) Analyze() *EngineAnalysis {
 	if !e.lastTrain.IsZero() {
 		analysis.LastTrained = e.lastTrain.Format(time.RFC3339)
 	}
-	for tool, tt := range e.timings {
+	timings := make(map[string]*ToolTiming, len(e.timings))
+	for k, v := range e.timings {
+		timings[k] = v
+	}
+	successes := make(map[string]*ToolSuccess, len(e.successes))
+	for k, v := range e.successes {
+		successes[k] = v
+	}
+	persisted := make(map[string]PersistedStat, len(e.persisted))
+	for k, v := range e.persisted {
+		persisted[k] = *v
+	}
+	e.mu.RUnlock()
+
+	analysis.TimingStats = make(map[string]*TimingStat, len(timings))
+	for tool, tt := range timings {
 		if stat := tt.Stat(); stat != nil {
 			analysis.TimingStats[tool] = stat
 		}
 	}
-	for tool, ts := range e.successes {
+	analysis.SuccessRates = make(map[string]float64, len(successes))
+	for tool, ts := range successes {
 		analysis.SuccessRates[tool] = ts.Rate()
 	}
-	// Fill in from the durable persisted aggregate for any tool that has
-	// no live in-memory samples yet in this process (e.g. right after a
-	// restart, before new commands arrive). Live samples take priority
-	// since they carry real stddev/min/max for the current session.
-	for tool, p := range e.persisted {
+	for tool, p := range persisted {
 		if _, ok := analysis.TimingStats[tool]; !ok && p.DurationCount > 0 {
 			analysis.TimingStats[tool] = &TimingStat{
 				Mean:  p.DurationSum / float64(p.DurationCount),
