@@ -11,12 +11,14 @@ import (
 // ── Step types ──
 
 const (
-	StepTool   = "tool"
-	StepWait   = "wait"
-	StepPoll   = "poll"
-	StepIf     = "if"
-	StepLoop   = "loop"
-	StepVerify = "verify"
+	StepTool     = "tool"
+	StepWait     = "wait"
+	StepPoll     = "poll"
+	StepIf       = "if"
+	StepLoop     = "loop"
+	StepVerify   = "verify"
+	StepVerifyUI = "verify_ui"
+	StepIfUIA    = "if_uia"
 )
 
 // ── Poll / If / Loop config ──
@@ -38,6 +40,22 @@ type LoopConfig struct {
 	Steps []ChainStep `json:"steps,omitempty"`
 }
 
+type VerifyUIConfig struct {
+	ElementName string `json:"element_name,omitempty"`
+	ControlType string `json:"control_type,omitempty"`
+	Handle      uintptr `json:"handle,omitempty"`
+	TimeoutMs   int     `json:"timeout_ms,omitempty"`
+	NotExists   bool    `json:"not_exists,omitempty"`
+}
+
+type IfUIAConfig struct {
+	ElementName string      `json:"element_name,omitempty"`
+	ControlType string      `json:"control_type,omitempty"`
+	Handle      uintptr     `json:"handle,omitempty"`
+	Then        []ChainStep `json:"then,omitempty"`
+	Else        []ChainStep `json:"else,omitempty"`
+}
+
 // ── Data structures ──
 
 type ChainRequest struct {
@@ -56,6 +74,8 @@ type ChainStep struct {
 	If          *IfConfig         `json:"if,omitempty"`
 	Loop        *LoopConfig       `json:"loop,omitempty"`
 	Verify      *VerifyStepConfig `json:"verify,omitempty"`
+	VerifyUI    *VerifyUIConfig   `json:"verify_ui,omitempty"`
+	IfUIA       *IfUIAConfig      `json:"if_uia,omitempty"`
 	FocusWindow string            `json:"focus_window,omitempty"`
 }
 
@@ -158,6 +178,7 @@ func init() {
 		"kill_process":        chainKillProcess,
 		"list_processes":      chainListProcesses,
 		"focus_window":        chainFocusWindow,
+		"get_active_window":   chainGetActiveWindow,
 		"minimize_window":     chainMinimizeWindow,
 		"maximize_window":     chainMaximizeWindow,
 		"restore_window":      chainRestoreWindow,
@@ -168,17 +189,27 @@ func init() {
 		"wait_for_window":     chainWaitForWindow,
 		"launch_and_wait":     chainLaunchAndWait,
 		"find_window":         chainFindWindow,
-		"list_directory":      chainListDirectory,
-		"read_file":           chainReadFile,
-		"write_file":          chainWriteFile,
-		"find_files":          chainFindFilesTool,
-		"copy_file":           chainCopyFile,
-		"move_file":           chainMoveFile,
-		"delete_file":         chainDeleteFile,
-		"create_directory":    chainCreateDirectory,
-		"get_file_info":          chainGetFileInfo,
-		"set_working_directory":  chainSetWorkingDirectory,
-		"get_working_directory":  chainGetWorkingDirectory,
+		// UIA tools
+		"ocr_window":            chainOCRWindow,
+		"ocr_active_window":     chainOCRActiveWindow,
+		// UIA tools
+		"uia_find":                chainUIAFind,
+		"uia_get_element_at_point": chainUIAGetElementAtPoint,
+		"uia_get_all_elements":   chainUIAGetAllElements,
+		"uia_set_text":           chainUIASetText,
+		"wait_for_ui_element":    chainWaitForUIElement,
+		// File tools
+		"list_directory":          chainListDirectory,
+		"read_file":               chainReadFile,
+		"write_file":              chainWriteFile,
+		"find_files":              chainFindFilesTool,
+		"copy_file":               chainCopyFile,
+		"move_file":               chainMoveFile,
+		"delete_file":             chainDeleteFile,
+		"create_directory":        chainCreateDirectory,
+		"get_file_info":           chainGetFileInfo,
+		"set_working_directory":   chainSetWorkingDirectory,
+		"get_working_directory":   chainGetWorkingDirectory,
 	}
 }
 
@@ -265,10 +296,14 @@ func execSteps(steps []ChainStep, state *chainState) ([]StepResult, int) {
 			stepResult = execPoll(step, state)
 		case StepIf:
 			stepResult = execIf(step, state)
+		case StepIfUIA:
+			stepResult = execIfUIA(step, state)
 		case StepLoop:
 			stepResult = execLoop(step, state)
 		case StepVerify:
 			stepResult = execVerify(step, stepArgs, state)
+		case StepVerifyUI:
+			stepResult = execVerifyUI(step, state)
 		default:
 			stepResult = execTool(step, stepArgs, state)
 		}
@@ -308,6 +343,45 @@ func execWait(step ChainStep, _ *chainState) StepResult {
 	}
 	time.Sleep(time.Duration(step.WaitMs) * time.Millisecond)
 	return StepResult{Success: true}
+}
+
+// mouseTools tracks tools whose args contain (x,y) coordinates where
+// UIA element-at-point should be auto-captured in step output.
+var mouseTools = map[string]bool{
+	"click":      true,
+	"move_mouse": true,
+	"hover":      true,
+	"drag":       true,
+}
+
+// captureUIAElementAtPoint extracts (x,y) from args and calls UIAElementFromPoint.
+// Returns nil if coords aren't available or UIA fails (non-fatal — just enriches output).
+func captureUIAElementAtPoint(name string, args map[string]any) any {
+	if !mouseTools[name] {
+		return nil
+	}
+	if name == "drag" {
+		x, _ := getInt(args, "to_x")
+		y, _ := getInt(args, "to_y")
+		if x == 0 && y == 0 {
+			return nil
+		}
+		el, err := UIAElementFromPoint(int32(x), int32(y))
+		if err != nil {
+			return nil
+		}
+		return el
+	}
+	x, _ := getInt(args, "x")
+	y, _ := getInt(args, "y")
+	if x == 0 && y == 0 {
+		return nil
+	}
+	el, err := UIAElementFromPoint(int32(x), int32(y))
+	if err != nil {
+		return nil
+	}
+	return el
 }
 
 // ── Tool step ──
@@ -357,10 +431,21 @@ func execTool(step ChainStep, args map[string]any, _ *chainState) StepResult {
 	if t, ok := trainingTools[toolName]; ok {
 		SaveSnapshotAfterAction(TrainingSourceRaw, t.Category, t.MakePrompt(args))
 	}
+	// Auto-capture UIA element at point for mouse-based tools
+	uiaEl := captureUIAElementAtPoint(toolName, args)
+	var enriched any
+	if uiaEl != nil {
+		enriched = map[string]any{
+			"tool_result":   output,
+			"element_at_point": uiaEl,
+		}
+	} else {
+		enriched = output
+	}
 	return StepResult{
 		Tool:    step.Tool,
 		Success: true,
-		Output:  output,
+		Output:  enriched,
 	}
 }
 
@@ -441,6 +526,113 @@ func execVerify(step ChainStep, args map[string]any, _ *chainState) StepResult {
 	}
 
 	return StepResult{Tool: step.Tool, Success: false, Error: "verify: max retries exceeded"}
+}
+
+// ── Verify UI step ──
+// Verifies a UI element appears (or disappears) using UIA instead of OCR.
+// Useful when waiting for structural changes (a dialog opening, button enabling).
+func execVerifyUI(step ChainStep, _ *chainState) StepResult {
+	cfg := step.VerifyUI
+	if cfg == nil {
+		return StepResult{Tool: "verify_ui", Success: false, Error: "missing verify_ui config"}
+	}
+
+	handle := cfg.Handle
+	timeoutMs := cfg.TimeoutMs
+	if timeoutMs <= 0 {
+		timeoutMs = 10000
+	}
+	deadline := time.Now().Add(time.Duration(timeoutMs) * time.Millisecond)
+
+	for time.Now().Before(deadline) {
+		found := false
+		if handle != 0 {
+			// Scoped to a specific window
+			el, err := WaitForUIElement(handle, cfg.ElementName, cfg.ControlType, 500)
+			found = (err == nil && el != nil)
+			if el != nil && err == nil {
+				_ = el // we could inspect further if needed
+			}
+		} else {
+			// Global search via UIAFindElement
+			opts := UIAFindOpts{Name: cfg.ElementName, ControlType: cfg.ControlType}
+			els, err := UIAFindElement(opts)
+			found = (err == nil && len(els) > 0)
+		}
+
+		if cfg.NotExists {
+			if !found {
+				return StepResult{
+					Tool:    "verify_ui",
+					Success: true,
+					Output:  map[string]any{"verified": true, "element_not_exists": true},
+				}
+			}
+		} else {
+			if found {
+				return StepResult{
+					Tool:    "verify_ui",
+					Success: true,
+					Output:  map[string]any{"verified": true, "exists": true},
+				}
+			}
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+
+	if cfg.NotExists {
+		return StepResult{
+			Tool:    "verify_ui",
+			Success: false,
+			Error:   "verify_ui: element still exists after timeout",
+		}
+	}
+	return StepResult{
+		Tool:    "verify_ui",
+		Success: false,
+		Error:   fmt.Sprintf("verify_ui: element not found within %dms", timeoutMs),
+	}
+}
+
+// ── IfUIA step ──
+// Conditional branching based on UI element presence (UIA-based).
+func execIfUIA(step ChainStep, state *chainState) StepResult {
+	cfg := step.IfUIA
+	if cfg == nil {
+		return StepResult{Tool: "if_uia", Success: false, Error: "missing if_uia config"}
+	}
+	if cfg.ElementName == "" && cfg.ControlType == "" {
+		return StepResult{Tool: "if_uia", Success: false, Error: "if_uia: element_name or control_type required"}
+	}
+
+	// Check condition via UIA
+	conditionMet := false
+	if cfg.Handle != 0 {
+		el, _ := WaitForUIElement(cfg.Handle, cfg.ElementName, cfg.ControlType, 1000)
+		conditionMet = (el != nil)
+	} else {
+		opts := UIAFindOpts{Name: cfg.ElementName, ControlType: cfg.ControlType}
+		els, _ := UIAFindElement(opts)
+		conditionMet = (len(els) > 0)
+	}
+
+	var branch string
+	var subSteps []ChainStep
+	if conditionMet {
+		branch = "then"
+		subSteps = cfg.Then
+	} else {
+		branch = "else"
+		subSteps = cfg.Else
+	}
+
+	subResults, _ := execSteps(subSteps, state)
+	return StepResult{
+		Tool:    "if_uia",
+		Success: true,
+		Output:  map[string]any{"condition": fmt.Sprintf("element: %s %s", cfg.ElementName, cfg.ControlType), "branch": branch},
+		Steps:   subResults,
+	}
 }
 
 // ── Poll step ──
@@ -596,6 +788,9 @@ func detectStepType(s ChainStep) string {
 	if s.Verify != nil {
 		return StepVerify
 	}
+	if s.VerifyUI != nil {
+		return StepVerifyUI
+	}
 	if s.WaitMs > 0 {
 		return StepWait
 	}
@@ -604,6 +799,9 @@ func detectStepType(s ChainStep) string {
 	}
 	if s.If != nil {
 		return StepIf
+	}
+	if s.IfUIA != nil {
+		return StepIfUIA
 	}
 	if s.Loop != nil {
 		return StepLoop
@@ -868,6 +1066,17 @@ func chainOCR(args map[string]any) (any, error) {
 	return OCRScreen(lang)
 }
 
+func chainOCRWindow(args map[string]any) (any, error) {
+	h, _ := getFloat(args, "handle")
+	lang, _ := getString(args, "language")
+	return OCRWindow(uintptr(h), lang)
+}
+
+func chainOCRActiveWindow(args map[string]any) (any, error) {
+	lang, _ := getString(args, "language")
+	return OCRWindow(ForegroundWindowHandle(), lang)
+}
+
 func chainWaitTool(args map[string]any) (any, error) {
 	ms, ok := getInt(args, "ms")
 	if ok {
@@ -1038,6 +1247,10 @@ func chainCloseWindow(args map[string]any) (any, error) {
 func chainGetWindowState(args map[string]any) (any, error) {
 	h, _ := getFloat(args, "handle")
 	return GetWindowState(uintptr(h))
+}
+
+func chainGetActiveWindow(_ map[string]any) (any, error) {
+	return GetActiveWindowInfo()
 }
 
 func chainFindTextAndClick(args map[string]any) (any, error) {
@@ -1233,6 +1446,74 @@ func chainSetWorkingDirectory(args map[string]any) (any, error) {
 
 func chainGetWorkingDirectory(_ map[string]any) (any, error) {
 	return GetWorkingDirectory(), nil
+}
+
+// ── UIA chain tools ──
+
+func chainUIAFind(args map[string]any) (any, error) {
+	opts := UIAFindOpts{}
+	if n, ok := args["name"]; ok {
+		opts.Name, _ = n.(string)
+	}
+	if a, ok := args["automation_id"]; ok {
+		opts.AutomationID, _ = a.(string)
+	}
+	if c, ok := args["control_type"]; ok {
+		opts.ControlType, _ = c.(string)
+	}
+	els, err := UIAFindElement(opts)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"elements": els, "count": len(els)}, nil
+}
+
+func chainUIAGetElementAtPoint(args map[string]any) (any, error) {
+	x, _ := getInt(args, "x")
+	y, _ := getInt(args, "y")
+	el, err := UIAElementFromPoint(int32(x), int32(y))
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"element": el}, nil
+}
+
+func chainUIAGetAllElements(args map[string]any) (any, error) {
+	h, _ := getInt(args, "handle")
+	maxR, _ := getInt(args, "max_results")
+	els, err := UIAGetAllElements(uintptr(h), maxR)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"elements": els, "count": len(els)}, nil
+}
+
+func chainUIASetText(args map[string]any) (any, error) {
+	name, _ := getString(args, "name")
+	aid, _ := getString(args, "automation_id")
+	val, ok := getString(args, "value")
+	if !ok {
+		return nil, fmt.Errorf("uia_set_text: value required")
+	}
+	if err := UIASetText(name, aid, val); err != nil {
+		return nil, err
+	}
+	return nil, nil
+}
+
+func chainWaitForUIElement(args map[string]any) (any, error) {
+	h, _ := getInt(args, "handle")
+	name, _ := getString(args, "name")
+	ct, _ := getString(args, "control_type")
+	tm, _ := getInt(args, "timeout_ms")
+	if tm <= 0 {
+		tm = 10000
+	}
+	el, err := WaitForUIElement(uintptr(h), name, ct, tm)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"element": el}, nil
 }
 
 // ── ChainFromJSON ──

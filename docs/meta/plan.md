@@ -109,9 +109,18 @@ Screenshot taken
 - **Feedback loop** — every action is verified by perception before continuing
 - **Stable planner/executor interface** — high-level skills decoupled from tool layer so vision models, LLMs, or backends can be swapped
 
-## Current State: v0.2.27 — 120+ tools
+## Current State: v0.2.38 — Desktop Awareness + Chain Integration
 
 All tools registered in `internal/server/server.go`, auto-documented in [`docs/reference/tools.md`](../reference/tools.md). Adaptive engine now includes timing stats, success rates, coordinate prediction, and full OCR-bridge training pair coverage across all 11 action tools.
+
+Chain system integrated with UIA: mouse steps auto-capture `element_at_point`, `verify_ui` and `if_uia` step types use UIA instead of OCR for structural verification and branching.
+
+Desktop awareness layer is now complete:
+- **Window state** — `get_window_state` returns full state: visible, minimized, maximized, fullscreen, foreground, z_order (0=topmost, higher=deeper behind), and bounding rect. AI can detect obscured windows and focus/restore before interacting.
+- **Window stacking** — `z_order` field lets AI compare which windows are on top. If window A has z_order=3 and window B has z_order=12, A is above B.
+- **Element discovery** — `uia_get_all_elements(handle)` dumps all child UI elements of a window (textboxes, address bars, title bars, buttons). `uia_find` searches by name/type. `find_ui_element` cascades memory→ONNX→OCR.
+- **Element at point** — `uia_get_element_at_point(x, y)` reverse-looks up screen coordinates to identify the element under the cursor.
+- **Content verification** — `wait_for_ui_element(handle, name, control_type)` polls UIA until element appears. Complements `wait_for_text` (OCR polling) for post-action validation.
 
 See [`docs/reference/tools.md`](../reference/tools.md) for the full categorized tool listing and [`backlog.md`](backlog.md) for the roadmap.
 
@@ -155,6 +164,20 @@ See [`docs/reference/tools.md`](../reference/tools.md) for the full categorized 
 - **Pre-action validation** — `pre_expected` field on all 11 verification tools, fails fast before action execution.
 - **Region-aware OCR** — type tools capture cursor position (`SmartRegionAround`), `click_menu_item` uses window bounds, `find_text_and_click` reuses click coordinates.
 - **`VerifyArgs` embeddable struct** — eliminated 22 lines of field duplication across arg structs.
+
+### v0.2.38 — Desktop Awareness + Chain Integration
+
+- **`z_order` on `get_window_state`** — 0=topmost, higher=deeper in stack. Uses `GetDesktopWindow` + `GW_CHILD` to find topmost, walks `GW_HWNDNEXT` counting visible windows. AI compares z_order between handles to find true stacking.
+- **`uia_get_all_elements(handle, max_results)`** — dumps all immediate child UI elements in a window via UIA `FindAll(TreeScope_Children, TrueCondition)`. One level deep — returns title bar, menu bar, content panes, toolbars, status bar without flooding thousands of nested DOM elements.
+- **`uia_get_element_at_point(x, y)`** — reverse-looks up element at screen coordinates via UIA `ElementFromPoint`. Use after `get_cursor_position` or click.
+- **`wait_for_ui_element(handle, name, control_type, timeout)`** — polls UIA `FindFirst` on window descendants until element appears. Structural alternative to `wait_for_text`.
+- **Auto-capture `element_at_point` in chain** — mouse steps (`click`, `move_mouse`, `hover`, `drag`) automatically call `UIAElementFromPoint` at target coordinates after execution. Element is attached to step output.
+- **`verify_ui` / `if_uia` step types** — UIA-based element presence verification and conditional branching. Structural alternatives to OCR-based `verify`/`if`.
+- **Chain-callable UIA tools** — `uia_find`, `uia_get_element_at_point`, `uia_get_all_elements`, `uia_set_text`, `wait_for_ui_element`, `get_active_window`, `ocr_window`, `ocr_active_window`.
+- **Schema fix** — `args.AdditionalProperties` relaxed so `{{variable}}` template strings pass validation.
+- **`ocr_window` / `ocr_active_window` tools** — window-targeted OCR. `ocr_window` by handle, `ocr_active_window` for foreground.
+- **`list_windows` / `get_active_window` now return bounding rects** — `x`, `y`, `width`, `height` for screen cross-referencing.
+- **Tool descriptions teach workflow** — `get_window_state`, `focus_window`, `uia_find`, `ocr_window` describe state→focus→interact→validate sequence.
 
 ### v0.2.27 — ONNX + OCR Fallback for Template Matching
 - **find_image / find_all_images** — NCC failure cascades to ONNX YOLO → OCR. Degenerate templates (zero-dim, no variance) skip NCC entirely.

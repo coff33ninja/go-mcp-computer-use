@@ -170,6 +170,17 @@ func (a *uiaAuto) getRootElement() (*uiaElement, error) {
 	return &uiaElement{p: e}, nil
 }
 
+func (a *uiaAuto) elementFromPoint(x, y int32) (*uiaElement, error) {
+	var e unsafe.Pointer
+	pt := struct{ x, y int32 }{x, y}
+	r, _, _ := syscall.SyscallN(vtblMethod(a.p, 7), uintptr(a.p), uintptr(unsafe.Pointer(&pt)), // 7 = ElementFromPoint
+		uintptr(unsafe.Pointer(&e)))
+	if r != S_OK {
+		return nil, fmt.Errorf("ElementFromPoint(%d,%d): 0x%X", x, y, r)
+	}
+	return &uiaElement{p: e}, nil
+}
+
 func (a *uiaAuto) elementFromHandle(hwnd uintptr) (*uiaElement, error) {
 	var e unsafe.Pointer
 	r, _, _ := syscall.SyscallN(vtblMethod(a.p, 6), uintptr(a.p), hwnd, uintptr(unsafe.Pointer(&e))) // 6 = ElementFromHandle

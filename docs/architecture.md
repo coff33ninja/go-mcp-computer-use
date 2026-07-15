@@ -21,7 +21,8 @@ The server implements the execution and perception layers of a closed-loop embod
 │  Memory ────── State Layer (SQLite facts, element   │
 │                 templates, UI position cache)       │
 │  Training ──── Data pipeline (screenshot store,     │
-│                 YOLO export, sample management)     │
+│                 YOLO export, sample management,     │
+│                 ocr_window / ocr_active_window)      │
 │                                                    │
 │  World ─────── Desktop / Browser / Applications     │
 └────────────────────────────────────────────────────┘
@@ -50,7 +51,7 @@ internal/actions/              — 46 files, organized by capability:
   │
   ├── Perception:
   │   ├── screenshot.go        — GDI BitBlt capture → PNG → base64
-  │   ├── ocr.go               — OCR orchestration (native COM + PowerShell fallback)
+  │   ├── ocr.go               — OCR orchestration (native COM + PowerShell fallback), window-targeted capture via OCRWindow
   │   ├── ocr_com.go           — WinRT COM OCR pipeline
   │   ├── template.go          — NCC template matching (find_image, find_all_images)
   │   ├── onnx.go              — YOLO/MobileNet inference via onnxruntime

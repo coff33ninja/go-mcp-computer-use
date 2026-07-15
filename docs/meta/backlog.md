@@ -5,7 +5,7 @@
 
 ## How to Read
 
-- **HAVE** = implemented (134 tools as of v0.2.37)
+- **HAVE** = implemented (desktop-state awareness, window-targeted OCR, z-order, UIA element discovery, UIA-based chain steps as of v0.2.38)
 - **NEXT** = high-impact, feasible additions
 - **FAR** = possible but lower priority or complex
 - Items within a section ordered roughly by priority

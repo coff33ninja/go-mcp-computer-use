@@ -8,14 +8,16 @@ import (
 )
 
 var (
-	moveWindow          = user32.NewProc("MoveWindow")
-	getWindowRect       = user32.NewProc("GetWindowRect")
-	showWindowAsync     = user32.NewProc("ShowWindowAsync")
-	postMessageW        = user32.NewProc("PostMessageW")
-	isIconic            = user32.NewProc("IsIconic")
-	isZoomed            = user32.NewProc("IsZoomed")
-	findWindowW         = user32.NewProc("FindWindowW")
-	monitorFromWindow   = user32.NewProc("MonitorFromWindow")
+	moveWindow           = user32.NewProc("MoveWindow")
+	getWindowRect        = user32.NewProc("GetWindowRect")
+	getWindow            = user32.NewProc("GetWindow")
+	getDesktopWindow     = user32.NewProc("GetDesktopWindow")
+	showWindowAsync      = user32.NewProc("ShowWindowAsync")
+	postMessageW         = user32.NewProc("PostMessageW")
+	isIconic             = user32.NewProc("IsIconic")
+	isZoomed             = user32.NewProc("IsZoomed")
+	findWindowW          = user32.NewProc("FindWindowW")
+	monitorFromWindow    = user32.NewProc("MonitorFromWindow")
 )
 
 const (
@@ -24,6 +26,9 @@ const (
 	SW_HIDE     = 0
 	WM_CLOSE    = 0x0010
 	WS_CAPTION  = 0x00C00000
+	GW_HWNDNEXT = 2
+	GW_HWNDPREV = 3
+	GW_CHILD    = 5
 )
 
 type WindowRect struct {
@@ -47,13 +52,15 @@ type MONITORINFO struct {
 }
 
 type WindowStateInfo struct {
-	Handle     uintptr     `json:"handle"`
-	Title      string      `json:"title"`
-	Visible    bool        `json:"visible"`
-	Minimized  bool        `json:"minimized"`
-	Maximized  bool        `json:"maximized"`
-	Fullscreen bool        `json:"fullscreen"`
-	Rect       *WindowRect `json:"rect,omitempty"`
+	Handle      uintptr     `json:"handle"`
+	Title       string      `json:"title"`
+	Visible     bool        `json:"visible"`
+	Minimized   bool        `json:"minimized"`
+	Maximized   bool        `json:"maximized"`
+	Fullscreen  bool        `json:"fullscreen"`
+	Foreground  bool        `json:"foreground"`
+	ZOrder      int         `json:"z_order"`
+	Rect        *WindowRect `json:"rect,omitempty"`
 }
 
 func MoveWindowByHandle(hwnd uintptr, x, y, w, h int32) error {
@@ -153,14 +160,48 @@ func GetWindowState(hwnd uintptr) (*WindowStateInfo, error) {
 	v, _, _ = isZoomed.Call(hwnd)
 	info.Maximized = v != 0
 
+	fg, _, _ := getForegroundWindow.Call()
+	info.Foreground = fg == hwnd
+
 	rect, err := GetWindowRectByHandle(hwnd)
 	if err == nil {
 		info.Rect = rect
 	}
 
 	info.Fullscreen = isFullscreen(hwnd)
+	info.ZOrder = GetWindowZOrder(hwnd)
 
 	return info, nil
+}
+
+// GetWindowZOrder returns the Z-order position for the given window handle.
+// 0 = topmost, higher values = deeper in the stack (behind other windows).
+// Uses GetDesktopWindow + GW_CHILD to get the true topmost top-level window,
+// then walks GW_HWNDNEXT through all siblings. Only windows with WS_VISIBLE
+// are counted, so invisible helper windows don't skew the position.
+// A window with visible=true, foreground=false, z_order>0 is behind others.
+func GetWindowZOrder(hwnd uintptr) int {
+	desk, _, _ := getDesktopWindow.Call()
+	if desk == 0 {
+		return -1
+	}
+	top, _, _ := getWindow.Call(desk, GW_CHILD)
+	if top == 0 {
+		return -1
+	}
+	pos := 0
+	cur := top
+	for cur != 0 {
+		if cur == hwnd {
+			return pos
+		}
+		v, _, _ := isWindowVisible.Call(cur)
+		if v != 0 {
+			pos++
+		}
+		cur, _, _ = getWindow.Call(cur, GW_HWNDNEXT)
+	}
+	return -1
 }
 
 func FindWindowByTitle(title string) uintptr {

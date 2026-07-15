@@ -69,6 +69,10 @@ type ActiveWindowInfo struct {
 	Handle uintptr `json:"handle"`
 	Title  string  `json:"title"`
 	PID    uint32  `json:"pid"`
+	X      int32   `json:"x,omitempty"`
+	Y      int32   `json:"y,omitempty"`
+	Width  int32   `json:"width,omitempty"`
+	Height int32   `json:"height,omitempty"`
 }
 
 func GetVolume() (uint32, error) {
@@ -131,11 +135,18 @@ func GetActiveWindowInfo() (*ActiveWindowInfo, error) {
 	}
 	title := getWindowTitle(hwnd)
 	pid := getWindowPID(hwnd)
-	return &ActiveWindowInfo{
+	info := &ActiveWindowInfo{
 		Handle: hwnd,
 		Title:  title,
 		PID:    pid,
-	}, nil
+	}
+	if rect, err := GetWindowRectByHandle(hwnd); err == nil && rect != nil {
+		info.X = rect.Left
+		info.Y = rect.Top
+		info.Width = rect.Width
+		info.Height = rect.Height
+	}
+	return info, nil
 }
 
 func openClipboardWithRetry() error {

@@ -234,6 +234,15 @@ type ScreenshotElementArgs struct {
 	Handle uintptr `json:"handle"`
 }
 
+type OCRWindowArgs struct {
+	Handle   uintptr `json:"handle"`
+	Language string  `json:"language,omitempty"`
+}
+
+type OcrActiveWindowArgs struct {
+	Language string `json:"language,omitempty"`
+}
+
 type HoverArgs struct {
 	X int32 `json:"x"`
 	Y int32 `json:"y"`
@@ -348,6 +357,56 @@ func uiaInvokeHandler(ctx context.Context, req *mcp.CallToolRequest, args UIAInv
 	return &mcp.CallToolResult{}, map[string]any{"ok": true}, nil
 }
 
+type UIAElementAtPointArgs struct {
+	X int32 `json:"x"`
+	Y int32 `json:"y"`
+}
+
+func uiaElementAtPointHandler(ctx context.Context, req *mcp.CallToolRequest, args UIAElementAtPointArgs) (*mcp.CallToolResult, any, error) {
+	el, err := actions.UIAElementFromPoint(args.X, args.Y)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uia_element_at_point: %w", err)
+	}
+	return &mcp.CallToolResult{}, map[string]any{"element": el}, nil
+}
+
+type UIAGetAllElementsArgs struct {
+	Handle     uintptr `json:"handle"`
+	MaxResults int     `json:"max_results,omitempty"`
+}
+
+func uiaGetAllElementsHandler(ctx context.Context, req *mcp.CallToolRequest, args UIAGetAllElementsArgs) (*mcp.CallToolResult, any, error) {
+	if args.Handle == 0 {
+		return nil, nil, fmt.Errorf("uia_get_all_elements: handle is required")
+	}
+	elements, err := actions.UIAGetAllElements(args.Handle, args.MaxResults)
+	if err != nil {
+		return nil, nil, fmt.Errorf("uia_get_all_elements: %w", err)
+	}
+	return &mcp.CallToolResult{}, map[string]any{"elements": elements, "count": len(elements)}, nil
+}
+
+type WaitForUIElementArgs struct {
+	Handle      uintptr `json:"handle"`
+	Name        string  `json:"name,omitempty"`
+	ControlType string  `json:"control_type,omitempty"`
+	TimeoutMs   int     `json:"timeout_ms,omitempty"`
+}
+
+func waitForUIElementHandler(ctx context.Context, req *mcp.CallToolRequest, args WaitForUIElementArgs) (*mcp.CallToolResult, any, error) {
+	if args.Name == "" && args.ControlType == "" {
+		return nil, nil, fmt.Errorf("wait_for_ui_element: name or control_type required")
+	}
+	if args.TimeoutMs <= 0 {
+		args.TimeoutMs = 10000
+	}
+	el, err := actions.WaitForUIElement(args.Handle, args.Name, args.ControlType, args.TimeoutMs)
+	if err != nil {
+		return nil, nil, fmt.Errorf("wait_for_ui_element: %w", err)
+	}
+	return &mcp.CallToolResult{}, map[string]any{"element": el}, nil
+}
+
 // chainInputSchema builds a JSON schema for the chain tool's input.
 // We provide this manually because ChainStep contains recursive types
 // (IfConfig → []ChainStep → ChainStep → *IfConfig) which cause the
@@ -376,7 +435,7 @@ func chainInputSchema() *jsonschema.Schema {
 						"type":         {Type: "string"},
 						"capture":      {Type: "string"},
 						"tool":         {Type: "string"},
-						"args":         {Type: "object", AdditionalProperties: subStep()},
+						"args":         {Type: "object", AdditionalProperties: &jsonschema.Schema{}},
 						"wait_ms":      {Type: "integer"},
 						"focus_window": {Type: "string"},
 						"poll": {
@@ -416,6 +475,26 @@ func chainInputSchema() *jsonschema.Schema {
 								},
 								"retries": {Type: "integer"},
 								"wait_ms": {Type: "integer"},
+							},
+						},
+						"verify_ui": {
+							Type: "object",
+							Properties: map[string]*jsonschema.Schema{
+								"element_name": {Type: "string"},
+								"control_type": {Type: "string"},
+								"handle":       {Type: "integer"},
+								"timeout_ms":   {Type: "integer"},
+								"not_exists":   {Type: "boolean"},
+							},
+						},
+						"if_uia": {
+							Type: "object",
+							Properties: map[string]*jsonschema.Schema{
+								"element_name": {Type: "string"},
+								"control_type": {Type: "string"},
+								"handle":       {Type: "integer"},
+								"then":         subStepArray(),
+								"else":         subStepArray(),
 							},
 						},
 					},
@@ -880,6 +959,26 @@ func ocrLanguagesHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (
 		return nil, nil, fmt.Errorf("ocr_languages: %w", err)
 	}
 	return &mcp.CallToolResult{}, map[string]any{"languages": languages}, nil
+}
+
+func ocrWindowHandler(ctx context.Context, req *mcp.CallToolRequest, args OCRWindowArgs) (*mcp.CallToolResult, any, error) {
+	result, err := actions.OCRWindow(args.Handle, args.Language)
+	if err != nil {
+		return nil, nil, fmt.Errorf("ocr_window: %w", err)
+	}
+	return &mcp.CallToolResult{}, result, nil
+}
+
+func ocrActiveWindowHandler(ctx context.Context, req *mcp.CallToolRequest, args OcrActiveWindowArgs) (*mcp.CallToolResult, any, error) {
+	hwnd := actions.ForegroundWindowHandle()
+	if hwnd == 0 {
+		return nil, nil, fmt.Errorf("ocr_active_window: no foreground window")
+	}
+	result, err := actions.OCRWindow(hwnd, args.Language)
+	if err != nil {
+		return nil, nil, fmt.Errorf("ocr_active_window: %w", err)
+	}
+	return &mcp.CallToolResult{}, result, nil
 }
 
 func getBrightnessHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
@@ -2329,12 +2428,12 @@ func New(version string) *mcp.Server {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "list_windows",
-		Description: "List all visible windows with their handles, titles, and PIDs.",
+		Description: "List all visible windows with their handles, titles, PIDs, and bounding rect (x, y, width, height). This includes background windows (minimized, behind other windows). Cross-reference with list_displays monitor positions to determine which screen each window occupies. Returns every top-level window — use get_window_state on a handle to check if it is actually foreground, minimized, or behind other windows.",
 	}, listWindowsHandler)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "focus_window",
-		Description: "Bring a window to the foreground by handle.",
+		Description: "Bring a window to the foreground by handle. Also restores the window if it is minimized. ALWAYS call this before typing, clicking, or OCR-ing a window that is not the current foreground window. Use get_window_state to check if a window is already foreground before calling.",
 	}, focusWindowHandler)
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -2394,7 +2493,7 @@ func New(version string) *mcp.Server {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_active_window",
-		Description: "Get the current foreground window info.",
+		Description: "Get the current foreground window info (handle, title, PID, and bounding rect).",
 	}, getActiveWindowHandler)
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -2479,7 +2578,7 @@ func New(version string) *mcp.Server {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_window_state",
-		Description: "Get window state (visible, minimized, maximized, position, size).",
+		Description: "Get window state: visible (WS_VISIBLE flag — NOT obscured-by-other-windows), minimized, maximized, fullscreen, foreground (is this the active/focused window?), z_order (0=topmost, higher=deeper behind other windows), and bounding rect. A window can be visible with high z_order but completely hidden behind other windows. Use this before interacting: if NOT foreground, call focus_window first (z_order will become 0); if visible vs other windows check, compare z_order values between windows.",
 	}, getWindowStateHandler)
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -2504,7 +2603,7 @@ func New(version string) *mcp.Server {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "ocr",
-		Description: "Extract text from screen using Windows OCR. Supports full screen or region (x,y,w,h).",
+		Description: "Extract text from screen using Windows OCR. Supports full screen, specific monitor (screen=N where N is the display index from list_displays, 0-based), or region (x,y,w,h).",
 	}, ocrHandler)
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -2643,6 +2742,16 @@ func New(version string) *mcp.Server {
 	}, ocrLanguagesHandler)
 
 	mcp.AddTool(server, &mcp.Tool{
+		Name:        "ocr_window",
+		Description: "Extract text from a specific window by handle using Windows OCR. Captures what is currently visible in the window's region. If the window is minimized, behind other windows, or off-screen, the captured region will show whatever is on top at those screen coordinates. Use get_window_state to check state, then focus_window or restore_window first if needed.",
+	}, ocrWindowHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "ocr_active_window",
+		Description: "Extract text from the currently active/foreground window using Windows OCR.",
+	}, ocrActiveWindowHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        "list_audio_devices",
 		Description: "List all audio playback and recording devices.",
 	}, listAudioDevicesHandler)
@@ -2659,13 +2768,13 @@ func New(version string) *mcp.Server {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "chain",
-		Description: "Execute a sequence of steps sequentially server-side. Steps can call any tool, wait, capture output, and use {{variable}} substitution.",
+		Description: "Execute a sequence of steps sequentially server-side. Steps can call any tool, wait, capture output, and use {{variable}} substitution. Mouse-based tools (click, move_mouse, hover, drag) auto-capture the UIA element at their target coordinates and include it in step output as 'element_at_point'. New step types: verify_ui (UIA element presence/absence check), if_uia (branch on element existence). New chain-callable tools: uia_find, uia_get_element_at_point, uia_get_all_elements, uia_set_text, wait_for_ui_element.",
 		InputSchema: chainInputSchema(),
 	}, chainHandler)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "uia_find",
-		Description: "Find UI elements by name, automation_id, or control_type using UI Automation. Returns bounding rectangles and properties.",
+		Description: "Find UI elements within windows by name, automation_id, or control_type using UI Automation. Returns bounding rectangles and properties (type, enabled state, etc.). Use this to locate text boxes, address bars, search menus, title bars, buttons, and other controls by their automation identity. The target window should be foreground (use focus_window first) for reliable results — some UIA providers only respond when the window is active.",
 	}, uiaFindHandler)
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -2682,6 +2791,21 @@ func New(version string) *mcp.Server {
 		Name:        "uia_set_text",
 		Description: "Set text in a UI element by name or automation_id using UI Automation.",
 	}, uiaSetTextHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "uia_get_element_at_point",
+		Description: "Identify a UI element at screen coordinates (x, y) using UI Automation. Returns the element's name, control_type, automation_id, bounding rect, and whether it is enabled. Use this after clicking or hovering to validate what was under the cursor, or to determine what element exists at a given point before interacting.",
+	}, uiaElementAtPointHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "uia_get_all_elements",
+		Description: "Get all immediate child UI elements in a window by handle (title bar, menu bar, content panes, toolbars, status bar — one level deep, not recursive DOM tree). Returns name, control_type, automation_id, bounding rect, and enabled state for each. Use this to understand a window's full control surface — text boxes, buttons, search fields, address bars, menus, etc. The window should be foreground (use focus_window first) for reliable results. Use max_results to cap output.",
+	}, uiaGetAllElementsHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "wait_for_ui_element",
+		Description: "Wait for a UI element to appear in a window, identified by name or control_type. Polls UIA FindFirst on the window's descendants until found or timeout. Use this for content verification after an action (e.g., wait for a dialog to appear after clicking a button). Default timeout is 10 seconds.",
+	}, waitForUIElementHandler)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "onnx_status",

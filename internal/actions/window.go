@@ -27,6 +27,10 @@ type WindowInfo struct {
 	Handle uintptr `json:"handle"`
 	Title  string  `json:"title"`
 	PID    uint32  `json:"pid"`
+	X      int32   `json:"x,omitempty"`
+	Y      int32   `json:"y,omitempty"`
+	Width  int32   `json:"width,omitempty"`
+	Height int32   `json:"height,omitempty"`
 }
 
 type windowCallback func(hwnd uintptr) bool
@@ -78,11 +82,18 @@ func ListWindows() ([]WindowInfo, error) {
 		if title == "" {
 			return true
 		}
-		windows = append(windows, WindowInfo{
+		wi := WindowInfo{
 			Handle: hwnd,
 			Title:  title,
 			PID:    getWindowPID(hwnd),
-		})
+		}
+		if rect, err := GetWindowRectByHandle(hwnd); err == nil && rect != nil {
+			wi.X = rect.Left
+			wi.Y = rect.Top
+			wi.Width = rect.Width
+			wi.Height = rect.Height
+		}
+		windows = append(windows, wi)
 		return true
 	}
 	enumCallback = callback

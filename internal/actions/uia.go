@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 	"syscall"
+	"time"
 	"unsafe"
 )
 
@@ -333,6 +334,137 @@ func UIASetText(name, automationID, value string) error {
 	defer elem.release()
 
 	return elem.setValue(value)
+}
+
+// ── UIAElementFromPoint ──
+func UIAElementFromPoint(x, y int32) (*UIAElement, error) {
+	ensureCOM()
+	if comInitErr != nil {
+		return nil, fmt.Errorf("uia_element_at_point com: %w", comInitErr)
+	}
+
+	au, err := newUIA()
+	if err != nil {
+		return nil, fmt.Errorf("uia_element_at_point: %w", err)
+	}
+	defer au.release()
+
+	elem, err := au.elementFromPoint(x, y)
+	if err != nil {
+		return nil, fmt.Errorf("uia_element_at_point: %w", err)
+	}
+	defer elem.release()
+
+	el := elem.toElement()
+	return &el, nil
+}
+
+// ── UIAGetAllElements ──
+// Returns all direct child UI elements of the given window handle.
+// Uses TreeScope_Children so it returns one level (title bar, content panes,
+// toolbars, etc.) without flooding with thousands of nested DOM elements.
+// maxResults caps the return to prevent context overload (default 500).
+func UIAGetAllElements(hwnd uintptr, maxResults int) ([]UIAElement, error) {
+	if maxResults <= 0 {
+		maxResults = 500
+	}
+
+	ensureCOM()
+	if comInitErr != nil {
+		return nil, fmt.Errorf("uia_get_all_elements com: %w", comInitErr)
+	}
+
+	au, err := newUIA()
+	if err != nil {
+		return nil, fmt.Errorf("uia_get_all_elements: %w", err)
+	}
+	defer au.release()
+
+	winElem, err := au.elementFromHandle(hwnd)
+	if err != nil {
+		return nil, fmt.Errorf("uia_get_all_elements elementFromHandle: %w", err)
+	}
+	defer winElem.release()
+
+	trueCond, err := au.createTrueCondition()
+	if err != nil {
+		return nil, fmt.Errorf("uia_get_all_elements trueCond: %w", err)
+	}
+	defer trueCond.release()
+
+	arr, err := winElem.findAll(TreeScope_Children, uintptr(trueCond.p))
+	if err != nil {
+		return nil, fmt.Errorf("uia_get_all_elements findAll: %w", err)
+	}
+	defer arr.release()
+
+	n := arr.length()
+	if n > maxResults {
+		n = maxResults
+	}
+
+	results := make([]UIAElement, 0, n)
+	for i := 0; i < n; i++ {
+		e, err := arr.get(i)
+		if err != nil || e == nil {
+			continue
+		}
+		results = append(results, e.toElement())
+		e.release()
+	}
+	return results, nil
+}
+
+// ── WaitForUIElement ──
+// Polls UIA FindFirst on a window's descendants until an element matching
+// the given name or control_type appears, or timeout is reached.
+func WaitForUIElement(hwnd uintptr, name, controlType string, timeoutMs int) (*UIAElement, error) {
+	if name == "" && controlType == "" {
+		return nil, fmt.Errorf("wait_for_ui_element: name or control_type required")
+	}
+	if timeoutMs <= 0 {
+		timeoutMs = 10000
+	}
+	ensureCOM()
+	if comInitErr != nil {
+		return nil, fmt.Errorf("wait_for_ui_element com: %w", comInitErr)
+	}
+
+	au, err := newUIA()
+	if err != nil {
+		return nil, fmt.Errorf("wait_for_ui_element: %w", err)
+	}
+	defer au.release()
+
+	winElem, err := au.elementFromHandle(hwnd)
+	if err != nil {
+		return nil, fmt.Errorf("wait_for_ui_element elementFromHandle: %w", err)
+	}
+	defer winElem.release()
+
+	deadline := time.Now().Add(time.Duration(timeoutMs) * time.Millisecond)
+	for time.Now().Before(deadline) {
+		cond, err := buildCondition(au, UIAFindOpts{
+			Name:        name,
+			ControlType: controlType,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		elem, err := winElem.findFirst(TreeScope_Descendants, uintptr(cond.p))
+		cond.release()
+		if err != nil {
+			return nil, err
+		}
+		if elem != nil {
+			el := elem.toElement()
+			elem.release()
+			return &el, nil
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	return nil, fmt.Errorf("wait_for_ui_element: element not found within %dms", timeoutMs)
 }
 
 // ── UIAInvoke ──

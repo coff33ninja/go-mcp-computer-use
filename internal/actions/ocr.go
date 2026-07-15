@@ -133,6 +133,43 @@ func OCRRegion(x, y, w, h int32, language string) (*OCRResult, error) {
 	return result, err
 }
 
+func clamp32(v, lo, hi int32) int32 {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
+}
+
+func OCRWindow(hwnd uintptr, language string) (*OCRResult, error) {
+	rect, err := GetWindowRectByHandle(hwnd)
+	if err != nil {
+		return nil, fmt.Errorf("ocr window get rect: %w", err)
+	}
+	if rect.Width <= 0 || rect.Height <= 0 {
+		return nil, fmt.Errorf("window has zero size")
+	}
+	sw, sh := ScreenSize()
+	x := clamp32(rect.Left, 0, sw-1)
+	y := clamp32(rect.Top, 0, sh-1)
+	w := clamp32(rect.Width, 1, sw-x)
+	h := clamp32(rect.Height, 1, sh-y)
+	b64, err := CaptureRegion(x, y, w, h)
+	if err != nil {
+		return nil, fmt.Errorf("ocr window capture: %w", err)
+	}
+	result, err := ocrFromBase64(b64, language)
+	if err == nil && result != nil {
+		winTitle := getWindowTitle(hwnd)
+		pushRecentOCR(result)
+		tryCompletePair(result.Text, winTitle)
+		go LogOCRSnapshot("tool", "ocr_window", winTitle, result)
+	}
+	return result, err
+}
+
 func OCRProportionalWindowRegion(hwnd uintptr, leftFrac, topFrac, rightFrac, bottomFrac float64, language string) (*OCRResult, error) {
 	wn, err := NewWindowNormalizer(hwnd)
 	if err != nil {

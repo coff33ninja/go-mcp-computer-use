@@ -35,6 +35,11 @@ var DataLog = &DataLogConfig{
 	LogKeys:  true,
 }
 
+func ForegroundWindowHandle() uintptr {
+	hwnd, _, _ := getForegroundWindow.Call()
+	return hwnd
+}
+
 func bridgeBufferSize() int {
 	pairMu.Lock()
 	defer pairMu.Unlock()

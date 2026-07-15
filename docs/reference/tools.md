@@ -1,6 +1,6 @@
-# Tools (132)
+# Tools (137)
 
-Auto-generated from `internal/server/server.go`. Total: **132 tools**.
+Auto-generated from `internal/server/server.go`. Total: **137 tools**.
 
 ## Screenshot & Vision (10)
 
@@ -10,7 +10,7 @@ Auto-generated from `internal/server/server.go`. Total: **132 tools**.
 - `get_pixel_color` — Get the hex color at screen coordinates x,y.
 - `get_screen_dpi` — Get per-monitor screen DPI and scale percentage.
 - `get_screen_size` — Get the screen dimensions.
-- `ocr` — Extract text from screen using Windows OCR. Supports full screen or region (x,y,w,h).
+- `ocr` — Extract text from screen using Windows OCR. Supports full screen, specific monitor (screen=N where N is the display index from list_displays, 0-based), or region (x,y,w,h).
 - `ocr_languages` — List all available Windows OCR languages. Returns array of language objects with tag, display_name, and native_name.
 - `record_screen` — Record screen frames at fixed intervals. Returns base64 images. Duration in ms, interval in ms.
 - `screenshot` — Capture the screen or a region. If w/h omitted, captures full screen.
@@ -40,11 +40,11 @@ Auto-generated from `internal/server/server.go`. Total: **132 tools**.
 
 - `close_window` — Close a window by handle.
 - `find_window` — Find a window handle by title.
-- `focus_window` — Bring a window to the foreground by handle.
+- `focus_window` — Bring a window to the foreground by handle. Also restores the window if it is minimized. ALWAYS call this before typing, clicking, or OCR-ing a window that is not the current foreground window. Use get_window_state to check if a window is already foreground before calling.
 - `focus_window_by_title` — Find a window by title and focus it, clicking its title bar to ensure activation. Useful before keyboard input in chain steps.
-- `get_active_window` — Get the current foreground window info.
-- `get_window_state` — Get window state (visible, minimized, maximized, position, size).
-- `list_windows` — List all visible windows with their handles, titles, and PIDs.
+- `get_active_window` — Get the current foreground window info (handle, title, PID, and bounding rect).
+- `get_window_state` — Get window state: visible (WS_VISIBLE flag — NOT obscured-by-other-windows), minimized, maximized, fullscreen, foreground (is this the active/focused window?), z_order (0=topmost, higher=deeper behind other windows), and bounding rect. A window can be visible with high z_order but completely hidden behind other windows. Use this before interacting: if NOT foreground, call focus_window first (z_order will become 0); if visible vs other windows check, compare z_order values between windows.
+- `list_windows` — List all visible windows with their handles, titles, PIDs, and bounding rect (x, y, width, height). This includes background windows (minimized, behind other windows). Cross-reference with list_displays monitor positions to determine which screen each window occupies. Returns every top-level window — use get_window_state on a handle to check if it is actually foreground, minimized, or behind other windows.
 - `maximize_window` — Maximize a window by handle.
 - `minimize_window` — Minimize a window by handle.
 - `move_window` — Move and resize a window by handle.
@@ -61,11 +61,11 @@ Auto-generated from `internal/server/server.go`. Total: **132 tools**.
 
 ## Chain Automation (1)
 
-- `chain` — Execute a sequence of steps sequentially server-side. Steps can call any tool, wait, capture output, and use {{variable}} substitution.
+- `chain` — Execute a sequence of steps sequentially server-side. Steps can call any tool, wait, capture output, and use {{variable}} substitution. Mouse-based tools (click, move_mouse, hover, drag) auto-capture the UIA element at their target coordinates and include it in step output as 'element_at_point'. New step types: verify_ui (UIA element presence/absence check), if_uia (branch on element existence). New chain-callable tools: uia_find, uia_get_element_at_point, uia_get_all_elements, uia_set_text, wait_for_ui_element.
 
 ## UI Automation (3)
 
-- `uia_find` — Find UI elements by name, automation_id, or control_type using UI Automation. Returns bounding rectangles and properties.
+- `uia_find` — Find UI elements within windows by name, automation_id, or control_type using UI Automation. Returns bounding rectangles and properties (type, enabled state, etc.). Use this to locate text boxes, address bars, search menus, title bars, buttons, and other controls by their automation identity. The target window should be foreground (use focus_window first) for reliable results — some UIA providers only respond when the window is active.
 - `uia_get_text` — Get text from a UI element by name or automation_id using UI Automation.
 - `uia_invoke` — Click or invoke a UI element by name or automation_id using UI Automation.
 
@@ -185,7 +185,7 @@ Auto-generated from `internal/server/server.go`. Total: **132 tools**.
 - `launch_app` — Launch an application by path or shell command.
 - `list_processes` — List all running processes with PID, name, and thread count.
 
-## Uncategorized (12)
+## Uncategorized (17)
 
 - `copy_file` — Copy a file or directory (recursively) from source to destination.
 - `create_directory` — Create a directory (recursive, like mkdir -p).
@@ -195,11 +195,16 @@ Auto-generated from `internal/server/server.go`. Total: **132 tools**.
 - `get_working_directory` — Get the current working directory used for relative path resolution.
 - `list_directory` — List directory contents. Returns entries with name, size, is_dir, mod_time, and mode.
 - `move_file` — Move or rename a file or directory.
+- `ocr_active_window` — Extract text from the currently active/foreground window using Windows OCR.
+- `ocr_window` — Extract text from a specific window by handle using Windows OCR. Captures what is currently visible in the window's region. If the window is minimized, behind other windows, or off-screen, the captured region will show whatever is on top at those screen coordinates. Use get_window_state to check state, then focus_window or restore_window first if needed.
 - `read_file` — Read a file with automatic type detection. Supports plaintext (txt, json, csv, yaml, etc.), docx, xlsx, pdf, and images (via OCR). Use page and page_size to paginate long content. Default page_size=8000 chars.
 - `set_working_directory` — Set the working directory for relative path resolution in file tools.
+- `uia_get_all_elements` — Get all immediate child UI elements in a window by handle (title bar, menu bar, content panes, toolbars, status bar — one level deep, not recursive DOM tree). Returns name, control_type, automation_id, bounding rect, and enabled state for each. Use this to understand a window's full control surface — text boxes, buttons, search fields, address bars, menus, etc. The window should be foreground (use focus_window first) for reliable results. Use max_results to cap output.
+- `uia_get_element_at_point` — Identify a UI element at screen coordinates (x, y) using UI Automation. Returns the element's name, control_type, automation_id, bounding rect, and whether it is enabled. Use this after clicking or hovering to validate what was under the cursor, or to determine what element exists at a given point before interacting.
 - `uia_set_text` — Set text in a UI element by name or automation_id using UI Automation.
+- `wait_for_ui_element` — Wait for a UI element to appear in a window, identified by name or control_type. Polls UIA FindFirst on the window's descendants until found or timeout. Use this for content verification after an action (e.g., wait for a dialog to appear after clicking a button). Default timeout is 10 seconds.
 - `write_file` — Write content to a file. Supports plaintext, docx (creates from text, preserves structure on overwrite), xlsx (TSV content becomes cells), and PDF (text creates PDF, JSON fills existing form fields). Requires overwrite=true to replace existing files.
 
 <!--
-Generated by scripts/gen-tools-doc.go — 132 tools found
+Generated by scripts/gen-tools-doc.go — 137 tools found
 -->

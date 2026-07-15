@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.2.38] - 2026-07-15
+
+### Added
+
+- **`z_order` field on `get_window_state`** — reports 0=topmost, higher=deeper in Z-order stack. Uses `GetDesktopWindow` + `GW_CHILD` to find the true topmost, then walks `GW_HWNDNEXT` counting visible windows. The AI can compare z_order between handles to determine absolute stacking: window A at z_order=3 is above window B at z_order=12.
+- **`uia_get_all_elements(handle, max_results)`** — returns all immediate child UI elements in a window (title bar, menu bar, content panes, toolbars, status bar). Uses `TreeScope_Children` + `TrueCondition` (one level deep, not recursive DOM tree) so a browser window doesn't flood with 10K+ elements. Returns name, control_type, automation_id, bounding rect, is_enabled for each.
+- **`uia_get_element_at_point(x, y)`** — identifies which UI element is at screen coordinates using UIA `ElementFromPoint`. Returns name, control_type, automation_id, bounding rect. Use after `get_cursor_position` or click to validate what was under the cursor.
+- **`wait_for_ui_element(handle, name, control_type, timeout_ms)`** — polls UIA FindFirst on a window's descendants until the element appears or timeout. Use for content verification: click a button, then wait_for_ui_element for the dialog that should appear. Default timeout 10s.
+- **Auto-capture element_at_point in chain** — mouse-based chain steps (`click`, `move_mouse`, `hover`, `drag`) now automatically call `UIAElementFromPoint` at their target coordinates after execution. The UIA element is attached to the step output as `element_at_point` and available as a captured variable for subsequent steps.
+- **`verify_ui` step type** — new chain step that verifies a UI element exists or disappears using UIA instead of OCR. Accepts `element_name`, `control_type`, `handle` (window scope), `timeout_ms`, `not_exists` (true = expect absence). Polls UIA `FindFirst` / `WaitForUIElement` until timeout. Complements the existing OCR-based `verify` step for structural post-action validation.
+- **`if_uia` step type** — new conditional branch that checks UI element existence via UIA. Branches `then`/`else` based on whether an element with the given name/control_type is found. Like `if` (OCR), but structural rather than pixel/text-based.
+- **Chain-callable UIA tools** — `uia_find`, `uia_get_element_at_point`, `uia_get_all_elements`, `uia_set_text`, `wait_for_ui_element` are now registered in the chain tool dispatch and can be called as regular chain steps with `{{variable}}` substitution.
+- **Chain-callable window tools** — `get_active_window`, `ocr_window`, `ocr_active_window` added to chain dispatch.
+- **`ocr_window` tool** — new MCP tool that extracts text from a specific window by handle using Windows OCR. Calls `OCRWindow(hwnd, language)` which captures the window's bounding rect via `GetWindowRectByHandle`, clamps to screen bounds, then runs WinRT OCR on the region. Accepts `handle` (uintptr) and optional `language`.
+- **`ocr_active_window` tool** — new MCP tool that extracts text from the current foreground window. Uses `ForegroundWindowHandle()` to get the active window handle, then delegates to `OCRWindow`. Accepts optional `language` parameter.
+- **`ForegroundWindowHandle()`** exported helper (`datalog.go`) — returns the current foreground window's HWND via `GetForegroundWindow`.
+- **`clamp32()` helper** (`ocr.go`) — clamps int32 values to [lo, hi] range for safe screen bounds capping.
+- **`list_windows` now returns bounding rect** — each window now includes `x`, `y`, `width`, `height` from `GetWindowRectByHandle`. The AI can cross-reference window bounds with `list_displays` monitor positions to determine which screen a window is on.
+- **`get_active_window` now returns bounding rect** — same `x`, `y`, `width`, `height` fields added.
+
+### Changed
+
+- **`OCRWindow` now clamps to screen bounds** — window rects with negative coordinates (off-screen title bars) are clamped to the virtual screen dimensions via `ScreenSize()` before capture, preventing "out of bounds" errors from `ValidateRegion`.
+- **`LogToolCall` auto-capture unchanged** — remains full-screen `OCRScreen` to preserve the training pair bridge behavior; the AI chooses between `ocr`, `ocr_window`, `ocr_active_window` as needed.
+- **Tool descriptions updated** — `get_window_state` documents z_order and the visible-flag vs actual-visibility distinction. `focus_window` tells AI to ALWAYS call before interacting with a non-foreground window. `uia_find` mentions it can find textboxes, address bars, search menus, title bars; advises focusing window first. `ocr_window` warns about minimized/obscured windows. `list_windows` and `get_active_window` descriptions mention bounding rect fields.
+- **Chain input schema relaxed** — `args` `AdditionalProperties` now accepts any type (`{}` instead of `{type:object}`), so `{{variable}}` template strings in arg values pass schema validation.
+
+### VERSION
+
+`0.2.37` → `0.2.38`
+
 ## [0.2.37] - 2026-07-08
 
 ### Added
