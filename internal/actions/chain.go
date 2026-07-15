@@ -59,9 +59,10 @@ type IfUIAConfig struct {
 // ── Data structures ──
 
 type ChainRequest struct {
-	Steps     []ChainStep `json:"steps"`
-	TimeoutMs int         `json:"timeout_ms,omitempty"`
-	OnError   string      `json:"on_error,omitempty"`
+	Steps          []ChainStep `json:"steps"`
+	TimeoutMs      int         `json:"timeout_ms,omitempty"`
+	OnError        string      `json:"on_error,omitempty"`
+	AutoVerifyFocus bool       `json:"auto_verify_focus,omitempty"`
 }
 
 type ChainStep struct {
@@ -77,6 +78,7 @@ type ChainStep struct {
 	VerifyUI    *VerifyUIConfig   `json:"verify_ui,omitempty"`
 	IfUIA       *IfUIAConfig      `json:"if_uia,omitempty"`
 	FocusWindow string            `json:"focus_window,omitempty"`
+	FocusHandle uintptr           `json:"focus_handle,omitempty"`
 }
 
 type VerifyStepConfig struct {
@@ -120,8 +122,10 @@ func ensureWindowFocus(windowTitle string) StepResult {
 		}
 	}
 	// Click title bar area to ensure activation before keyboard input
+	// Only clicks if the window is truly topmost (z_order==0) so we don't
+	// accidentally hit an always-on-top window overlapping this coordinate.
 	state, err := GetWindowState(hwnd)
-	if err == nil && state != nil {
+	if err == nil && state != nil && state.ZOrder == 0 {
 		clickX := (state.Rect.Left + state.Rect.Right) / 2
 		clickY := state.Rect.Top + 10
 		if clickY < state.Rect.Top+30 {
@@ -131,6 +135,27 @@ func ensureWindowFocus(windowTitle string) StepResult {
 		}
 	}
 	return StepResult{Tool: "focus_window", Success: true}
+}
+
+// inputTools tracks tools that send input to the foreground window.
+// Used by auto_verify_focus to ensure the intended window is still focused.
+var inputTools = map[string]bool{
+	"click":               true,
+	"type":                true,
+	"key_press":           true,
+	"key_down":            true,
+	"key_up":              true,
+	"type_and_submit":     true,
+	"select_all_and_type": true,
+	"scroll":              true,
+	"drag":                true,
+	"hover":               true,
+	"find_text_and_click": true,
+}
+
+func isInputTool(toolName string) bool {
+	trimmed := strings.TrimPrefix(toolName, "computer_use_")
+	return inputTools[trimmed]
 }
 
 // ── Tool dispatch ──
@@ -210,6 +235,7 @@ func init() {
 		"get_file_info":           chainGetFileInfo,
 		"set_working_directory":   chainSetWorkingDirectory,
 		"get_working_directory":   chainGetWorkingDirectory,
+		"get_dpi_for_point":      chainGetDPIPoint,
 	}
 }
 
@@ -217,8 +243,9 @@ func init() {
 
 func ExecuteChain(req ChainRequest) (*ChainResult, error) {
 	state := &chainState{
-		variables: make(map[string]any),
-		onError:   req.OnError,
+		variables:       make(map[string]any),
+		onError:         req.OnError,
+		autoVerifyFocus: req.AutoVerifyFocus,
 	}
 
 	if state.onError == "" {
@@ -275,8 +302,23 @@ func execSteps(steps []ChainStep, state *chainState) ([]StepResult, int) {
 		stepArgs := substituteVars(step.Args, state.variables)
 		var stepResult StepResult
 
-		// Auto-focus window before step if specified
-		if step.FocusWindow != "" {
+			// Auto-focus window before step if specified
+		if step.FocusHandle != 0 {
+			if err := FocusWindow(step.FocusHandle); err != nil {
+				stepResult = StepResult{
+					Tool: "focus_window", Success: false,
+					Error: fmt.Sprintf("focus handle failed: %v", err),
+				}
+				stepResult.Index = i
+				results = append(results, stepResult)
+				stepCount++
+				if state.onError == "stop" {
+					break
+				}
+				continue
+			}
+			state.lastFocusHandle = step.FocusHandle
+		} else if step.FocusWindow != "" {
 			if fr := ensureWindowFocus(step.FocusWindow); !fr.Success {
 				stepResult = fr
 				stepResult.Index = i
@@ -286,6 +328,17 @@ func execSteps(steps []ChainStep, state *chainState) ([]StepResult, int) {
 					break
 				}
 				continue
+			}
+			hwnd := FindWindowByTitle(step.FocusWindow)
+			if hwnd != 0 {
+				state.lastFocusHandle = hwnd
+			}
+		}
+
+		// Auto-verify: if enabled and step is an input tool, re-check foreground
+		if state.autoVerifyFocus && state.lastFocusHandle != 0 {
+			if isInputTool(step.Tool) && !isForeground(state.lastFocusHandle) {
+				FocusWindow(state.lastFocusHandle)
 			}
 		}
 
@@ -324,8 +377,10 @@ func execSteps(steps []ChainStep, state *chainState) ([]StepResult, int) {
 }
 
 type chainState struct {
-	variables map[string]any
-	onError   string
+	variables       map[string]any
+	onError         string
+	autoVerifyFocus bool
+	lastFocusHandle uintptr
 }
 
 func defaultTimeout(ms int) time.Duration {
@@ -1446,6 +1501,22 @@ func chainSetWorkingDirectory(args map[string]any) (any, error) {
 
 func chainGetWorkingDirectory(_ map[string]any) (any, error) {
 	return GetWorkingDirectory(), nil
+}
+
+func chainGetDPIPoint(args map[string]any) (any, error) {
+	x, _ := getInt(args, "x")
+	y, _ := getInt(args, "y")
+	dpi, err := GetDPIScaleForPoint(int32(x), int32(y))
+	if err != nil {
+		return nil, err
+	}
+	scale := (dpi * 100) / 96
+	return map[string]any{
+		"dpi":           dpi,
+		"scale_percent": scale,
+		"x":             x,
+		"y":             y,
+	}, nil
 }
 
 // ── UIA chain tools ──

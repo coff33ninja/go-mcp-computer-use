@@ -193,17 +193,16 @@ func SelectAllAndType(text string) error {
 	return TypeText(text)
 }
 
-func ClickMenuItem(windowTitle, menuItemText, language string) error {
-	hwnd := FindWindowByTitle(windowTitle)
-	if hwnd == 0 {
-		return fmt.Errorf("click_menu_item: window %q not found", windowTitle)
+func ClickMenuItem(handle uintptr, menuItemText, language string) error {
+	if handle == 0 {
+		return fmt.Errorf("click_menu_item: handle is 0")
 	}
-	state, err := GetWindowState(hwnd)
+	state, err := GetWindowState(handle)
 	if err != nil {
 		return fmt.Errorf("click_menu_item state: %w", err)
 	}
 	if state.Rect == nil {
-		return fmt.Errorf("click_menu_item: window %q has no position", windowTitle)
+		return fmt.Errorf("click_menu_item: window has no position")
 	}
 
 	result, err := OCRRegion(state.Rect.Left, state.Rect.Top, state.Rect.Width, state.Rect.Height, language)
@@ -212,6 +211,14 @@ func ClickMenuItem(windowTitle, menuItemText, language string) error {
 	}
 
 	return clickFirstMatch(result, menuItemText, state.Rect.Left, state.Rect.Top)
+}
+
+func ClickMenuItemByTitle(windowTitle, menuItemText, language string) error {
+	hwnd := FindWindowByTitle(windowTitle)
+	if hwnd == 0 {
+		return fmt.Errorf("click_menu_item: window %q not found", windowTitle)
+	}
+	return ClickMenuItem(hwnd, menuItemText, language)
 }
 
 func clickFirstMatch(result *OCRResult, text string, offsetX, offsetY int32) error {

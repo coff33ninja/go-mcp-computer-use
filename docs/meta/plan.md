@@ -109,18 +109,19 @@ Screenshot taken
 - **Feedback loop** — every action is verified by perception before continuing
 - **Stable planner/executor interface** — high-level skills decoupled from tool layer so vision models, LLMs, or backends can be swapped
 
-## Current State: v0.2.38 — Desktop Awareness + Chain Integration
+## Current State: v0.2.39 — Verified Window Focus + DPI Awareness
 
 All tools registered in `internal/server/server.go`, auto-documented in [`docs/reference/tools.md`](../reference/tools.md). Adaptive engine now includes timing stats, success rates, coordinate prediction, and full OCR-bridge training pair coverage across all 11 action tools.
 
 Chain system integrated with UIA: mouse steps auto-capture `element_at_point`, `verify_ui` and `if_uia` step types use UIA instead of OCR for structural verification and branching.
 
-Desktop awareness layer is now complete:
-- **Window state** — `get_window_state` returns full state: visible, minimized, maximized, fullscreen, foreground, z_order (0=topmost, higher=deeper behind), and bounding rect. AI can detect obscured windows and focus/restore before interacting.
-- **Window stacking** — `z_order` field lets AI compare which windows are on top. If window A has z_order=3 and window B has z_order=12, A is above B.
-- **Element discovery** — `uia_get_all_elements(handle)` dumps all child UI elements of a window (textboxes, address bars, title bars, buttons). `uia_find` searches by name/type. `find_ui_element` cascades memory→ONNX→OCR.
-- **Element at point** — `uia_get_element_at_point(x, y)` reverse-looks up screen coordinates to identify the element under the cursor.
-- **Content verification** — `wait_for_ui_element(handle, name, control_type)` polls UIA until element appears. Complements `wait_for_text` (OCR polling) for post-action validation.
+Focus reliability hardened: `FocusWindow` now uses a 4-attempt fallback chain with post-call verification via `GetForegroundWindow`. Chain steps accept `focus_handle` (direct handle, no title re-resolve) and support `auto_verify_focus` to re-check foreground before input tools. Desktop awareness layer extended with DPI-per-point lookup:
+
+- **Verified focus** — `FocusWindow` verifies via `GetForegroundWindow` after each attempt. Fallback chain: `SetForegroundWindow` + `AttachThreadInput` → `BringWindowToTop` + `SW_SHOW` → `SwitchToThisWindow` (bypasses lock) → delayed retry. Returns error if all fail instead of silent failure.
+- **Handle-based focus in chains** — `focus_handle` field on chain steps accepts captured handle directly, avoiding title re-resolution collisions. Falls back to `focus_window` (title) when handle is 0.
+- **Auto-verify focus** — `auto_verify_focus` chain option re-checks foreground before input steps (click, type, key_press). If a popup stole focus mid-chain, it re-focuses.
+- **DPI awareness** — `get_dpi_for_point(x, y)` returns DPI and scale percent for any screen coordinate. Mixed-DPI multi-monitor: AI can check DPI before clicking.
+- **Handle-based tools** — `click_menu_item` and `layout_validate` accept optional `handle`/`window_handle` to skip title lookup.
 
 See [`docs/reference/tools.md`](../reference/tools.md) for the full categorized tool listing and [`backlog.md`](backlog.md) for the roadmap.
 

@@ -16,6 +16,7 @@ type Coord struct {
 type LayoutValidateInput struct {
 	Elements       []LayoutElement `json:"elements"`
 	WindowTitle    string          `json:"window_title,omitempty"`
+	WindowHandle   uintptr         `json:"window_handle,omitempty"`
 	DriftTolerance int32           `json:"drift_tolerance,omitempty"`
 	Language       string          `json:"language,omitempty"`
 }
@@ -50,11 +51,13 @@ func ValidateLayout(in LayoutValidateInput) (*LayoutValidateResult, error) {
 
 	var currentRect *WindowRect
 
-	if in.WindowTitle != "" {
-		hwnd := FindWindowByTitle(in.WindowTitle)
-		if hwnd == 0 {
-			return staleAll(in.Elements), nil
-		}
+	var hwnd uintptr
+	if in.WindowHandle != 0 {
+		hwnd = in.WindowHandle
+	} else if in.WindowTitle != "" {
+		hwnd = FindWindowByTitle(in.WindowTitle)
+	}
+	if hwnd != 0 {
 		state, err := GetWindowState(hwnd)
 		if err != nil {
 			return staleAll(in.Elements), nil

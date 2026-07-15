@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.2.39] - 2026-07-15
+
+### Added
+
+- **`get_dpi_for_point(x, y)`** — new MCP tool that returns DPI and scale percentage at a specific screen coordinate. Useful for determining which monitor a coordinate is on and its scaling factor in mixed-DPI multi-monitor setups. Returns `{dpi, scale_percent, x, y}`. Also available in chain dispatch.
+- **`FocusHandle` chain step field** — new `focus_handle` field on chain steps accepts a handle directly (via `{{var.handle}}` capture), avoiding title re-resolution. Chain checks `focus_handle` first, falls back to `focus_window` (title-based).
+- **`auto_verify_focus` chain option** — new boolean field on chain requests. When `true`, the chain engine tracks the last-focused window handle and re-verifies foreground state before sending input (click, type, key_press, scroll, etc.). If focus was stolen by a popup or notification, it re-focuses before acting.
+- **`click_menu_item` accepts handle** — new optional `handle` field. When provided, bypasses title-based window lookup. Falls back to `window_title` if handle is 0.
+- **`layout_validate` accepts window handle** — new optional `window_handle` field. When provided, bypasses title-based window lookup. Falls back to `window_title` if handle is 0.
+
+### Fixed
+
+- **`FocusWindow` now verifies and retries** — previously discarded `SetForegroundWindow` return and never confirmed the window actually became foreground. Now uses a 4-attempt fallback chain: (1) `SetForegroundWindow` with `AttachThreadInput`, (2) `BringWindowToTop` + `SW_SHOW`, (3) `SwitchToThisWindow` (bypasses foreground lock), (4) retry `SetForegroundWindow` after delay. Each attempt verified via `GetForegroundWindow`. Returns error if all attempts fail instead of silently returning nil. This fixes the stale-focus failure where clicks land on the wrong window.
+- **`click_menu_item` no longer silently fails** — when window title matches but window is obscured, the improved `FocusWindow` (called by browser focus helpers) now actually brings the window to foreground before OCR+click.
+- **`ensureWindowFocus` title-bar click guarded by z_order** — the post-focus activation click at `Top+10` was blind to always-on-top windows. Now checks `ZOrder == 0` (truly topmost) before clicking, preventing accidental hits on overlapping windows.
+
+### VERSION
+
+`0.2.38` → `0.2.39`
+
 ## [0.2.38] - 2026-07-15
 
 ### Added

@@ -260,7 +260,8 @@ type SelectAllAndTypeArgs struct {
 }
 
 type ClickMenuItemArgs struct {
-	WindowTitle  string `json:"window_title"`
+	WindowTitle  string `json:"window_title,omitempty"`
+	Handle       uintptr `json:"handle,omitempty"`
 	MenuItemText string `json:"menu_item_text"`
 	Language     string `json:"language,omitempty"`
 	VerifyArgs
@@ -507,16 +508,18 @@ func chainInputSchema() *jsonschema.Schema {
 }
 
 type ChainArgs struct {
-	Steps     []actions.ChainStep `json:"steps"`
-	TimeoutMs int                 `json:"timeout_ms,omitempty"`
-	OnError   string              `json:"on_error,omitempty"`
+	Steps          []actions.ChainStep `json:"steps"`
+	TimeoutMs      int                 `json:"timeout_ms,omitempty"`
+	OnError        string              `json:"on_error,omitempty"`
+	AutoVerifyFocus bool               `json:"auto_verify_focus,omitempty"`
 }
 
 func chainHandler(ctx context.Context, req *mcp.CallToolRequest, args ChainArgs) (*mcp.CallToolResult, any, error) {
 	chainReq := actions.ChainRequest{
-		Steps:     args.Steps,
-		TimeoutMs: args.TimeoutMs,
-		OnError:   args.OnError,
+		Steps:           args.Steps,
+		TimeoutMs:       args.TimeoutMs,
+		OnError:         args.OnError,
+		AutoVerifyFocus: args.AutoVerifyFocus,
 	}
 	result, err := actions.ExecuteChain(chainReq)
 	if err != nil {
@@ -1121,7 +1124,12 @@ func selectAllAndTypeHandler(ctx context.Context, req *mcp.CallToolRequest, args
 
 func clickMenuItemHandler(ctx context.Context, req *mcp.CallToolRequest, args ClickMenuItemArgs) (*mcp.CallToolResult, any, error) {
 	var rx, ry, rw, rh *int32
-	hwnd := actions.FindWindowByTitle(args.WindowTitle)
+	var hwnd uintptr
+	if args.Handle != 0 {
+		hwnd = args.Handle
+	} else {
+		hwnd = actions.FindWindowByTitle(args.WindowTitle)
+	}
 	if hwnd != 0 {
 		if state, err := actions.GetWindowState(hwnd); err == nil && state.Rect != nil {
 			rx, ry, rw, rh = &state.Rect.Left, &state.Rect.Top, &state.Rect.Width, &state.Rect.Height
@@ -1130,7 +1138,13 @@ func clickMenuItemHandler(ctx context.Context, req *mcp.CallToolRequest, args Cl
 	if err := preVerifyCheck(args.PreExpected, rx, ry, rw, rh); err != nil {
 		return nil, nil, err
 	}
-	if err := actions.ClickMenuItem(args.WindowTitle, args.MenuItemText, args.Language); err != nil {
+	var err error
+	if args.Handle != 0 {
+		err = actions.ClickMenuItem(args.Handle, args.MenuItemText, args.Language)
+	} else {
+		err = actions.ClickMenuItemByTitle(args.WindowTitle, args.MenuItemText, args.Language)
+	}
+	if err != nil {
 		return nil, nil, fmt.Errorf("click_menu_item: %w", err)
 	}
 	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatClick,
@@ -1265,6 +1279,7 @@ func recordScreenHandler(ctx context.Context, req *mcp.CallToolRequest, args Rec
 type LayoutValidateArgs struct {
 	Elements       []actions.LayoutElement `json:"elements"`
 	WindowTitle    string                  `json:"window_title,omitempty"`
+	WindowHandle   uintptr                 `json:"window_handle,omitempty"`
 	DriftTolerance int32                   `json:"drift_tolerance,omitempty"`
 	Language       string                  `json:"language,omitempty"`
 }
@@ -1273,6 +1288,7 @@ func layoutValidateHandler(ctx context.Context, req *mcp.CallToolRequest, args L
 	result, err := actions.ValidateLayout(actions.LayoutValidateInput{
 		Elements:       args.Elements,
 		WindowTitle:    args.WindowTitle,
+		WindowHandle:   args.WindowHandle,
 		DriftTolerance: args.DriftTolerance,
 		Language:       args.Language,
 	})
@@ -1288,6 +1304,25 @@ func getScreenDPIHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (
 		return nil, nil, fmt.Errorf("get_screen_dpi: %w", err)
 	}
 	return &mcp.CallToolResult{}, map[string]any{"monitors": dpi}, nil
+}
+
+type DPIPointArgs struct {
+	X int32 `json:"x"`
+	Y int32 `json:"y"`
+}
+
+func getDPIPointHandler(ctx context.Context, req *mcp.CallToolRequest, args DPIPointArgs) (*mcp.CallToolResult, any, error) {
+	dpi, err := actions.GetDPIScaleForPoint(args.X, args.Y)
+	if err != nil {
+		return nil, nil, fmt.Errorf("get_dpi_for_point: %w", err)
+	}
+	scale := (dpi * 100) / 96
+	return &mcp.CallToolResult{}, map[string]any{
+		"dpi":           dpi,
+		"scale_percent": scale,
+		"x":             args.X,
+		"y":             args.Y,
+	}, nil
 }
 
 type FocusWindowByTitleArgs struct {
@@ -2725,6 +2760,11 @@ func New(version string) *mcp.Server {
 		Name:        "get_screen_dpi",
 		Description: "Get per-monitor screen DPI and scale percentage.",
 	}, getScreenDPIHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "get_dpi_for_point",
+		Description: "Get DPI and scale percentage at a specific screen coordinate. Useful for determining which monitor a coordinate is on and its scaling factor, especially in mixed-DPI multi-monitor setups.",
+	}, getDPIPointHandler)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "find_image",

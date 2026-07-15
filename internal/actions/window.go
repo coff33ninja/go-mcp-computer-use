@@ -2,19 +2,22 @@ package actions
 
 import (
 	"encoding/json"
+	"fmt"
 	"syscall"
 	"time"
 	"unsafe"
 )
 
 var (
-	enumWindows         = user32.NewProc("EnumWindows")
-	getWindowTextW      = user32.NewProc("GetWindowTextW")
+	enumWindows              = user32.NewProc("EnumWindows")
+	getWindowTextW           = user32.NewProc("GetWindowTextW")
 	getWindowThreadProcessId = user32.NewProc("GetWindowThreadProcessId")
-	isWindowVisible     = user32.NewProc("IsWindowVisible")
-	setForegroundWindow = user32.NewProc("SetForegroundWindow")
-	showWindow          = user32.NewProc("ShowWindow")
-	getWindowLongW      = user32.NewProc("GetWindowLongW")
+	isWindowVisible          = user32.NewProc("IsWindowVisible")
+	setForegroundWindow      = user32.NewProc("SetForegroundWindow")
+	showWindow               = user32.NewProc("ShowWindow")
+	getWindowLongW           = user32.NewProc("GetWindowLongW")
+	bringWindowToTop         = user32.NewProc("BringWindowToTop")
+	switchToThisWindow       = user32.NewProc("SwitchToThisWindow")
 )
 
 const (
@@ -104,6 +107,24 @@ func ListWindows() ([]WindowInfo, error) {
 	return windows, nil
 }
 
+func trySetForeground(handle uintptr) bool {
+	windowThread, _, _ := getWindowThreadProcessId.Call(handle, 0)
+	currentThread, _, _ := getCurrentThreadId.Call()
+	if windowThread != currentThread {
+		attachThreadInput.Call(currentThread, windowThread, 1)
+		ret, _, _ := setForegroundWindow.Call(handle)
+		attachThreadInput.Call(currentThread, windowThread, 0)
+		return ret != 0
+	}
+	ret, _, _ := setForegroundWindow.Call(handle)
+	return ret != 0
+}
+
+func isForeground(handle uintptr) bool {
+	fg, _, _ := getForegroundWindow.Call()
+	return fg == handle
+}
+
 func FocusWindow(handle uintptr) (err error) {
 	start := time.Now()
 	defer func() {
@@ -112,15 +133,41 @@ func FocusWindow(handle uintptr) (err error) {
 		Adaptive.RecordResult("focus_window", float64(time.Since(start).Milliseconds()), err == nil)
 		Adaptive.LearnFromCommand("focus_window", string(b), err == nil)
 	}()
-	windowThread, _, _ := getWindowThreadProcessId.Call(handle, 0)
-	currentThread, _, _ := getCurrentThreadId.Call()
-	if windowThread != currentThread {
-		attachThreadInput.Call(currentThread, windowThread, 1)
-		setForegroundWindow.Call(handle)
-		attachThreadInput.Call(currentThread, windowThread, 0)
-	} else {
-		setForegroundWindow.Call(handle)
-	}
+
+	// If already foreground, still restore in case minimized
 	showWindow.Call(handle, SW_RESTORE)
-	return
+	if isForeground(handle) {
+		return nil
+	}
+
+	// Attempt 1: SetForegroundWindow with AttachThreadInput
+	trySetForeground(handle)
+	showWindow.Call(handle, SW_RESTORE)
+	if isForeground(handle) {
+		return nil
+	}
+
+	// Attempt 2: BringWindowToTop + SW_SHOW
+	bringWindowToTop.Call(handle)
+	showWindow.Call(handle, SW_SHOW)
+	if isForeground(handle) {
+		return nil
+	}
+
+	// Attempt 3: SwitchToThisWindow (bypasses foreground lock)
+	switchToThisWindow.Call(handle, 1)
+	showWindow.Call(handle, SW_RESTORE)
+	if isForeground(handle) {
+		return nil
+	}
+
+	// Attempt 4: Retry SetForegroundWindow one more time after delay
+	Wait(100)
+	trySetForeground(handle)
+	showWindow.Call(handle, SW_RESTORE)
+	if isForeground(handle) {
+		return nil
+	}
+
+	return fmt.Errorf("focus_window: failed to bring window to foreground after all attempts")
 }
