@@ -2,7 +2,7 @@ param()
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
-$outDir = Join-Path $repoRoot "docs" "meta"
+$outDir = Join-Path (Join-Path $repoRoot "docs") "meta"
 $outFile = Join-Path $outDir "credit-audit-report.json"
 $version = (Get-Content (Join-Path $repoRoot "VERSION") -Raw).Trim()
 
