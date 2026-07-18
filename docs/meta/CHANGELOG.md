@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.2.41] - 2026-07-18
+
+### Added
+
+- **`reset_state` tool** — clears accumulated adaptive engine stats (timings, successes, sequences, word→cmd index, coord index) and OCR→command bridge buffer. Use between heavy batch operations to prevent state accumulation and MCP timeouts.
+- **`dismiss_all_menus` tool** — presses Escape to dismiss open context menus/dialogs. OCRs before and after to detect which menus were open and whether they successfully closed. Returns `{esc_pressed, menus_before, menus_still_open}`.
+- **Error enrichment for `find_text_and_click`** — when target text is not found, the error now includes up to 15 visible lines from OCR so the AI can see what IS on screen (e.g. `"text 'Delete...' not found. Visible text: 'Back | Refresh | Save as | Print...'"`).
+
+### Removed
+
+- **`AI_ERROR_REPORT.md`** — error report findings addressed in v0.2.41 (reset_state, error enrichment, dismiss_all_menus).
+
+### VERSION
+
+`0.2.40` → `0.2.41`
+
 ## [0.2.40] - 2026-07-15
 
 ### Added

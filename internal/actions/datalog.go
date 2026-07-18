@@ -322,6 +322,16 @@ func pushRecentOCR(result *OCRResult) {
 	}
 }
 
+// ResetBridgeState clears the OCR→command training bridge buffer.
+// Call between heavy batch operations to prevent stale context accumulation.
+func ResetBridgeState() {
+	pairMu.Lock()
+	defer pairMu.Unlock()
+	recentOCR = nil
+	pendingCmd = nil
+	pendingTime = time.Time{}
+}
+
 // findRecentOCRBefore returns the OCR context to associate with the given
 // command. For coordinate-based tools it scopes the context to words near
 // the actual target (x, y) instead of the whole screen. Otherwise, or if no

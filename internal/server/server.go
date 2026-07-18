@@ -2305,6 +2305,56 @@ func getWorkingDirectoryHandler(_ context.Context, _ *mcp.CallToolRequest, _ any
 	return &mcp.CallToolResult{}, map[string]string{"working_directory": actions.GetWorkingDirectory()}, nil
 }
 
+func resetStateHandler(_ context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
+	actions.Adaptive.Reset()
+	actions.ResetBridgeState()
+	slog.Info("server state reset — adaptive engine + bridge buffer cleared")
+	return &mcp.CallToolResult{}, map[string]string{"status": "reset complete", "cleared": "adaptive engine, bridge buffer"}, nil
+}
+
+func dismissAllMenusHandler(_ context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
+	// OCR before to capture what menus are open
+	before, err := actions.OCRScreen("")
+	if err != nil {
+		return nil, nil, fmt.Errorf("dismiss_all_menus ocr before: %w", err)
+	}
+	menuWords := []string{"delete", "copy", "paste", "cut", "undo", "redo", "select all", "inspect", "back", "forward", "refresh", "save as", "print", "more tools", "open link", "copy link", "bookmark"}
+	var detectedMenus []string
+	lower := strings.ToLower(before.Text)
+	for _, mw := range menuWords {
+		if strings.Contains(lower, mw) {
+			detectedMenus = append(detectedMenus, mw)
+		}
+	}
+	// Press Escape to dismiss
+	if err := actions.KeyPress([]string{"ESC"}); err != nil {
+		return nil, nil, fmt.Errorf("dismiss_all_menus escape: %w", err)
+	}
+	actions.Wait(300)
+	// OCR after to verify
+	after, err := actions.OCRScreen("")
+	if err != nil {
+		return nil, nil, fmt.Errorf("dismiss_all_menus ocr after: %w", err)
+	}
+	afterLower := strings.ToLower(after.Text)
+	menusStillOpen := false
+	for _, mw := range menuWords {
+		if strings.Contains(afterLower, mw) {
+			menusStillOpen = true
+			break
+		}
+	}
+	result := map[string]any{
+		"esc_pressed":    true,
+		"menus_before":   detectedMenus,
+		"menus_still_open": menusStillOpen,
+	}
+	if menusStillOpen {
+		result["warning"] = "menus may still be open after Escape"
+	}
+	return &mcp.CallToolResult{}, result, nil
+}
+
 func New(version string) *mcp.Server {
 	cfg, err := config.Load()
 	if err != nil {
@@ -3093,6 +3143,16 @@ func New(version string) *mcp.Server {
 		Name:        "get_working_directory",
 		Description: "Get the current working directory used for relative path resolution.",
 	}, getWorkingDirectoryHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "reset_state",
+		Description: "Clear accumulated server state (adaptive engine stats, bridge buffer). Use between heavy batch operations to prevent state accumulation and timeouts.",
+	}, resetStateHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "dismiss_all_menus",
+		Description: "Press Escape to dismiss open context menus/dialogs. OCRs before and after to detect which menus were open and whether they closed.",
+	}, dismissAllMenusHandler)
 
 	if len(cfg.ToolDenylist) > 0 {
 		var denied []string

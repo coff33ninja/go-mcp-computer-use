@@ -183,6 +183,22 @@ func NewAdaptiveEngine() *AdaptiveEngine {
 	}
 }
 
+// Reset clears all in-memory adaptive state without touching the database.
+// Use between heavy batch operations to prevent state accumulation.
+func (e *AdaptiveEngine) Reset() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.timings = make(map[string]*ToolTiming)
+	e.successes = make(map[string]*ToolSuccess)
+	e.sequences = nil
+	e.wordToCmds = make(map[string]map[string]*cmdFreq)
+	e.coordIndex = make(map[string]map[string]*coordSample)
+	e.persisted = make(map[string]*PersistedStat)
+	e.totalCmds = 0
+	e.totalSeqs = 0
+	e.lastTrain = time.Time{}
+}
+
 func (e *AdaptiveEngine) RecordTiming(tool string, durationMs float64) {
 	e.mu.Lock()
 	tt, ok := e.timings[tool]

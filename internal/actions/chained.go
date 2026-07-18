@@ -60,7 +60,21 @@ search:
 			return cx, cy, Click(ClickInput{X: cx, Y: cy, Button: "left", Clicks: 1})
 		}
 	}
-	return 0, 0, fmt.Errorf("find_text_and_click: text %q not found on screen", opts.Text)
+	// Enrich error with visible text so the AI can see what IS on screen
+	visible := make([]string, 0, min(len(result.Lines), 15))
+	for _, line := range result.Lines {
+		t := strings.TrimSpace(line.Text)
+		if t != "" {
+			visible = append(visible, t)
+		}
+		if len(visible) >= 15 {
+			break
+		}
+	}
+	if len(visible) > 0 {
+		return 0, 0, fmt.Errorf("find_text_and_click: text %q not found on screen. Visible text: %q", opts.Text, strings.Join(visible, " | "))
+	}
+	return 0, 0, fmt.Errorf("find_text_and_click: text %q not found on screen (no text detected via OCR)", opts.Text)
 }
 
 func TypeAndSubmit(text string) error {

@@ -13,8 +13,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot    = Resolve-Path (Join-Path $PSScriptRoot "..")
-$icoPath     = Join-Path $repoRoot "icons" "app.ico"
-$sysoOut     = Join-Path $repoRoot "cmd" "mcp-server" "rsrc_windows.syso"
+$icoPath     = Join-Path (Join-Path $repoRoot "icons") "app.ico"
+$sysoOut     = Join-Path (Join-Path (Join-Path $repoRoot "cmd") "mcp-server") "rsrc_windows.syso"
 
 if (-not (Test-Path $icoPath)) {
     Write-Error "Icon not found at $icoPath — run icons/gen-icons.py first"
