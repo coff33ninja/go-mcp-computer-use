@@ -12,7 +12,7 @@ require (
 	github.com/xuri/excelize/v2 v2.11.0
 	github.com/yalue/onnxruntime_go v1.13.0
 	golang.org/x/sys v0.46.0
-	modernc.org/sqlite v1.53.0
+	modernc.org/sqlite v1.54.0
 )
 
 require (
@@ -41,7 +41,7 @@ require (
 	golang.org/x/oauth2 v0.35.0 // indirect
 	golang.org/x/text v0.38.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	modernc.org/libc v1.73.4 // indirect
+	modernc.org/libc v1.74.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 )
