@@ -1781,6 +1781,11 @@ type SetConfigArgs struct {
 	WatcherIntervalSecs  *int     `json:"watcher_interval_seconds,omitempty"`
 	ToolDenylist         []string `json:"tool_denylist,omitempty"`
 	RetentionDays        *int     `json:"retention_days,omitempty"`
+	ChainAbortEnabled    *bool    `json:"chain_abort_enabled,omitempty"`
+	ChainAbortKeys       string   `json:"chain_abort_keys,omitempty"`
+	ChainAbortPollMs     *int     `json:"chain_abort_poll_ms,omitempty"`
+	WindowLockEnabled    *bool    `json:"window_lock_enabled,omitempty"`
+	WindowLockAutoFocus  *bool    `json:"window_lock_auto_focus,omitempty"`
 }
 
 type ListDirectoryArgs struct {
@@ -2136,6 +2141,57 @@ func setConfigHandler(ctx context.Context, req *mcp.CallToolRequest, args SetCon
 		}
 	}
 
+	if args.ChainAbortEnabled != nil {
+		val := *args.ChainAbortEnabled
+		if cfg.ChainAbortEnabled != val {
+			cfg.ChainAbortEnabled = val
+			changed = true
+			if val {
+				actions.StartAbortPoller(actions.ParseHotkeyString(cfg.ChainAbortKeys), cfg.ChainAbortPollMs)
+			} else {
+				actions.StopAbortPoller()
+			}
+		}
+	}
+	if args.ChainAbortKeys != "" {
+		if cfg.ChainAbortKeys != args.ChainAbortKeys {
+			cfg.ChainAbortKeys = args.ChainAbortKeys
+			changed = true
+			if cfg.ChainAbortEnabled {
+				actions.StopAbortPoller()
+				actions.StartAbortPoller(actions.ParseHotkeyString(cfg.ChainAbortKeys), cfg.ChainAbortPollMs)
+			}
+		}
+	}
+	if args.ChainAbortPollMs != nil {
+		val := *args.ChainAbortPollMs
+		if val < 10 {
+			val = 10
+		}
+		if cfg.ChainAbortPollMs != val {
+			cfg.ChainAbortPollMs = val
+			changed = true
+			if cfg.ChainAbortEnabled {
+				actions.StopAbortPoller()
+				actions.StartAbortPoller(actions.ParseHotkeyString(cfg.ChainAbortKeys), cfg.ChainAbortPollMs)
+			}
+		}
+	}
+	if args.WindowLockEnabled != nil {
+		val := *args.WindowLockEnabled
+		if cfg.WindowLockEnabled != val {
+			cfg.WindowLockEnabled = val
+			changed = true
+		}
+	}
+	if args.WindowLockAutoFocus != nil {
+		val := *args.WindowLockAutoFocus
+		if cfg.WindowLockAutoFocus != val {
+			cfg.WindowLockAutoFocus = val
+			changed = true
+		}
+	}
+
 	if changed {
 		slog.Info("config updated", "training_enabled", cfg.TrainingEnabled,
 			"prior_adjustment", cfg.PriorAdjustment, "verify_bounds", cfg.VerifyBounds,
@@ -2149,15 +2205,20 @@ func setConfigHandler(ctx context.Context, req *mcp.CallToolRequest, args SetCon
 	watcherStatus := actions.GetWatcherStatus()
 
 	return &mcp.CallToolResult{}, map[string]any{
-		"training_enabled":       cfg.TrainingEnabled,
-		"prior_adjustment":       cfg.PriorAdjustment,
-		"verify_bounds":          cfg.VerifyBounds,
-		"log_level":              cfg.LogLevel,
-		"watcher_running":        watcherStatus.Running,
-		"watcher_interval_secs":  cfg.WatcherIntervalSecs,
-		"tool_denylist":          cfg.ToolDenylist,
-		"retention_days":         cfg.RetentionDays,
-		"saved":                  changed,
+		"training_enabled":        cfg.TrainingEnabled,
+		"prior_adjustment":        cfg.PriorAdjustment,
+		"verify_bounds":           cfg.VerifyBounds,
+		"log_level":               cfg.LogLevel,
+		"watcher_running":         watcherStatus.Running,
+		"watcher_interval_secs":   cfg.WatcherIntervalSecs,
+		"tool_denylist":           cfg.ToolDenylist,
+		"retention_days":          cfg.RetentionDays,
+		"chain_abort_enabled":     cfg.ChainAbortEnabled,
+		"chain_abort_keys":        cfg.ChainAbortKeys,
+		"chain_abort_poll_ms":     cfg.ChainAbortPollMs,
+		"window_lock_enabled":     cfg.WindowLockEnabled,
+		"window_lock_auto_focus":  cfg.WindowLockAutoFocus,
+		"saved":                   changed,
 	}, nil
 }
 
@@ -2355,6 +2416,36 @@ func dismissAllMenusHandler(_ context.Context, _ *mcp.CallToolRequest, _ any) (*
 	return &mcp.CallToolResult{}, result, nil
 }
 
+func chainAbortHandler(_ context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
+	aborted := actions.IsChainAborted()
+	return &mcp.CallToolResult{}, map[string]any{
+		"aborted": aborted,
+	}, nil
+}
+
+type SetWindowLockArgs struct {
+	Handle uintptr `json:"handle"`
+}
+
+func setWindowLockHandler(_ context.Context, _ *mcp.CallToolRequest, args SetWindowLockArgs) (*mcp.CallToolResult, any, error) {
+	if err := actions.SetWindowLock(args.Handle); err != nil {
+		return nil, nil, err
+	}
+	return &mcp.CallToolResult{}, map[string]any{
+		"locked": true,
+		"handle": args.Handle,
+		"title":  actions.GetWindowLockTitle(),
+		"pid":    actions.GetWindowLockPID(),
+	}, nil
+}
+
+func clearWindowLockHandler(_ context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
+	actions.ClearWindowLock()
+	return &mcp.CallToolResult{}, map[string]any{
+		"cleared": true,
+	}, nil
+}
+
 func New(version string) *mcp.Server {
 	cfg, err := config.Load()
 	if err != nil {
@@ -2368,7 +2459,7 @@ func New(version string) *mcp.Server {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
 	slog.SetDefault(logger)
 
-	slog.Info("starting go-mcp-computer-use", "version", version, "tools", 111, "tools_doc", "docs/tools.md")
+	slog.Info("starting go-mcp-computer-use", "version", version, "tools", 143, "tools_doc", "docs/tools.md")
 
 	if cfg.UIAWarmup {
 		go func() {
@@ -2401,6 +2492,15 @@ func New(version string) *mcp.Server {
 	if cfg.RetentionDays > 0 && cfg.TrainingEnabled {
 		actions.StartRetentionPruner(cfg.RetentionDays)
 		slog.Info("retention pruner started", "retention_days", cfg.RetentionDays)
+	}
+
+	if cfg.ChainAbortEnabled {
+		pollMs := cfg.ChainAbortPollMs
+		if pollMs < 10 {
+			pollMs = 50
+		}
+		actions.StartAbortPoller(actions.ParseHotkeyString(cfg.ChainAbortKeys), pollMs)
+		slog.Info("chain abort hotkey enabled", "keys", cfg.ChainAbortKeys, "poll_ms", pollMs)
 	}
 
 	server := mcp.NewServer(&mcp.Implementation{
@@ -3086,7 +3186,7 @@ func New(version string) *mcp.Server {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "set_config",
-		Description: "Update runtime configuration. Accepts any subset of: training_enabled (stop/start background screenshot saving), prior_adjustment (enable/disable ML prior confidence tuning), verify_bounds (toggle coordinate bounds checking), log_level (debug/info/warn/error), watcher_enabled (start/stop the background screenshot watcher), watcher_interval_seconds (change polling frequency while running), tool_denylist (list of tool names to disable, e.g. [\"shutdown\",\"restart\"]), retention_days (auto-prune training samples older than N days, 0=disabled). Changes persist to disk.",
+		Description: "Update runtime configuration. Accepts any subset of: training_enabled (stop/start background screenshot saving), prior_adjustment (enable/disable ML prior confidence tuning), verify_bounds (toggle coordinate bounds checking), log_level (debug/info/warn/error), watcher_enabled (start/stop the background screenshot watcher), watcher_interval_seconds (change polling frequency while running), tool_denylist (list of tool names to disable, e.g. [\"shutdown\",\"restart\"]), retention_days (auto-prune training samples older than N days, 0=disabled), chain_abort_enabled (enable/disable global hotkey abort), chain_abort_keys (hotkey combo like \"Ctrl+Shift+Escape\"), chain_abort_poll_ms (polling interval), window_lock_enabled (enable/disable screen tool locking), window_lock_auto_focus (auto re-focus locked window). Changes persist to disk.",
 	}, setConfigHandler)
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -3153,6 +3253,21 @@ func New(version string) *mcp.Server {
 		Name:        "dismiss_all_menus",
 		Description: "Press Escape to dismiss open context menus/dialogs. OCRs before and after to detect which menus were open and whether they closed.",
 	}, dismissAllMenusHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "chain_abort",
+		Description: "Check if the global chain abort hotkey has been pressed since last check. Returns {aborted: true} when the configured hotkey combo is detected. The abort is consumed on read (auto-resets). Call before starting long chains or poll periodically.",
+	}, chainAbortHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "set_window_lock",
+		Description: "Lock the active chain to a specific window by handle. Screen-touching tools (click, type, OCR, etc.) will verify the locked window is foreground before executing. If window_lock_auto_focus is enabled, automatically re-focuses the locked window when it loses foreground. Use GetWindowState or list_windows to find the handle.",
+	}, setWindowLockHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "clear_window_lock",
+		Description: "Release the window lock. Screen-touching tools will no longer be restricted to a specific window.",
+	}, clearWindowLockHandler)
 
 	if len(cfg.ToolDenylist) > 0 {
 		var denied []string

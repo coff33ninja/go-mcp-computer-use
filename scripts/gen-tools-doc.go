@@ -7,6 +7,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -65,6 +66,8 @@ var categoryForTool = map[string]string{
 	"get_window_state":    "Window Management",
 	"screenshot_element":  "Window Management",
 	"get_active_window": "Window Management",
+	"set_window_lock":   "Window Management",
+	"clear_window_lock": "Window Management",
 
 	// Chained / Composite (4) — note: type_and_submit, select_all_and_type,
 	// and launch_and_wait are dual-listed in Keyboard / Process Management
@@ -73,8 +76,9 @@ var categoryForTool = map[string]string{
 	"click_menu_item":     "Chained / Composite",
 	"launch_and_wait":     "Chained / Composite",
 
-	// Chain Automation (1)
-	"chain": "Chain Automation",
+	// Chain Automation (2)
+	"chain":       "Chain Automation",
+	"chain_abort": "Chain Automation",
 
 	// UI Automation (3)
 	"uia_find":    "UI Automation",
@@ -275,6 +279,9 @@ func main() {
 		os.Exit(1)
 	}
 	fmt.Printf("wrote %s (%d tools)\n", outputPath, len(tools))
+
+	// Patch hardcoded tool counts in other docs
+	patchDocCounts(len(tools))
 }
 
 func writeCategory(b *strings.Builder, cat string, tools []Tool) {
@@ -286,6 +293,121 @@ func writeCategory(b *strings.Builder, cat string, tools []Tool) {
 		b.WriteString(fmt.Sprintf("- `%s` — %s\n", t.Name, t.Description))
 	}
 	b.WriteString("\n")
+}
+
+// patchDocCounts rewrites hardcoded tool counts in docs that are NOT auto-generated.
+// Each entry is (filename, compiled regex, replacement template where $1 = group).
+var docCountPatches = []struct {
+	file  string
+	re    *regexp.Regexp
+	tmpl  string
+}{
+	{
+		file: filepath.Join("README.md"),
+		re:   regexp.MustCompile(`(?m)- \*\*\d+ MCP tools\*\*`),
+		tmpl: "- **%d MCP tools**",
+	},
+	{
+		file: filepath.Join("docs", "architecture.md"),
+		re:   regexp.MustCompile(`(?m)\(\d+ tools\)`),
+		tmpl: "(%d tools)",
+	},
+	{
+		file: filepath.Join("docs", "comparison-vs-alternatives.md"),
+		// Landscape table: "| 140 | — | ✅ MIT |" — match the cell before the stars/licence columns
+		re: regexp.MustCompile(`(?m)(go-mcp-computer-use[^|]*\|[^|]*\|[^|]*\|[^|]*\|[^|]*\|[^|]*\|[^|]*\| )\d+( \| — \| ✅ MIT \|)`),
+		tmpl: "${1}%d${2}",
+	},
+	{
+		file: filepath.Join("docs", "comparison-vs-alternatives.md"),
+		// Side-by-side tables: "| **Tool count** | 140 | ~30 |"
+		re: regexp.MustCompile(`(?m)(\*\*Tool count\*\* \| )\d+( \| ~\d+ \|)`),
+		tmpl: "${1}%d${2}",
+	},
+	{
+		file: filepath.Join("docs", "comparison-vs-alternatives.md"),
+		// "(140 tools)" references in DesktopCtl section
+		re: regexp.MustCompile(`\(\d+ tools\)`),
+		tmpl: "(%d tools)",
+	},
+	{
+		file: filepath.Join("docs", "comparison-vs-alternatives.md"),
+		// bare "N tools" at end of table cell: "memory, 132 tools |"
+		re: regexp.MustCompile(`\d+ tools \|`),
+		tmpl: "%d tools |",
+	},
+	{
+		file: filepath.Join("docs", "comparison-vs-alternatives.md"),
+		// bare "N tools)" in prose: "memory, 132 tools)"
+		re: regexp.MustCompile(`, \d+ tools\)`),
+		tmpl: ", %d tools)",
+	},
+	{
+		file: filepath.Join("docs", "meta", "backlog.md"),
+		// "~130 tools" strategy line
+		re: regexp.MustCompile(`~\d+ tools\)`),
+		tmpl: "~%d tools)",
+	},
+	{
+		file: filepath.Join("docs", "reference", "codebase-map.md"),
+		// "lists all 140 tools"
+		re: regexp.MustCompile(`lists all \d+ tools`),
+		tmpl: "lists all %d tools",
+	},
+	{
+		file: filepath.Join("docs", "guides", "agent-guides.md"),
+		// "140-tool set"
+		re: regexp.MustCompile(`\d+-tool set`),
+		tmpl: "%d-tool set",
+	},
+	{
+		file: filepath.Join("docs", "guides", "computer-use-guide-for-ai-agents.md"),
+		// "**140 tools**"
+		re: regexp.MustCompile(`\*\*\d+ tools\*\*`),
+		tmpl: "**%d tools**",
+	},
+	{
+		file: filepath.Join("docs", "meta", "known-issues.md"),
+		// "exposes 140 tools"
+		re: regexp.MustCompile(`exposes \d+ tools`),
+		tmpl: "exposes %d tools",
+	},
+	{
+		file: filepath.Join("docs", "reference", "scripts.md"),
+		// "all 140 MCP tool definitions"
+		re: regexp.MustCompile(`all \d+ MCP tool`),
+		tmpl: "all %d MCP tool",
+	},
+}
+
+func patchDocCounts(count int) {
+	for _, p := range docCountPatches {
+		data, err := os.ReadFile(p.file)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			fmt.Fprintf(os.Stderr, "warning: cannot read %s: %v\n", p.file, err)
+			continue
+		}
+		orig := string(data)
+		var result string
+		if strings.Contains(p.tmpl, "${1}") {
+			// Group-reference replacement: substitute %d first, then let regex handle ${1}/${2}
+			tmpl := strings.Replace(p.tmpl, "%d", strconv.Itoa(count), 1)
+			result = p.re.ReplaceAllString(orig, tmpl)
+		} else {
+			// Simple count replacement
+			result = p.re.ReplaceAllString(orig, fmt.Sprintf(p.tmpl, count))
+		}
+		if result != orig {
+			if err := os.WriteFile(p.file, []byte(result), 0644); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: cannot write %s: %v\n", p.file, err)
+				continue
+			}
+			fmt.Printf("patched tool count in %s\n", p.file)
+		}
+	}
 }
 
 func findServerGo() string {

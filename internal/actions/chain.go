@@ -1,8 +1,10 @@
 package actions
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"strings"
 	"time"
@@ -246,6 +248,7 @@ func ExecuteChain(req ChainRequest) (*ChainResult, error) {
 		variables:       make(map[string]any),
 		onError:         req.OnError,
 		autoVerifyFocus: req.AutoVerifyFocus,
+		abort:           GetAbortChannel(),
 	}
 
 	if state.onError == "" {
@@ -260,6 +263,9 @@ func ExecuteChain(req ChainRequest) (*ChainResult, error) {
 
 	startTime := time.Now()
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	done := make(chan bool, 1)
 	go func() {
 		results, sc := execSteps(req.Steps, state)
@@ -270,8 +276,19 @@ func ExecuteChain(req ChainRequest) (*ChainResult, error) {
 
 	select {
 	case <-done:
+	case <-state.abort:
+		cancel()
+		slog.Info("chain aborted by user")
+		return &ChainResult{
+			Results:   result.Results,
+			StepCount: result.StepCount,
+			Variables: state.variables,
+			Success:   false,
+		}, fmt.Errorf("chain aborted by user")
 	case <-time.After(globalTimeout):
+		cancel()
 		return nil, fmt.Errorf("chain timed out after %v", globalTimeout)
+	case <-ctx.Done():
 	}
 
 	result.Success = true
@@ -294,6 +311,20 @@ func execSteps(steps []ChainStep, state *chainState) ([]StepResult, int) {
 	var results []StepResult
 	var stepCount int
 	for i, step := range steps {
+		// Check abort between steps
+		if state.abort != nil {
+			select {
+			case <-state.abort:
+				results = append(results, StepResult{
+					Index:   i,
+					Success: false,
+					Error:   "aborted by user (global hotkey)",
+				})
+				return results, stepCount + 1
+			default:
+			}
+		}
+
 		stepType := step.Type
 		if stepType == "" {
 			stepType = detectStepType(step)
@@ -342,6 +373,25 @@ func execSteps(steps []ChainStep, state *chainState) ([]StepResult, int) {
 			}
 		}
 
+		// Window lock-on verification for screen-touching tools
+		if cfg := ActiveConfig; cfg != nil && cfg.WindowLockEnabled {
+			if IsScreenTool(step.Tool) {
+				if valid, reason := VerifyWindowLock(cfg.WindowLockAutoFocus); !valid {
+					stepResult = StepResult{
+						Tool: step.Tool, Success: false,
+						Error: reason,
+					}
+					stepResult.Index = i
+					results = append(results, stepResult)
+					stepCount++
+					if state.onError == "stop" {
+						break
+					}
+					continue
+				}
+			}
+		}
+
 		switch stepType {
 		case StepWait:
 			stepResult = execWait(step, state)
@@ -381,6 +431,7 @@ type chainState struct {
 	onError         string
 	autoVerifyFocus bool
 	lastFocusHandle uintptr
+	abort           <-chan struct{}
 }
 
 func defaultTimeout(ms int) time.Duration {

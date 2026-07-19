@@ -83,7 +83,16 @@ if (-not $runId) {
 }
 Write-Host "Release workflow completed successfully."
 
-# ---- Step 6: Download release asset ----
+# ---- Step 6: Pull latest (CI may have pushed doc fixes, tool count patches, etc.) ----
+Write-Host "Pulling latest from origin..."
+git pull --ff-only
+if ($LASTEXITCODE) {
+    Write-Host "  fast-forward failed, trying rebase..." -ForegroundColor Yellow
+    git pull --rebase
+    if ($LASTEXITCODE) { throw "git pull failed — resolve conflicts manually" }
+}
+
+# ---- Step 7: Download release asset ----
 Write-Host "Downloading mcp-server.exe from release $tag..."
 $dlDir = "$env:TEMP\mcp-release"
 Remove-Item $dlDir -Recurse -Force -ErrorAction SilentlyContinue
@@ -100,7 +109,7 @@ do {
 } while ($LASTEXITCODE -and $dlAttempt -lt 6)
 if ($LASTEXITCODE) { throw "Failed to download mcp-server.exe after 6 attempts" }
 
-# ---- Step 7-9: Spawn background cleanup + replace + relaunch ----
+# ---- Step 8-10: Spawn background cleanup + replace + relaunch ----
 # Spawn as detached process so killing OpenCode doesn't kill us mid-flight
 Write-Host "Scheduling cleanup, replacement, and relaunch (background)..."
 $src = "$dlDir\mcp-server.exe"

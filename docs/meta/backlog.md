@@ -847,7 +847,7 @@
 
 ## Strategy
 
-1. **Build out NEXT items** — these are straightforward and high value (another ~128 tools)
+1. **Build out NEXT items** — these are straightforward and high value (another ~143 tools)
 2. **Error wrapping audit** — remaining Slice 4 item for consistent error feedback across all tools
 3. **Security + Transport** — TLS + SSE are prerequisites for remote deployment (per-tool denylist delivered in v0.2.37)
 4. **Browser DOM mode** — CDP/Playwright integration for 10x faster web tasks (steal from Windows-MCP)

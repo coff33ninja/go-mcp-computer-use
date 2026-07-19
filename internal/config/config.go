@@ -21,20 +21,30 @@ type Config struct {
 	WatcherIntervalSecs int      `json:"watcher_interval_seconds"`
 	ToolDenylist        []string `json:"tool_denylist,omitempty"`
 	RetentionDays       int      `json:"retention_days,omitempty"`
+	ChainAbortEnabled   bool     `json:"chain_abort_enabled"`
+	ChainAbortKeys      string   `json:"chain_abort_keys"`
+	ChainAbortPollMs    int      `json:"chain_abort_poll_ms"`
+	WindowLockEnabled   bool     `json:"window_lock_enabled"`
+	WindowLockAutoFocus bool     `json:"window_lock_auto_focus"`
 }
 
 func Default() *Config {
 	return &Config{
-		LogLevel:         "info",
-		MouseSpeed:       500,
-		ClickDelay:       100,
-		VerifyBounds:     true,
-		ActionTimeoutMs:  30000,
-		UIAWarmup:        true,
-		TrainingEnabled:     true,
-		PriorAdjustment:     true,
-		WatcherAutoStart:    false,
-		WatcherIntervalSecs: 5,
+		LogLevel:            "info",
+		MouseSpeed:          500,
+		ClickDelay:          100,
+		VerifyBounds:        true,
+		ActionTimeoutMs:     30000,
+		UIAWarmup:           true,
+		TrainingEnabled:        true,
+		PriorAdjustment:        true,
+		WatcherAutoStart:       false,
+		WatcherIntervalSecs:    5,
+		ChainAbortEnabled:      true,
+		ChainAbortKeys:         "Ctrl+Shift+Escape",
+		ChainAbortPollMs:       50,
+		WindowLockEnabled:      false,
+		WindowLockAutoFocus:    true,
 	}
 }
 
@@ -113,4 +123,16 @@ func (c *Config) Save() error {
 	}
 
 	return nil
+}
+
+func (c *Config) SaveToBytes() ([]byte, error) {
+	return json.MarshalIndent(c, "", "  ")
+}
+
+func LoadFromBytes(data []byte) (*Config, error) {
+	cfg := Default()
+	if err := json.Unmarshal(data, cfg); err != nil {
+		return nil, fmt.Errorf("parse config: %w", err)
+	}
+	return cfg, nil
 }

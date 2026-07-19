@@ -28,13 +28,13 @@ jobs:
         shell: pwsh
         run: |
           go run ./scripts/gen-tools-doc.go
-          $diff = git diff --name-only docs/reference/tools.md
-          if ($diff) {
-            Write-Host "ERROR: docs/reference/tools.md is stale. Run 'go run ./scripts/gen-tools-doc.go' and commit."
-            git diff docs/reference/tools.md
+          $stale = git diff --name-only docs/reference/tools.md README.md docs/architecture.md docs/comparison-vs-alternatives.md docs/meta/backlog.md docs/reference/codebase-map.md docs/guides/agent-guides.md docs/guides/computer-use-guide-for-ai-agents.md docs/meta/known-issues.md docs/reference/scripts.md
+          if ($stale) {
+            Write-Host "ERROR: docs have stale tool counts. Run 'go run ./scripts/gen-tools-doc.go' and commit."
+            git diff $stale
             exit 1
           } else {
-            Write-Host "docs/reference/tools.md is up to date"
+            Write-Host "all docs up to date"
           }
 
       - name: Check go.mod is tidy

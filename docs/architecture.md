@@ -40,7 +40,7 @@ cmd/
   ├── benchmark/               — performance benchmark tool
   └── ocrhelper/               — WinRT OCR helper binary
 
-internal/server/server.go      — MCP tool registrations (96 tools, 120+ registrations)
+internal/server/server.go      — MCP tool registrations (143 tools)
 internal/config/config.go      — JSON config file (~/.config/go-mcp-computer-use/config.json)
 
 internal/actions/              — 46 files, organized by capability:

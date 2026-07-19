@@ -1,7 +1,7 @@
 # Agent Prompt Engineering Guide
 
 > How to configure AI agents with the right tool subset for different tasks.
-> The full 120-tool set (v0.2.27) is powerful but bloated for simple tasks. Load only what you need.
+> The full 143-tool set (v0.2.41) is powerful but bloated for simple tasks. Load only what you need.
 
 ---
 

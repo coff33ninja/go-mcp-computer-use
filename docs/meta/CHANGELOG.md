@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.2.42] - 2026-07-19
+
+### Added
+
+- **`chain_abort` tool** — checks if the global chain abort hotkey has been pressed since last check. Returns `{aborted: true}` when the configured key combo (default: Ctrl+Shift+Escape) is detected. The abort is consumed on read (auto-resets). Call before starting long chains or poll periodically.
+- **`set_window_lock` tool** — locks the active chain to a specific window by handle. Screen-touching tools (click, type, OCR, etc.) will verify the locked window is foreground before executing. If `window_lock_auto_focus` is enabled, automatically re-focuses the locked window when it loses foreground.
+- **`clear_window_lock` tool** — releases the window lock. Screen-touching tools will no longer be restricted to a specific window.
+- **Chain abort hotkey engine** — background goroutine polls `GetAsyncKeyState` every 50ms (configurable) for a global hotkey combo. When all keys in the combo are held simultaneously, the abort channel closes and any running chain terminates at the next step boundary.
+- **Window lock-on context** — `verify_window_lock()` is called before every screen-touching step in chains when `window_lock_enabled=true`. Prevents accidental actions on wrong windows when focus is stolen.
+- **New config fields** — `chain_abort_enabled` (default: true), `chain_abort_keys` (default: "Ctrl+Shift+Escape"), `chain_abort_poll_ms` (default: 50), `window_lock_enabled` (default: false), `window_lock_auto_focus` (default: true). All persist via `set_config`.
+- **`go-mcp-computer-use` skill for Claude** — new skill file that teaches Claude about this MCP server's tools, architecture, and limitations.
+- **`scripts/test.ps1`** — PowerShell test runner with Zig CGO setup (mirrors `scripts/build.ps1`), `-Integration` flag, `-Short` flag, and configurable timeout.
+- **`SaveToBytes` / `LoadFromBytes` config helpers** — enables testing config round-trips without touching the filesystem.
+
+### Fixed
+
+- **Chain goroutine leak on global timeout** — `ExecuteChain` spawned a goroutine for `execSteps` but never cancelled it on timeout. The goroutine would run to completion (or hang) after the parent returned. Now uses `context.WithCancel` — timeout cancels the context, and the abort case also cancels.
+- **Chain abort channel shared across chains** — previously the abort channel was never reset after being consumed, so a single hotkey press would abort all future chains. Now `GetAbortChannel` detects a closed channel and creates a fresh one automatically.
+
+### VERSION
+
+`0.2.41` → `0.2.42`
+
 ## [0.2.41] - 2026-07-18
 
 ### Added
