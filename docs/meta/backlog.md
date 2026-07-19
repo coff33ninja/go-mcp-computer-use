@@ -5,16 +5,17 @@
 
 ## How to Read
 
-- **HAVE** = implemented (desktop-state awareness, window-targeted OCR, z-order, UIA element discovery, UIA-based chain steps as of v0.2.38)
+- **HAVE** = implemented as standalone MCP tools (counted by individual tool names)
 - **NEXT** = high-impact, feasible additions
 - **FAR** = possible but lower priority or complex
 - Items within a section ordered roughly by priority
+- **Note**: Some sections include "built-in features" (not standalone tools) marked as such — these are capabilities baked into existing tools, not separately callable MCP endpoints
 
 ---
 
 ## 1. VISION — See What's on Screen
 
-### HAVE
+### HAVE (13 tools)
 - `screenshot` — full screen or region → base64 PNG
 - `get_pixel_color` — hex color at x,y
 - `get_screen_size` — virtual screen dimensions
@@ -83,17 +84,20 @@
 
 ## 3. KEYBOARD — Type and Command
 
-### HAVE
+### HAVE (11 tools)
 - `type` — send text string
 - `key_press` — key combos (Ctrl+C, Alt+Tab, etc.)
-- `key_down` / `key_up` — hold/release individual keys
+- `key_down` — hold individual key
+- `key_up` — release individual key
 - `type_and_submit` — type + Enter
 - `select_all_and_type` — Ctrl+A + type
 - `get_keyboard_layout` — current input language (e.g. en-US)
 - `set_keyboard_layout` — change input language
-- `keylogger_start` / `keylogger_stop` / `keylogger_status` — record input for replay
+- `keylogger_start` — start recording input
+- `keylogger_stop` — stop recording, return sequence
+- `keylogger_status` — check if recording active
 
-### NEXT
+### NEXT (4 items)
 | Tool | Why |
 |------|-----|
 | `type_character_by_character` — type with per-char delay | simulate human typing for apps that buffer input |
@@ -113,18 +117,21 @@
 
 ## 4. WINDOWS — Manage Screen Real Estate
 
-### HAVE
+### HAVE (15 tools)
 - `list_windows` — all visible windows (handle, title, PID)
 - `focus_window` — bring to foreground
 - `find_window` — by title substring
 - `wait_for_window` — poll until window appears
 - `move_window` — set x,y,w,h
-- `minimize_window` / `maximize_window` / `restore_window`
+- `minimize_window` — minimize
+- `maximize_window` — maximize
+- `restore_window` — restore from min/max
 - `close_window`
 - `get_window_state` — visible, minimized, maximized, fullscreen, position, z_order
 - `get_active_window` — current foreground window info (handle, title, PID, bounding rect)
 - `focus_window_by_title` — find by title and focus (convenience wrapper)
-- `set_window_lock` / `clear_window_lock` — lock chain to a window (v0.2.42)
+- `set_window_lock` — lock chain to a window (v0.2.42)
+- `clear_window_lock` — unlock chain (v0.2.42)
 - `screenshot_element` — screenshot a specific window
 
 ### NEXT
@@ -682,11 +689,12 @@
 
 ## 26. VERIFICATION & FEEDBACK
 
-### HAVE
-- `auto_verify` — all 11 action tools support post-action OCR verification
-- `pre_expected` — all 11 action tools support pre-action precondition check
-- `expected` — configurable text/change/not_text criteria
-- chain `verify` step type — retry loop with OCR diff
+### HAVE (0 standalone tools — built-in features)
+- **Built-in features** (not standalone MCP tools, but available on 11 action tools):
+  - `auto_verify` — post-action OCR verification parameter
+  - `pre_expected` — pre-action precondition check parameter
+  - `expected` — configurable text/change/not_text criteria
+  - chain `verify` step type — retry loop with OCR diff
 
 ### NEXT
 | Tool | Why |
@@ -698,15 +706,12 @@
 
 ## 27. DEBUGGING & DIAGNOSTICS
 
-### HAVE
-| Tool | Why |
-|------|-----|
-| `structured_logging` — file-based JSON structured logging to `%APPDATA%\go-mcp-computer-use\logs\` with rotation (v0.2.43) | debug & audit trail |
-| `get_logs` — read recent log entries with level/search/time filtering (v0.2.43) | diagnose past failures |
-| `report_issue` — generate GitHub issue with system info, logs, context; auto-submit via gh CLI (v0.2.43) | error reporting |
-| `reset_state` — clear adaptive engine stats + bridge buffer (v0.2.41) | prevent state accumulation |
-| `bridge_debug` — OCR→command bridge state inspection | bridge diagnostics |
-| Panic recovery — `safeHandler` wrapper + global recover in main.go (v0.2.43) | crash resilience |
+### HAVE (4 tools + 2 built-in features)
+- `get_logs` — read recent log entries with level/search/time filtering (v0.2.43)
+- `report_issue` — generate GitHub issue with system info, logs, context; auto-submit via gh CLI (v0.2.43)
+- `reset_state` — clear adaptive engine stats + bridge buffer (v0.2.41)
+- `bridge_debug` — OCR→command bridge state inspection
+- **Built-in features**: structured logging (via `set_config` log_file_enabled), panic recovery (safeHandler wrapper + global recover)
 
 ### NEXT
 | Tool | Why |
@@ -759,8 +764,8 @@
 
 ## 29. TRANSPORT & SERVER — Connectivity
 
-### HAVE
-- stdio transport only
+### HAVE (0 tools — current transport state)
+- stdio transport only (not an MCP tool, just the current capability)
 
 ### NEXT
 | Feature | Why |
@@ -903,10 +908,10 @@ Full spec: `docs/meta/plan-self-update.md`
 
 | Domain | HAVE | NEXT | FAR | Total |
 |--------|------|------|-----|-------|
-| Vision | 14 | 3 | 9 | 26 |
+| Vision | 13 | 3 | 9 | 25 |
 | Mouse | 6 | 3 | 7 | 16 |
-| Keyboard | 9 | 3 | 4 | 16 |
-| Windows | 13 | 8 | 6 | 27 |
+| Keyboard | 11 | 4 | 4 | 19 |
+| Windows | 15 | 8 | 6 | 29 |
 | Virtual Desktops | 0 | 6 | 2 | 8 |
 | Processes | 3 | 8 | 8 | 19 |
 | File System | 16 | 2 | 6 | 24 |
@@ -924,23 +929,23 @@ Full spec: `docs/meta/plan-self-update.md`
 | Time & Date | 0 | 2 | 2 | 4 |
 | Accessibility | 0 | 3 | 2 | 5 |
 | Remote Session | 0 | 2 | 1 | 3 |
-| Security & Identity | 1 | 4 | 4 | 9 |
+| Security & Identity | 1 | 3 | 4 | 8 |
 | Screen (HW) | 6 | 2 | 3 | 11 |
 | Windows Shell | 3 | 5 | 4 | 12 |
 | Chained | 12 | 12 | 5 | 29 |
-| Verification | 4 | 2 | 0 | 6 |
-| Debugging | 6 | 3 | 2 | 11 |
+| Verification | 0 | 2 | 0 | 2 |
+| Debugging | 4 | 3 | 2 | 9 |
 | Memory & ML | 34 | 4 | 4 | 42 |
-| Transport & Server | 1 | 7 | 3 | 11 |
+| Transport & Server | 0 | 7 | 3 | 10 |
 | Browser Automation | 7 | 7 | 8 | 22 |
 | Linux & Container | 0 | 2 | 4 | 6 |
 | Permissions | 0 | 7 | 4 | 11 |
 | Upgrade (v1.3.0) | 0 | 3 | 3 | 6 |
-| **TOTAL** | **167** | **131** | **133** | **431** |
+| **TOTAL** | **160** | **142** | **132** | **434** |
 
 ## Strategy
 
-1. **Build out NEXT items** — straightforward and high value (~155 tools remaining)
+1. **Build out NEXT items** — straightforward and high value (~142 items remaining)
 2. **Error wrapping audit** — remaining Slice 4 item for consistent error feedback
 3. **Security + Transport** — TLS + SSE prerequisites for remote deployment
 4. **Browser DOM mode** — CDP/Playwright integration for 10x faster web tasks
