@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.2.45] - 2026-07-19
+
+### Fixed
+
+- **Nullable union type serialization bug** — the Go jsonschema library generates `"type": ["null", "integer"]` for `*int32` fields and `"type": ["null", "boolean"]` for `*bool` fields. The opencode MCP client cannot serialize values for nullable union types, producing truncated JSON (e.g. `{"x": ` instead of `{"x": 100}`). This broke `screenshot`, `ocr`, `find_text_and_click`, `image_diff`, and any tool with `VerifyArgs` (`auto_verify`, `expected`, `pre_expected`). Fixed via `addToolClean` wrapper that auto-generates clean schemas with plain `"type": "integer"` (not nullable) for all 100+ tool registrations. Recursively strips nullable unions from nested properties, array items, definitions, and additional properties.
+
+### VERSION
+
+`0.2.44` → `0.2.45`
+
 ## [0.2.44] - 2026-07-19
 
 ### Added

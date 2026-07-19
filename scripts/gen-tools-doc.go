@@ -436,7 +436,7 @@ func parseTools(path string) []Tool {
 
 	var tools []Tool
 
-	// Walk all function calls looking for mcp.AddTool
+	// Walk all function calls looking for mcp.AddTool or addToolClean
 	for _, decl := range f.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
 		if !ok {
@@ -447,11 +447,16 @@ func parseTools(path string) []Tool {
 			if !ok {
 				return true
 			}
-			sel, ok := call.Fun.(*ast.SelectorExpr)
-			if !ok {
+			var funcName string
+			switch f := call.Fun.(type) {
+			case *ast.SelectorExpr:
+				funcName = f.Sel.Name
+			case *ast.Ident:
+				funcName = f.Name
+			default:
 				return true
 			}
-			if sel.Sel.Name != "AddTool" {
+			if funcName != "AddTool" && funcName != "addToolClean" {
 				return true
 			}
 			// mcp.AddTool(server, &mcp.Tool{Name: "...", Description: "..."}, handler)

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 
@@ -19,6 +20,64 @@ import (
 
 func shouldVerify(autoVerify *bool, expected *actions.ExpConfig) bool {
 	return (autoVerify != nil && *autoVerify) || expected != nil
+}
+
+// cleanNullableTypes recursively strips nullable union types from a JSON Schema.
+// The Go jsonschema library generates "type": ["null", "X"] for pointer types (*int32, *bool, etc.).
+// The opencode MCP client cannot serialize values for nullable union types, producing truncated JSON.
+// This function converts ["null", "X"] → "X" for all properties recursively.
+func cleanNullableTypes(s *jsonschema.Schema) {
+	if s == nil {
+		return
+	}
+	if len(s.Types) > 0 {
+		nonNull := make([]string, 0, len(s.Types))
+		for _, t := range s.Types {
+			if t != "null" {
+				nonNull = append(nonNull, t)
+			}
+		}
+		if len(nonNull) == 1 {
+			s.Type = nonNull[0]
+			s.Types = nil
+		} else if len(nonNull) > 1 {
+			s.Types = nonNull
+		} else {
+			s.Types = nil
+		}
+	}
+	for _, p := range s.Properties {
+		cleanNullableTypes(p)
+	}
+	if s.Items != nil {
+		cleanNullableTypes(s.Items)
+	}
+	if s.AdditionalProperties != nil {
+		cleanNullableTypes(s.AdditionalProperties)
+	}
+	for _, v := range s.Defs {
+		cleanNullableTypes(v)
+	}
+}
+
+// addToolClean is a wrapper around mcp.AddTool that auto-generates the JSON Schema
+// from the Go In type and strips nullable union types before registering.
+// This fixes the opencode MCP client bug where ["null", "integer"] etc. cause
+// truncated JSON serialization (e.g. {"x":  → {"x": .
+func addToolClean[In, Out any](server *mcp.Server, tool *mcp.Tool, handler mcp.ToolHandlerFor[In, Out]) {
+	rt := reflect.TypeFor[In]()
+	if rt.Kind() == reflect.Ptr {
+		rt = rt.Elem()
+	}
+	if rt.Kind() == reflect.Struct && tool.InputSchema == nil {
+		schema, err := jsonschema.ForType(rt, &jsonschema.ForOptions{})
+		if err == nil {
+			schema.Schema = ""
+			cleanNullableTypes(schema)
+			tool.InputSchema = schema
+		}
+	}
+	mcp.AddTool(server, tool, handler)
 }
 
 func safeHandler[Args any](name string, fn func(ctx context.Context, req *mcp.CallToolRequest, args Args) (*mcp.CallToolResult, any, error)) func(ctx context.Context, req *mcp.CallToolRequest, args Args) (*mcp.CallToolResult, any, error) {
@@ -2698,523 +2757,523 @@ func New(version string) *mcp.Server {
 		MIMEType:    "application/json",
 	}, adaptiveAnalysisResource)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "screenshot",
 		Description: "Capture the screen or a region. If w/h omitted, captures full screen.",
 	}, screenshotHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "click",
 		Description: "Click at screen coordinates x,y. Button: left/right/middle. Clicks: 1 or 2.",
 	}, clickHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "move_mouse",
 		Description: "Move mouse cursor to x,y.",
 	}, moveMouseHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "scroll",
 		Description: "Scroll the mouse wheel. Positive clicks = up, negative = down. Set horizontal=true for horizontal scroll.",
 	}, scrollHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "key_press",
 		Description: "Press key combination. Example: [\"Ctrl\", \"C\"] for copy.",
 	}, keyPressHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "key_down",
 		Description: "Hold a key down (does not release it). Use key_up to release. Example: \"W\"",
 	}, keyDownHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "key_up",
 		Description: "Release a key that was held down with key_down. Example: \"W\"",
 	}, keyUpHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "keylogger_start",
 		Description: "Start recording keyboard and mouse input for replay",
 	}, keyloggerStartHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "keylogger_stop",
 		Description: "Stop recording and return recorded sequence as chain steps",
 	}, keyloggerStopHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "keylogger_status",
 		Description: "Check if keylogger is active and event count",
 	}, keyloggerStatusHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "type",
 		Description: "Type text at the currently focused element.",
 	}, typeHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "get_screen_size",
 		Description: "Get the screen dimensions.",
 	}, screenSizeHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "get_cursor_position",
 		Description: "Get the current mouse cursor position.",
 	}, cursorPosHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "drag",
 		Description: "Drag mouse from (from_x, from_y) to (to_x, to_y).",
 	}, dragHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "list_windows",
 		Description: "List all visible windows with their handles, titles, PIDs, and bounding rect (x, y, width, height). This includes background windows (minimized, behind other windows). Cross-reference with list_displays monitor positions to determine which screen each window occupies. Returns every top-level window — use get_window_state on a handle to check if it is actually foreground, minimized, or behind other windows.",
 	}, listWindowsHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "focus_window",
 		Description: "Bring a window to the foreground by handle. Also restores the window if it is minimized. ALWAYS call this before typing, clicking, or OCR-ing a window that is not the current foreground window. Use get_window_state to check if a window is already foreground before calling.",
 	}, focusWindowHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "focus_window_by_title",
 		Description: "Find a window by title and focus it, clicking its title bar to ensure activation. Useful before keyboard input in chain steps.",
 	}, focusWindowByTitleHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "browser_focus_url_bar",
 		Description: "Focus a browser window's URL bar. Supports Firefox (Ctrl+T), Chrome/Edge (Ctrl+L), and other browsers. Provide browser name (firefox, chrome, edge, brave, opera) or window title substring.",
 	}, browserFocusURLBarHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "browser_new_tab",
 		Description: "Open a new tab in a browser window. Uses Ctrl+T for all browsers.",
 	}, browserNewTabHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "browser_navigate",
 		Description: "Open a new tab in a browser and navigate to a URL.",
 	}, browserNavigateHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "browser_search",
 		Description: "Open a new tab in a browser and perform a search query.",
 	}, browserSearchHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "explorer_focus",
 		Description: "Focus an existing File Explorer window.",
 	}, explorerFocusHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "explorer_open_path",
 		Description: "Open a File Explorer window at the specified path. Reuses existing window when possible.",
 	}, explorerOpenPathHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "get_volume",
 		Description: "Get the current system volume level (0-100).",
 	}, getVolumeHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "set_volume",
 		Description: "Set the system volume level (0-100).",
 	}, setVolumeHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "set_mute",
 		Description: "Mute or unmute the system audio.",
 	}, setMuteHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "get_system_info",
 		Description: "Get system information (hostname, OS, RAM).",
 	}, getSystemInfoHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "get_active_window",
 		Description: "Get the current foreground window info (handle, title, PID, and bounding rect).",
 	}, getActiveWindowHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "get_clipboard",
 		Description: "Read text from the clipboard.",
 	}, getClipboardHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "set_clipboard",
 		Description: "Write text to the clipboard.",
 	}, setClipboardHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "open_url",
 		Description: "Open a URL in the default browser.",
 	}, openURLHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "wait",
 		Description: "Wait for N milliseconds before the next action.",
 	}, waitHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "get_pixel_color",
 		Description: "Get the hex color at screen coordinates x,y.",
 	}, getPixelColorHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "list_processes",
 		Description: "List all running processes with PID, name, and thread count.",
 	}, listProcessesHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "launch_app",
 		Description: "Launch an application by path or shell command.",
 	}, launchAppHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "kill_process",
 		Description: "Terminate a process by PID.",
 	}, killProcessHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "list_displays",
 		Description: "List all monitors with resolution and position.",
 	}, listDisplaysHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "get_display_modes",
 		Description: "Get all available display modes (resolution, refresh rate, color depth) for a monitor by device name.",
 	}, displayModesHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "get_battery",
 		Description: "Get battery status (percentage, charging, on battery).",
 	}, getBatteryHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "move_window",
 		Description: "Move and resize a window by handle.",
 	}, moveWindowHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "minimize_window",
 		Description: "Minimize a window by handle.",
 	}, minimizeWindowHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "maximize_window",
 		Description: "Maximize a window by handle.",
 	}, maximizeWindowHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "restore_window",
 		Description: "Restore a minimized or maximized window by handle.",
 	}, restoreWindowHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "close_window",
 		Description: "Close a window by handle.",
 	}, closeWindowHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "get_window_state",
 		Description: "Get window state: visible (WS_VISIBLE flag — NOT obscured-by-other-windows), minimized, maximized, fullscreen, foreground (is this the active/focused window?), z_order (0=topmost, higher=deeper behind other windows), and bounding rect. A window can be visible with high z_order but completely hidden behind other windows. Use this before interacting: if NOT foreground, call focus_window first (z_order will become 0); if visible vs other windows check, compare z_order values between windows.",
 	}, getWindowStateHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "find_window",
 		Description: "Find a window handle by title.",
 	}, findWindowHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "wait_for_window",
 		Description: "Wait for a window with the given title to appear. Returns handle or timeout.",
 	}, waitForWindowHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "show_notification",
 		Description: "Show a Windows notification message box.",
 	}, showNotificationHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "lock_workstation",
 		Description: "Lock the workstation.",
 	}, lockWorkstationHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "ocr",
 		Description: "Extract text from screen using Windows OCR. Supports full screen, specific monitor (screen=N where N is the display index from list_displays, 0-based), or region (x,y,w,h).",
 	}, ocrHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "get_brightness",
 		Description: "Get the current display brightness level (0-100).",
 	}, getBrightnessHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "set_brightness",
 		Description: "Set the display brightness level (0-100).",
 	}, setBrightnessHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "get_idle_time",
 		Description: "Get the system idle time (time since last user input) in milliseconds.",
 	}, getIdleTimeHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "get_network_info",
 		Description: "Get network information: hostname, IP addresses, DNS servers, default gateway.",
 	}, getNetworkInfoHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "ping",
 		Description: "Ping a host to check network reachability.",
 	}, pingHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "find_text_and_click",
 		Description: "Find text on screen using OCR and click at its location. Optional region x,y,w,h to search within.",
 	}, findTextAndClickHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "type_and_submit",
 		Description: "Type text and press Enter (e.g. for form submission or search).",
 	}, typeAndSubmitHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "launch_and_wait",
 		Description: "Launch an application and wait for its window to appear.",
 	}, launchAndWaitHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "screenshot_element",
 		Description: "Take a screenshot of a specific window by handle.",
 	}, screenshotElementHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "hover",
 		Description: "Move the mouse to coordinates and wait briefly (for tooltips/hover menus).",
 	}, hoverHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "wait_for_text",
 		Description: "Wait for text to appear on screen. Polls OCR until found or timeout.",
 	}, waitForTextHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "select_all_and_type",
 		Description: "Select all text (Ctrl+A) and type replacement text.",
 	}, selectAllAndTypeHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "click_menu_item",
 		Description: "Find a window by title, then click a menu item or button using OCR within that window.",
 	}, clickMenuItemHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "get_uptime",
 		Description: "Get the system uptime (time since last boot).",
 	}, getUptimeHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "shutdown",
 		Description: "Shut down the computer.",
 	}, shutdownHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "restart",
 		Description: "Restart the computer.",
 	}, restartHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "sleep",
 		Description: "Put the computer to sleep.",
 	}, sleepHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "hibernate",
 		Description: "Hibernate the computer.",
 	}, hibernateHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "get_keyboard_layout",
 		Description: "Get the current keyboard layout / input language.",
 	}, getKeyboardLayoutHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "set_keyboard_layout",
 		Description: "Set the keyboard layout / input language (e.g. 'en-US', 'ja-JP').",
 	}, setKeyboardLayoutHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "get_disk_usage",
 		Description: "Get disk usage information for all drives.",
 	}, getDiskUsageHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "open_file_explorer",
 		Description: "Open File Explorer to a specified path (default: C:\\).",
 	}, openFileExplorerHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "open_file_location",
 		Description: "Open File Explorer with a specific file selected.",
 	}, openFileLocationHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "get_screen_dpi",
 		Description: "Get per-monitor screen DPI and scale percentage.",
 	}, getScreenDPIHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "get_dpi_for_point",
 		Description: "Get DPI and scale percentage at a specific screen coordinate. Useful for determining which monitor a coordinate is on and its scaling factor, especially in mixed-DPI multi-monitor setups.",
 	}, getDPIPointHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "find_image",
 		Description: "Find a template image on screen using NCC template matching. Provide template as base64 PNG. Returns coordinates of best match.",
 	}, findImageHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "find_all_images",
 		Description: "Find ALL occurrences of a template image on screen using NCC template matching. Provide template as base64 PNG. Returns array of matches with coordinates and scores.",
 	}, findAllImagesHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "ocr_languages",
 		Description: "List all available Windows OCR languages. Returns array of language objects with tag, display_name, and native_name.",
 	}, ocrLanguagesHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "ocr_window",
 		Description: "Extract text from a specific window by handle using Windows OCR. Captures what is currently visible in the window's region. If the window is minimized, behind other windows, or off-screen, the captured region will show whatever is on top at those screen coordinates. Use get_window_state to check state, then focus_window or restore_window first if needed.",
 	}, ocrWindowHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "ocr_active_window",
 		Description: "Extract text from the currently active/foreground window using Windows OCR.",
 	}, ocrActiveWindowHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "list_audio_devices",
 		Description: "List all audio playback and recording devices.",
 	}, listAudioDevicesHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "set_default_audio_device",
 		Description: "Set the default audio playback device by device ID.",
 	}, setDefaultAudioDeviceHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "record_screen",
 		Description: "Record screen frames at fixed intervals. Returns base64 images. Duration in ms, interval in ms.",
 	}, recordScreenHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "chain",
 		Description: "Execute a sequence of steps sequentially server-side. Steps can call any tool, wait, capture output, and use {{variable}} substitution. Mouse-based tools (click, move_mouse, hover, drag) auto-capture the UIA element at their target coordinates and include it in step output as 'element_at_point'. New step types: verify_ui (UIA element presence/absence check), if_uia (branch on element existence). New chain-callable tools: uia_find, uia_get_element_at_point, uia_get_all_elements, uia_set_text, wait_for_ui_element.",
 		InputSchema: chainInputSchema(),
 	}, chainHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "uia_find",
 		Description: "Find UI elements within windows by name, automation_id, or control_type using UI Automation. Returns bounding rectangles and properties (type, enabled state, etc.). Use this to locate text boxes, address bars, search menus, title bars, buttons, and other controls by their automation identity. The target window should be foreground (use focus_window first) for reliable results — some UIA providers only respond when the window is active.",
 	}, uiaFindHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "uia_get_text",
 		Description: "Get text from a UI element by name or automation_id using UI Automation.",
 	}, uiaGetTextHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "uia_invoke",
 		Description: "Click or invoke a UI element by name or automation_id using UI Automation.",
 	}, uiaInvokeHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "uia_set_text",
 		Description: "Set text in a UI element by name or automation_id using UI Automation.",
 	}, uiaSetTextHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "uia_get_element_at_point",
 		Description: "Identify a UI element at screen coordinates (x, y) using UI Automation. Returns the element's name, control_type, automation_id, bounding rect, and whether it is enabled. Use this after clicking or hovering to validate what was under the cursor, or to determine what element exists at a given point before interacting.",
 	}, uiaElementAtPointHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "uia_get_all_elements",
 		Description: "Get all immediate child UI elements in a window by handle (title bar, menu bar, content panes, toolbars, status bar — one level deep, not recursive DOM tree). Returns name, control_type, automation_id, bounding rect, and enabled state for each. Use this to understand a window's full control surface — text boxes, buttons, search fields, address bars, menus, etc. The window should be foreground (use focus_window first) for reliable results. Use max_results to cap output.",
 	}, uiaGetAllElementsHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "wait_for_ui_element",
 		Description: "Wait for a UI element to appear in a window, identified by name or control_type. Polls UIA FindFirst on the window's descendants until found or timeout. Use this for content verification after an action (e.g., wait for a dialog to appear after clicking a button). Default timeout is 10 seconds.",
 	}, waitForUIElementHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "onnx_status",
 		Description: "Check ONNX runtime and model availability. Returns presence of YOLO model, MobileNet model, and onnxruntime.dll.",
 	}, onnxStatusHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "onnx_detect",
 		Description: "Run YOLO-based UI element detection on a screenshot (or full screen if no image provided). Returns detected elements with class labels, confidence scores, and bounding boxes. Requires onnxruntime.dll and YOLO model file.",
 	}, onnxDetectHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "onnx_download",
 		Description: "Check and prepare ONNX model files. Lists which models are present and which need manual download.",
 	}, onnxDownloadHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "onnx_watch_start",
 		Description: "Start a background watcher that periodically screenshots the screen, runs ONNX detection, and caches results. Takes interval_seconds (default 5).",
 	}, onnxWatchStartHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "onnx_watch_stop",
 		Description: "Stop the background ONNX watcher.",
 	}, onnxWatchStopHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "onnx_watch_status",
 		Description: "Get the current ONNX watcher state: running, interval, last run time, cache size.",
 	}, onnxWatchStatusHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "onnx_watch_cache",
 		Description: "Retrieve cached detections from the background watcher. Returns the most recent detection results with timestamps and saved reference paths.",
 	}, onnxWatchCacheHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "layout_validate",
 		Description: "Validate stored UI element layout against the current screen. Checks window existence, position drift, and OCR keyword verification. Returns adjusted coordinates and confidence levels (ok/drifted/stale).",
 	}, layoutValidateHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "template_store",
 		Description: "Capture a UI element template from the current screen by cropping around a coordinate. Stores as base64 PNG in the element_templates table for visual re-identification.",
 	}, templateStoreHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "template_find",
 		Description: "Find a stored UI element template on the current screen using NCC template matching. Returns coordinates, score, and drift from stored position.",
 	}, templateFindHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "template_list",
 		Description: "List stored UI element templates with metadata (element key, scope, window title, hit count, etc.).",
 	}, templateListHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "template_forget",
 		Description: "Delete a stored UI element template by element_key and optional scope.",
 	}, templateForgetHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "memory_set",
 		Description: "Store a fact into the memory store. Fields: key (required), value (required, any JSON value), scope, tags (comma-separated), ttl (optional expiry in seconds).",
 		InputSchema: json.RawMessage(`{
@@ -3231,212 +3290,212 @@ func New(version string) *mcp.Server {
 		}`),
 	}, memorySetHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "memory_get",
 		Description: "Retrieve a fact from the memory store by key and optional scope.",
 	}, memoryGetHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "memory_search",
 		Description: "Full-text search across keys, values, scope, and tags using FTS5. Supports SQLite FTS5 query syntax.",
 	}, memorySearchHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "memory_list",
 		Description: "List stored facts under a scope with optional tag filter.",
 	}, memoryListHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "memory_forget",
 		Description: "Delete facts by key, scope, or tags. At least one filter is required to prevent accidental mass deletion.",
 	}, memoryForgetHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "training_save_sample",
 		Description: "Capture screenshot and save as a training sample with a task prompt (e.g. 'click the submit button'). The ONNX model learns from these during idle retraining.",
 	}, trainingSaveSampleHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "training_list_samples",
 		Description: "List saved training samples, optionally filtered by category or unused-only status.",
 	}, trainingListSamplesHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "training_stats",
 		Description: "Get training data statistics: total samples, unused samples, breakdown by category, disk usage.",
 	}, trainingStatsHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "training_mark_used",
 		Description: "Mark a training sample as used (after the model has been trained on it).",
 	}, trainingMarkUsedHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "find_ui_element",
 		Description: "Find a UI element on screen by label. Checks memory first (from past ONNX detections), then runs ONNX detection, then falls back to OCR. Stores findings in memory for future reuse. Use this when the AI needs to locate an element it has seen before or needs to find programmatically.",
 	}, findUIElementHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "priors_stats",
 		Description: "Show learned element frequency and position statistics per window. Returns priors with sample count, frequency, and position distributions. Use min_count to filter out low-sample entries.",
 	}, priorStatsHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "export_yolo_dataset",
 		Description: "Export unused training samples as a YOLO-format dataset (images + labels + dataset.yaml) for external training with Ultralytics or other YOLO frameworks. Outputs to a directory of your choice.",
 	}, exportYoloDatasetHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "training_cleanup_noise",
 		Description: "Delete low-signal (signal_level=0) training samples older than max_age_hours. Use dry_run=true to see what would be deleted without actually removing anything. Returns deleted count and freed bytes.",
 	}, trainingCleanupNoiseHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "datalog_query",
 		Description: "Query the action/OCR data log. Table: commands, chains, ocr, or pairs. Filter by source, tool, success. Returns recent rows with all columns.",
 	}, datalogQueryHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "datalog_export",
 		Description: "Export OCR+command training pairs as JSON for ML training. Optionally filter by session_id. Returns pairs with before/after OCR text and command JSON.",
 	}, datalogExportHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "datalog_status",
 		Description: "Get data logging statistics: count of commands, chains, OCR snapshots, and training pairs logged to the datalog database.",
 	}, datalogStatusHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "agent_analyze",
 		Description: "Analyze the adaptive engine state — timing stats, success rates per tool, and learned OCR→command sequences. Returns a full report for AI decision-making.",
 	}, agentAnalyzeHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "agent_suggest",
 		Description: "Given OCR screen text, predict the best next command based on past successful sequences. Returns ranked predictions with confidence scores and optional coord (x, y, confidence, samples) for click/hover/move_mouse.",
 	}, agentSuggestHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "agent_train",
 		Description: "Train the adaptive engine from datalog training_pairs. Rebuilds the OCR→command word index and sequence cache. Call after the datalog has accumulated new pairs.",
 	}, agentTrainHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "task_begin",
 		Description: "Mark the start of a task for post-task introspection. Call before the first tool call in a task.",
 	}, taskBeginHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "task_end",
 		Description: "Mark the end of a task. Returns mined insights: slow/failed tools, OCR stats, repeat patterns, and improvement suggestions.",
 	}, taskEndHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "introspection_analyze",
 		Description: "View task history with mined insights from past task_begin/task_end sessions.",
 	}, introspectionAnalyzeHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "bridge_debug",
 		Description: "Debug the OCR→command bridge state — shows recent OCR buffer, pending command, and timing info.",
 	}, bridgeDebugHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "set_config",
 		Description: "Update runtime configuration. Accepts any subset of: training_enabled (stop/start background screenshot saving), prior_adjustment (enable/disable ML prior confidence tuning), verify_bounds (toggle coordinate bounds checking), log_level (debug/info/warn/error), watcher_enabled (start/stop the background screenshot watcher), watcher_interval_seconds (change polling frequency while running), tool_denylist (list of tool names to disable, e.g. [\"shutdown\",\"restart\"]), retention_days (auto-prune training samples older than N days, 0=disabled), chain_abort_enabled (enable/disable global hotkey abort), chain_abort_keys (hotkey combo like \"Ctrl+Shift+Escape\"), chain_abort_poll_ms (polling interval), window_lock_enabled (enable/disable screen tool locking), window_lock_auto_focus (auto re-focus locked window), log_file_enabled (enable/disable file-based logging), log_file_max_size_mb (max MB per log file before rotation), log_file_retention (number of rotated log files to keep). Changes persist to disk.",
 	}, setConfigHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "list_directory",
 		Description: "List directory contents. Returns entries with name, size, is_dir, mod_time, and mode.",
 	}, listDirectoryHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "read_file",
 		Description: "Read a file with automatic type detection. Supports plaintext (txt, json, csv, yaml, etc.), docx, xlsx, pdf, and images (via OCR). Use page and page_size to paginate long content. Default page_size=8000 chars.",
 	}, readFileHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "write_file",
 		Description: "Write content to a file. Supports plaintext, docx (creates from text, preserves structure on overwrite), xlsx (TSV content becomes cells), and PDF (text creates PDF, JSON fills existing form fields). Requires overwrite=true to replace existing files.",
 	}, writeFileHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "find_files",
 		Description: "Recursively search for files matching a glob pattern (e.g. '*.go', '**/*.md').",
 	}, findFilesHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "copy_file",
 		Description: "Copy a file or directory (recursively) from source to destination.",
 	}, copyFileHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "move_file",
 		Description: "Move or rename a file or directory.",
 	}, moveFileHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "delete_file",
 		Description: "Delete a file or directory to the Recycle Bin (uses SHFileOperationW with FOF_ALLOWUNDO).",
 	}, deleteFileHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "create_directory",
 		Description: "Create a directory (recursive, like mkdir -p).",
 	}, createDirectoryHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "get_file_info",
 		Description: "Get file or directory metadata: size, mod_time, is_dir, mode.",
 	}, getFileInfoHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "set_working_directory",
 		Description: "Set the working directory for relative path resolution in file tools.",
 	}, setWorkingDirectoryHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "get_working_directory",
 		Description: "Get the current working directory used for relative path resolution.",
 	}, getWorkingDirectoryHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "reset_state",
 		Description: "Clear accumulated server state (adaptive engine stats, bridge buffer). Use between heavy batch operations to prevent state accumulation and timeouts.",
 	}, resetStateHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "dismiss_all_menus",
 		Description: "Press Escape to dismiss open context menus/dialogs. OCRs before and after to detect which menus were open and whether they closed.",
 	}, dismissAllMenusHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "chain_abort",
 		Description: "Check if the global chain abort hotkey has been pressed since last check. Returns {aborted: true} when the configured hotkey combo is detected. The abort is consumed on read (auto-resets). Call before starting long chains or poll periodically.",
 	}, chainAbortHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "set_window_lock",
 		Description: "Lock the active chain to a specific window by handle. Screen-touching tools (click, type, OCR, etc.) will verify the locked window is foreground before executing. If window_lock_auto_focus is enabled, automatically re-focuses the locked window when it loses foreground. Use GetWindowState or list_windows to find the handle.",
 	}, setWindowLockHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "clear_window_lock",
 		Description: "Release the window lock. Screen-touching tools will no longer be restricted to a specific window.",
 	}, clearWindowLockHandler)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "get_logs",
 		Description: "Read server log entries from the file-based log. Returns recent log lines with timestamps, levels, and messages. Useful for diagnosing tool failures, crashes, and errors after they occur.",
 	}, safeHandler("get_logs", getLogsHandler))
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "report_issue",
 		Description: "Generate a GitHub issue report with system info, recent error logs, and context. If gh CLI is available, creates the issue automatically. Otherwise returns the markdown body for manual submission.",
 	}, safeHandler("report_issue", reportIssueHandler))
 
-	mcp.AddTool(server, &mcp.Tool{
+	addToolClean(server, &mcp.Tool{
 		Name:        "image_diff",
 		Description: "Compare two base64-encoded PNG screenshots pixel by pixel. Returns statistics: changed_pixels, total_pixels, change_ratio (0-1), mean_diff (0-255), max_diff (0-255), same (bool). Optionally generates a diff image with changed pixels highlighted in red. Use threshold (0-255, default 30) to control sensitivity.",
 	}, imageDiffHandler)
