@@ -7,16 +7,35 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	jsonschema "github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/coff33ninja/go-mcp-computer-use/internal/actions"
 	"github.com/coff33ninja/go-mcp-computer-use/internal/config"
+	"github.com/coff33ninja/go-mcp-computer-use/internal/logging"
 )
 
 func shouldVerify(autoVerify *bool, expected *actions.ExpConfig) bool {
 	return (autoVerify != nil && *autoVerify) || expected != nil
+}
+
+func safeHandler[Args any](name string, fn func(ctx context.Context, req *mcp.CallToolRequest, args Args) (*mcp.CallToolResult, any, error)) func(ctx context.Context, req *mcp.CallToolRequest, args Args) (*mcp.CallToolResult, any, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, args Args) (result *mcp.CallToolResult, payload any, err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				buf := make([]byte, 4096)
+				n := runtime.Stack(buf, false)
+				stack := string(buf[:n])
+				slog.Error("panic in tool handler", "tool", name, "panic", fmt.Sprintf("%v", r), "stack", stack)
+				result = nil
+				payload = nil
+				err = fmt.Errorf("panic in %s: %v", name, r)
+			}
+		}()
+		return fn(ctx, req, args)
+	}
 }
 
 func verifyCfg(ec *actions.ExpConfig, rx, ry, rw, rh *int32) *actions.VerifyConfig {
@@ -1786,6 +1805,23 @@ type SetConfigArgs struct {
 	ChainAbortPollMs     *int     `json:"chain_abort_poll_ms,omitempty"`
 	WindowLockEnabled    *bool    `json:"window_lock_enabled,omitempty"`
 	WindowLockAutoFocus  *bool    `json:"window_lock_auto_focus,omitempty"`
+	LogFileEnabled       *bool    `json:"log_file_enabled,omitempty"`
+	LogFileMaxSizeMB     *int     `json:"log_file_max_size_mb,omitempty"`
+	LogFileRetention     *int     `json:"log_file_retention,omitempty"`
+}
+
+type GetLogsArgs struct {
+	Level        string `json:"level,omitempty"`
+	Lines        int    `json:"lines,omitempty"`
+	Search       string `json:"search,omitempty"`
+	SinceMinutes int    `json:"since_minutes,omitempty"`
+}
+
+type ReportIssueArgs struct {
+	Title    string   `json:"title"`
+	Body     string   `json:"body,omitempty"`
+	Labels   []string `json:"labels,omitempty"`
+	AutoLogs *bool    `json:"auto_logs,omitempty"`
 }
 
 type ListDirectoryArgs struct {
@@ -2191,12 +2227,39 @@ func setConfigHandler(ctx context.Context, req *mcp.CallToolRequest, args SetCon
 			changed = true
 		}
 	}
+	if args.LogFileEnabled != nil {
+		val := *args.LogFileEnabled
+		if cfg.LogFileEnabled != val {
+			cfg.LogFileEnabled = val
+			changed = true
+		}
+	}
+	if args.LogFileMaxSizeMB != nil {
+		val := *args.LogFileMaxSizeMB
+		if val < 1 {
+			val = 10
+		}
+		if cfg.LogFileMaxSizeMB != val {
+			cfg.LogFileMaxSizeMB = val
+			changed = true
+		}
+	}
+	if args.LogFileRetention != nil {
+		val := *args.LogFileRetention
+		if val < 1 {
+			val = 7
+		}
+		if cfg.LogFileRetention != val {
+			cfg.LogFileRetention = val
+			changed = true
+		}
+	}
 
 	if changed {
 		slog.Info("config updated", "training_enabled", cfg.TrainingEnabled,
 			"prior_adjustment", cfg.PriorAdjustment, "verify_bounds", cfg.VerifyBounds,
 			"log_level", cfg.LogLevel, "tool_denylist", cfg.ToolDenylist,
-			"retention_days", cfg.RetentionDays)
+			"retention_days", cfg.RetentionDays, "log_file_enabled", cfg.LogFileEnabled)
 		if err := cfg.Save(); err != nil {
 			slog.Warn("failed to save config", "error", err)
 		}
@@ -2218,7 +2281,54 @@ func setConfigHandler(ctx context.Context, req *mcp.CallToolRequest, args SetCon
 		"chain_abort_poll_ms":     cfg.ChainAbortPollMs,
 		"window_lock_enabled":     cfg.WindowLockEnabled,
 		"window_lock_auto_focus":  cfg.WindowLockAutoFocus,
+		"log_file_enabled":        cfg.LogFileEnabled,
+		"log_file_max_size_mb":    cfg.LogFileMaxSizeMB,
+		"log_file_retention":      cfg.LogFileRetention,
 		"saved":                   changed,
+	}, nil
+}
+
+func getLogsHandler(ctx context.Context, req *mcp.CallToolRequest, args GetLogsArgs) (*mcp.CallToolResult, any, error) {
+	logPath := logging.LogPath()
+	if logPath == "" {
+		return nil, nil, fmt.Errorf("log path not available (APPDATA not set)")
+	}
+
+	lines := args.Lines
+	if lines < 1 {
+		lines = 50
+	}
+
+	entries, totalLines, truncated := logging.ReadLogs(logPath, lines, args.Level, args.Search, args.SinceMinutes)
+
+	return &mcp.CallToolResult{}, map[string]any{
+		"entries":    entries,
+		"count":      len(entries),
+		"total_lines": totalLines,
+		"truncated":  truncated,
+		"log_path":   logPath,
+	}, nil
+}
+
+func reportIssueHandler(ctx context.Context, req *mcp.CallToolRequest, args ReportIssueArgs) (*mcp.CallToolResult, any, error) {
+	logPath := logging.LogPath()
+
+	autoLogs := true
+	if args.AutoLogs != nil {
+		autoLogs = *args.AutoLogs
+	}
+
+	issue, err := logging.GenerateIssue(args.Title, args.Body, logPath, autoLogs)
+	if err != nil {
+		return nil, nil, fmt.Errorf("generate issue: %w", err)
+	}
+
+	return &mcp.CallToolResult{}, map[string]any{
+		"title":          issue.Title,
+		"body":           issue.Body,
+		"issue_url":      issue.IssueURL,
+		"log_lines_included": issue.LogLines,
+		"submitted":      issue.IssueURL != "",
 	}, nil
 }
 
@@ -2454,12 +2564,32 @@ func New(version string) *mcp.Server {
 	}
 	actions.ActiveConfig = cfg
 
+	if cfg.LogFileEnabled {
+		logDir := logging.LogDir()
+		if logDir != "" {
+			maxMB := cfg.LogFileMaxSizeMB
+			if maxMB < 1 {
+				maxMB = 10
+			}
+			keep := cfg.LogFileRetention
+			if keep < 1 {
+				keep = 7
+			}
+			if fh, err := logging.Init(logDir, maxMB, keep, cfg.LogLevelSlog()); err != nil {
+				slog.Warn("file logging init failed", "error", err)
+			} else {
+				slog.Info("file logging enabled", "path", logging.LogPath(), "max_mb", maxMB, "retention", keep)
+				defer fh.Close()
+			}
+		}
+	}
+
 	level := new(slog.LevelVar)
 	level.Set(slog.Level(cfg.LogLevelSlog()))
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
 	slog.SetDefault(logger)
 
-	slog.Info("starting go-mcp-computer-use", "version", version, "tools", 143, "tools_doc", "docs/tools.md")
+	slog.Info("starting go-mcp-computer-use", "version", version, "tools", 145, "tools_doc", "docs/tools.md")
 
 	if cfg.UIAWarmup {
 		go func() {
@@ -3186,7 +3316,7 @@ func New(version string) *mcp.Server {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "set_config",
-		Description: "Update runtime configuration. Accepts any subset of: training_enabled (stop/start background screenshot saving), prior_adjustment (enable/disable ML prior confidence tuning), verify_bounds (toggle coordinate bounds checking), log_level (debug/info/warn/error), watcher_enabled (start/stop the background screenshot watcher), watcher_interval_seconds (change polling frequency while running), tool_denylist (list of tool names to disable, e.g. [\"shutdown\",\"restart\"]), retention_days (auto-prune training samples older than N days, 0=disabled), chain_abort_enabled (enable/disable global hotkey abort), chain_abort_keys (hotkey combo like \"Ctrl+Shift+Escape\"), chain_abort_poll_ms (polling interval), window_lock_enabled (enable/disable screen tool locking), window_lock_auto_focus (auto re-focus locked window). Changes persist to disk.",
+		Description: "Update runtime configuration. Accepts any subset of: training_enabled (stop/start background screenshot saving), prior_adjustment (enable/disable ML prior confidence tuning), verify_bounds (toggle coordinate bounds checking), log_level (debug/info/warn/error), watcher_enabled (start/stop the background screenshot watcher), watcher_interval_seconds (change polling frequency while running), tool_denylist (list of tool names to disable, e.g. [\"shutdown\",\"restart\"]), retention_days (auto-prune training samples older than N days, 0=disabled), chain_abort_enabled (enable/disable global hotkey abort), chain_abort_keys (hotkey combo like \"Ctrl+Shift+Escape\"), chain_abort_poll_ms (polling interval), window_lock_enabled (enable/disable screen tool locking), window_lock_auto_focus (auto re-focus locked window), log_file_enabled (enable/disable file-based logging), log_file_max_size_mb (max MB per log file before rotation), log_file_retention (number of rotated log files to keep). Changes persist to disk.",
 	}, setConfigHandler)
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -3268,6 +3398,16 @@ func New(version string) *mcp.Server {
 		Name:        "clear_window_lock",
 		Description: "Release the window lock. Screen-touching tools will no longer be restricted to a specific window.",
 	}, clearWindowLockHandler)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "get_logs",
+		Description: "Read server log entries from the file-based log. Returns recent log lines with timestamps, levels, and messages. Useful for diagnosing tool failures, crashes, and errors after they occur.",
+	}, safeHandler("get_logs", getLogsHandler))
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "report_issue",
+		Description: "Generate a GitHub issue report with system info, recent error logs, and context. If gh CLI is available, creates the issue automatically. Otherwise returns the markdown body for manual submission.",
+	}, safeHandler("report_issue", reportIssueHandler))
 
 	if len(cfg.ToolDenylist) > 0 {
 		var denied []string

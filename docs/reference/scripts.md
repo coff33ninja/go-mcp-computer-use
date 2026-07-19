@@ -9,7 +9,7 @@
 | `discover-winrt-iids.ps1` | `powershell -File scripts\discover-winrt-iids.ps1 [-UpdateDocs]` | Brute-force WinRT IID discovery via reflection — loads 30+ WinRT classes, resolves every interface GUID |
 | `verify-iid-usage.go` | `go run ./scripts/verify-iid-usage.go [-update]` | Scans `winrt.go` for IID definitions, traces references, reports used/internal/unused. `-update` rewrites the Status column in `com-patterns.md` |
 | `verify-vtable-docs.go` | `go run ./scripts/verify-vtable-docs.go` | Parses all 36 `vtblMethod()` call sites, cross-references indices against doc tables and test annotations |
-| `gen-tools-doc.go` | `go run ./scripts/gen-tools-doc.go` | AST-based extraction of all 143 MCP tool definitions, generates `docs/reference/tools.md` sorted by category |
+| `gen-tools-doc.go` | `go run ./scripts/gen-tools-doc.go` | AST-based extraction of all 145 MCP tool definitions, generates `docs/reference/tools.md` sorted by category |
 | `run-credit-audit.ps1` | `.\scripts\run-credit-audit.ps1` | Builds `cmd/credit-audit`, runs all 66 read-only MCP tool probes, measures JSON payload size and estimated token cost per tool, and writes the report to `docs/meta/credit-audit-report.json` |
 
 **Uniqueness chain:** `discover-winrt-iids.ps1` discovers IIDs from the running Windows build → `verify-iid-usage.go` audits which are actually used in Go code → `verify-vtable-docs.go` validates the vtable dispatch indices are correct → `gen-tools-doc.go` keeps the tool reference in sync. All four scripts exist because the WinRT COM surface has no central documentation and the codebase makes many raw vtable-indexed calls that would silently corrupt memory if wrong.

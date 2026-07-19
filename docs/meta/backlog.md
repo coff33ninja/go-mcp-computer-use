@@ -19,11 +19,14 @@
 - `get_pixel_color` — hex color at x,y
 - `get_screen_size` — virtual screen dimensions
 - `get_screen_dpi` — per-monitor DPI + scale %
+- `get_dpi_for_point` — DPI and scale at a specific screen coordinate (multi-monitor aware)
 - `ocr` — extract text via Windows.Media.Ocr (any language)
 - `find_image` — NCC template matching with ONNX + OCR fallback
 - `find_all_images` — NCC template matching with ONNX + OCR fallback, returns all matches
 - `ocr_languages` — list installed OCR languages (so agent knows what's available)
 - `record_screen` — frame polling at interval → base64 frame array
+- `ocr_window` — extract text from a specific window by handle
+- `ocr_active_window` — extract text from the current foreground window
 
 ### NEXT
 | Tool | Why |
@@ -31,6 +34,7 @@
 | `image_diff` | pixel-level diff between two screenshots (detect changes) |
 | `image_histogram` | color histogram analysis (detect dark/bright screens) |
 | `match_template_multi` | multi-pass NCC at different scales (handle DPI variation) |
+| `color_region_analysis` | average/min/max/std dev color in a region (not just single pixel) |
 
 ### FAR
 | Tool | Why |
@@ -62,7 +66,6 @@
 |------|-----|
 | `click_hold` / `release` — separate hold/release | complex drag-and-drop, slider manipulation |
 | `scroll_smooth` — pixel-based scrolling | precise scroll in lists/canvases |
-| `scroll_horizontal` — horizontal wheel/tilt | horizontal scrolling in wide content |
 | `drag_relative` — drag by (dx, dy) from current pos | relative drag gestures |
 
 ### FAR
@@ -83,15 +86,18 @@
 ### HAVE
 - `type` — send text string
 - `key_press` — key combos (Ctrl+C, Alt+Tab, etc.)
+- `key_down` / `key_up` — hold/release individual keys
 - `type_and_submit` — type + Enter
 - `select_all_and_type` — Ctrl+A + type
+- `get_keyboard_layout` — current input language (e.g. en-US)
+- `set_keyboard_layout` — change input language
+- `keylogger_start` / `keylogger_stop` / `keylogger_status` — record input for replay
 
 ### NEXT
 | Tool | Why |
 |------|-----|
 | `type_character_by_character` — type with per-char delay | simulate human typing for apps that buffer input |
 | `type_with_modifiers` — e.g. type "hello" while holding Shift | advanced text entry |
-| `key_hold` / `key_release` — separate hold/release | games, modifier management |
 | `get_keyboard_state` — which modifier keys are pressed | check CapsLock/NumLock/ScrollLock state |
 | `set_keyboard_state` — toggle CapsLock/NumLock | fix common input issues |
 
@@ -101,7 +107,6 @@
 | `text_from_clipboard_paste` — paste instead of type | faster, avoids IME/input issues |
 | `text_file_input` — type contents of a text file | paste large text without clipboard |
 | `ime_text_input` — send text through IME composition | Japanese/Chinese input methods |
-| `macro_record` / `macro_playback` — record key sequence | repeatable automation |
 | `send_keys_advanced` — SendKeys-style with pauses | legacy app compatibility |
 
 ---
@@ -116,7 +121,10 @@
 - `move_window` — set x,y,w,h
 - `minimize_window` / `maximize_window` / `restore_window`
 - `close_window`
-- `get_window_state` — visible, minimized, maximized, fullscreen, position
+- `get_window_state` — visible, minimized, maximized, fullscreen, position, z_order
+- `get_active_window` — current foreground window info (handle, title, PID, bounding rect)
+- `focus_window_by_title` — find by title and focus (convenience wrapper)
+- `set_window_lock` / `clear_window_lock` — lock chain to a window (v0.2.42)
 - `screenshot_element` — screenshot a specific window
 
 ### NEXT
@@ -124,12 +132,12 @@
 |------|-----|
 | `snap_window_left` / `snap_window_right` — snap to half screen | common multi-window workflow |
 | `snap_window_top` / `snap_window_bottom` / `snap_window_corner` | quarter-screen layouts |
-| `get_window_z_order` — window stacking order | understand overlap |
 | `set_window_z_order` — bring to top/bottom/above/below | reorder windows |
 | `set_window_transparency` — alpha blend (SetLayeredWindowAttributes) | peek through windows |
 | `set_window_title` — change window title | identification |
 | `cascade_windows` / `tile_windows` — arrange all windows | classic Windows arrange |
 | `find_window_by_pid` — get window owned by a process | process→window mapping |
+| `save_window_layout` / `restore_window_layout` — save/restore named window groups | workspace management |
 
 ### FAR
 | Tool | Why |
@@ -183,6 +191,7 @@
 | `wait_for_process_exit` — wait until PID exits | sequential task chaining |
 | `launch_and_wait_exit` — launch + wait for exit | run-and-collect |
 | `get_process_info` — memory, CPU, command line | process details |
+| `watch_process` — watch process by name/PID, trigger chain on exit | process monitoring |
 
 ### FAR
 | Tool | Why |
@@ -213,6 +222,10 @@
 - `delete_file` — move to Recycle Bin (SHFileOperationW)
 - `create_directory` — mkdir -p
 - `get_file_info` — size, mod_time, is_dir, mode
+- `set_working_directory` — set working directory for relative path resolution
+- `get_working_directory` — get current working directory
+- `explorer_focus` — focus an existing File Explorer window
+- `explorer_open_path` — open File Explorer at specified path
 
 ### NEXT
 | Tool | Why |
@@ -245,11 +258,11 @@
 | `get_clipboard_files` — read copied file paths | file cut/copy |
 | `get_clipboard_formats` — list available formats | clipboard inspection |
 | `clear_clipboard` — empty clipboard | security cleanup |
+| `clipboard_history` — access Windows clipboard history (Win+V) | multi-paste |
 
 ### FAR
 | Tool | Why |
 |------|-----|
-| `clipboard_history` — access clipboard history | multi-paste |
 | `set_clipboard_image` — copy image to clipboard | image editing context |
 | `set_clipboard_files` — copy files to clipboard | file operations |
 
@@ -411,15 +424,16 @@
 - `uia_find` — find elements by name, automation_id, control_type → bounding rect + properties
 - `uia_get_text` — read text from a UI element
 - `uia_invoke` — click/invoke a button or control via Invoke/Toggle/Click pattern
+- `uia_set_text` — set text in a text control via ValuePattern (v0.2.35)
+- `uia_get_all_elements` — list all immediate child elements of a window (v0.2.38)
+- `uia_get_element_at_point` — identify UI element at screen coordinates (v0.2.38)
+- `wait_for_ui_element` — poll for a UI element to appear in a window (v0.2.38)
 
 ### NEXT
 | Tool | Why |
 |------|-----|
 | `uia_get_focused_control` — AutomationElement for focused element | know what's focused |
-| `uia_get_text` — get text from a text control | read text fields |
-| `uia_set_text` — set text in a text control | input without keyboard simulation |
-| `uia_invoke` — click a button by AutomationId/Name | reliable click on controls |
-| `uia_get_children` — list child elements of a window | explore UI structure |
+| `uia_store_element` / `uia_recall_element` — store/recall UIA element positions per window | element memory across sessions |
 
 ### FAR
 | Tool | Why |
@@ -427,7 +441,6 @@
 | `uia_select` — select from combobox/listbox | dropdown selection |
 | `uia_get_table` — read table/grid content | data extraction |
 | `uia_scroll` / `uia_select_tab` | control interaction |
-| `uia_wait_for_element` — wait for control by AutomationId | robust automation |
 | `uia_get_bounding_rect` — get element screen rect | positioning |
 
 ---
@@ -553,7 +566,7 @@
 ## 22. SECURITY & IDENTITY
 
 ### HAVE
-— *none*
+- `set_config` — runtime config (training, priors, denylist, retention, abort, lock)
 
 ### NEXT
 | Tool | Why |
@@ -586,6 +599,8 @@
 - `get_screen_size` — virtual width/height
 - `get_screen_dpi` — per-monitor DPI + scale %
 - `get_display_modes` — all available resolutions, refresh rates, color depths per monitor
+- `get_brightness` — current display brightness level (0-100)
+- `set_brightness` — set display brightness level (0-100)
 
 ### NEXT
 | Tool | Why |
@@ -639,6 +654,10 @@
 - `hover` — move + wait
 - `type_and_submit` — type + Enter
 - `select_all_and_type` — Ctrl+A + type
+- `dismiss_all_menus` — press Escape + OCR before/after (v0.2.41)
+- `chain` — server-side step sequencer with variable capture
+- `chain_abort` — hotkey-triggered chain termination (v0.2.42)
+- `wait` — pause for N milliseconds
 
 ### NEXT
 | Tool | Why |
@@ -653,6 +672,8 @@
 | `click_all_matching_text` — click every occurrence | bulk dismissals |
 | `dismiss_all_notifications` — find+close | cleanup |
 | `type_password` — type from env var | secure input |
+| `chain_template` — save/load named chain recipes | reusable automation patterns |
+| `chain_step_retry` — retry individual steps on failure | resilient chains |
 
 ### FAR
 | Tool | Why |
@@ -686,7 +707,12 @@
 ### HAVE
 | Tool | Why |
 |------|-----|
-| `structured_logging` — per-module structured logging to `%APPDATA%\go-mcp-computer-use\logs\` via `slog` with rotation | debug & audit trail |
+| `structured_logging` — file-based JSON structured logging to `%APPDATA%\go-mcp-computer-use\logs\` with rotation (v0.2.43) | debug & audit trail |
+| `get_logs` — read recent log entries with level/search/time filtering (v0.2.43) | diagnose past failures |
+| `report_issue` — generate GitHub issue with system info, logs, context; auto-submit via gh CLI (v0.2.43) | error reporting |
+| `reset_state` — clear adaptive engine stats + bridge buffer (v0.2.41) | prevent state accumulation |
+| `bridge_debug` — OCR→command bridge state inspection | bridge diagnostics |
+| Panic recovery — `safeHandler` wrapper + global recover in main.go (v0.2.43) | crash resilience |
 
 ### NEXT
 | Tool | Why |
@@ -710,7 +736,12 @@
 - `agent_analyze` / `agent_suggest` / `agent_train` — adaptive engine (timing stats, success rates, coordinate prediction)
 - `training_save_sample` / `training_list_samples` / `training_stats` / `training_mark_used` / `training_cleanup_noise` / `export_yolo_dataset` — auto-collect + export pipeline
 - `datalog_query` / `datalog_status` / `datalog_export` — action/OCR/chain/pair datalog
-- Statistical priors — element frequency + position per window
+- `priors_stats` — learned element frequency + position per window
+- `find_ui_element` — cascading locator: memory → prior → ONNX → OCR
+- `layout_validate` — validate stored UI element layout against current screen
+- `template_store` / `template_find` / `template_list` / `template_forget` — visual element templates
+- `onnx_status` / `onnx_detect` / `onnx_download` — ONNX runtime + YOLO detection
+- `onnx_watch_start` / `onnx_watch_stop` / `onnx_watch_status` / `onnx_watch_cache` — background ONNX watcher
 - `introspection_analyze` / `task_begin` / `task_end` — post-task mining
 
 ### NEXT
@@ -811,43 +842,44 @@
 
 ## Summary
 
-| Domain | HAVE | NEXT | FAR | Total Possible |
-|--------|------|------|-----|---------------|
-| Vision | 10 | 5 | 9 | 24 |
-| Mouse | 6 | 6 | 7 | 19 |
-| Keyboard | 10 | 5 | 6 | 21 |
-| Windows | 13 | 9 | 6 | 28 |
+| Domain | HAVE | NEXT | FAR | Total |
+|--------|------|------|-----|-------|
+| Vision | 13 | 4 | 9 | 26 |
+| Mouse | 6 | 3 | 7 | 16 |
+| Keyboard | 9 | 3 | 4 | 16 |
+| Windows | 13 | 8 | 6 | 27 |
 | Virtual Desktops | 0 | 6 | 2 | 8 |
-| Processes | 4 | 7 | 8 | 19 |
-| File System | 12 | 3 | 6 | 21 |
-| Clipboard | 2 | 4 | 3 | 9 |
-| Audio | 4 | 5 | 6 | 15 |
+| Processes | 3 | 8 | 8 | 19 |
+| File System | 16 | 2 | 6 | 24 |
+| Clipboard | 2 | 5 | 2 | 9 |
+| Audio | 5 | 6 | 5 | 16 |
 | TTS / STT | 0 | 4 | 4 | 8 |
-| Power & System | 11 | 8 | 6 | 25 |
-| Network | 2 | 8 | 5 | 15 |
-| Registry | 0 | 2 | 2 | 4 |
+| Power & System | 10 | 8 | 7 | 25 |
+| Network | 2 | 7 | 5 | 14 |
+| Registry | 0 | 2 | 1 | 3 |
 | Environment | 0 | 3 | 2 | 5 |
-| UI Automation | 3 | 4 | 5 | 12 |
-| Taskbar / Start | 0 | 3 | 5 | 8 |
+| UI Automation | 7 | 2 | 4 | 13 |
+| Taskbar / Start | 0 | 4 | 7 | 11 |
 | Notifications | 1 | 2 | 1 | 4 |
 | USB & Devices | 0 | 2 | 3 | 5 |
 | Time & Date | 0 | 2 | 2 | 4 |
 | Accessibility | 0 | 3 | 2 | 5 |
-| Remote Session | 0 | 2 | 2 | 4 |
-| Security & Identity | 0 | 8 | 6 | 14 |
-| Screen (HW) | 6 | 3 | 3 | 12 |
-| Windows Shell | 3 | 5 | 3 | 11 |
-| Chained | 10 | 11 | 5 | 26 |
-| Debugging | 1 | 3 | 2 | 6 |
-| Memory & ML | 10 | 3 | 4 | 17 |
-| Transport & Server | 0 | 6 | 3 | 9 |
-| Browser Automation | 3 | 6 | 6 | 15 |
+| Remote Session | 0 | 2 | 1 | 3 |
+| Security & Identity | 1 | 7 | 7 | 15 |
+| Screen (HW) | 6 | 2 | 3 | 11 |
+| Windows Shell | 3 | 5 | 4 | 12 |
+| Chained | 12 | 12 | 5 | 29 |
+| Verification | 4 | 2 | 0 | 6 |
+| Debugging | 6 | 3 | 2 | 11 |
+| Memory & ML | 34 | 4 | 4 | 42 |
+| Transport & Server | 1 | 7 | 3 | 11 |
+| Browser Automation | 7 | 7 | 8 | 22 |
 | Linux & Container | 0 | 2 | 4 | 6 |
-| **TOTAL** | **135** | **128** | **122** | **385** |
+| **TOTAL** | **166** | **125** | **126** | **417** |
 
 ## Strategy
 
-1. **Build out NEXT items** — these are straightforward and high value (another ~143 tools)
+1. **Build out NEXT items** — these are straightforward and high value (another ~145 tools)
 2. **Error wrapping audit** — remaining Slice 4 item for consistent error feedback across all tools
 3. **Security + Transport** — TLS + SSE are prerequisites for remote deployment (per-tool denylist delivered in v0.2.37)
 4. **Browser DOM mode** — CDP/Playwright integration for 10x faster web tasks (steal from Windows-MCP)

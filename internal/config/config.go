@@ -26,6 +26,9 @@ type Config struct {
 	ChainAbortPollMs    int      `json:"chain_abort_poll_ms"`
 	WindowLockEnabled   bool     `json:"window_lock_enabled"`
 	WindowLockAutoFocus bool     `json:"window_lock_auto_focus"`
+	LogFileEnabled      bool     `json:"log_file_enabled"`
+	LogFileMaxSizeMB    int      `json:"log_file_max_size_mb"`
+	LogFileRetention    int      `json:"log_file_retention"`
 }
 
 func Default() *Config {
@@ -45,6 +48,9 @@ func Default() *Config {
 		ChainAbortPollMs:       50,
 		WindowLockEnabled:      false,
 		WindowLockAutoFocus:    true,
+		LogFileEnabled:         true,
+		LogFileMaxSizeMB:       10,
+		LogFileRetention:       7,
 	}
 }
 

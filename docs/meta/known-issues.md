@@ -159,7 +159,7 @@ But `list_displays` only returns DISPLAY1.
 
 ## Prompt Engineering: Learn-Once-Reuse-Forever Pattern
 
-The MCP server exposes 143 tools, but an AI agent using them starts **cold** every session — no knowledge of:
+The MCP server exposes 145 tools, but an AI agent using them starts **cold** every session — no knowledge of:
 - What windows exist on this user's desktop and where they're positioned
 - How specific applications render (Firefox tab bar vs URL bar, Outlook email list vs reading pane)
 - What sequences of tool calls successfully completed a task last time

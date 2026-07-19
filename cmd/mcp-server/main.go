@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -34,18 +35,26 @@ func main() {
 
 	srv := server.New(Version)
 
+	slog.Info("starting on stdio")
 	go func() {
-		<-ctx.Done()
-		slog.Info("shutting down")
-		actions.CloseWinRT()
-		os.Exit(0)
+		defer func() {
+			if r := recover(); r != nil {
+				buf := make([]byte, 8192)
+				n := runtime.Stack(buf, false)
+				slog.Error("FATAL PANIC (server crashed)", "panic", fmt.Sprintf("%v", r), "stack", string(buf[:n]))
+				os.Exit(2)
+			}
+		}()
+		if err := srv.Run(ctx, &mcp.StdioTransport{}); err != nil {
+			slog.Error("server exited", "error", err)
+			os.Exit(1)
+		}
 	}()
 
-	slog.Info("starting on stdio")
-	if err := srv.Run(ctx, &mcp.StdioTransport{}); err != nil {
-		slog.Error("server exited", "error", err)
-		os.Exit(1)
-	}
+	<-ctx.Done()
+	slog.Info("shutting down")
+	actions.CloseWinRT()
+	os.Exit(0)
 }
 
 func runInit() {

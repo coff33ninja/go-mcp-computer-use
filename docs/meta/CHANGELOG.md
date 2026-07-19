@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.2.43] - 2026-07-19
+
+### Added
+
+- **File-based structured logging** — rotating JSON log files at `%APPDATA%/go-mcp-computer-use/logs/server.log`. Configurable via `set_config`: `log_file_enabled` (default: true), `log_file_max_size_mb` (default: 10), `log_file_retention` (default: 7 rotated files). Logs persist across restarts.
+- **`get_logs` tool** — reads server log entries from the file-based log. Supports filtering by `level` (min level), `search` (keyword), `since_minutes` (time window), and `lines` (max entries, default 50, max 500). Returns parsed log entries with timestamps, levels, messages, and attributes.
+- **`report_issue` tool** — generates a GitHub issue report with system info, recent error logs, and AI-provided context. If `gh` CLI is available, creates the issue automatically with the `bug` label. Otherwise returns the full markdown body for manual submission.
+- **Panic recovery wrapper** — `safeHandler` generic wrapper catches panics in tool handlers, logs the panic value + full stack trace, and returns a structured MCP error instead of crashing the process. Applied to `get_logs` and `report_issue`. Global panic recovery in `main.go` catches any remaining panics.
+- **Multi-handler slog** — logs now go to both stderr (TextHandler, for MCP transport) and file (JSONHandler, for persistence) simultaneously. File handler uses the configured `log_level`.
+- **New config fields** — `log_file_enabled` (default: true), `log_file_max_size_mb` (default: 10), `log_file_retention` (default: 7). All persist via `set_config`.
+
+### VERSION
+
+`0.2.42` → `0.2.43`
+
 ## [0.2.42] - 2026-07-19
 
 ### Added

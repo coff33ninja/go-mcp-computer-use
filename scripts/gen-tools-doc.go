@@ -146,11 +146,13 @@ var categoryForTool = map[string]string{
 	"agent_suggest": "Adaptive Agent",
 	"agent_train":   "Adaptive Agent",
 
-	// Introspection & Debugging (4)
+	// Introspection & Debugging (6)
 	"task_begin":            "Introspection & Debugging",
 	"task_end":              "Introspection & Debugging",
 	"introspection_analyze": "Introspection & Debugging",
 	"bridge_debug":          "Introspection & Debugging",
+	"get_logs":              "Introspection & Debugging",
+	"report_issue":          "Introspection & Debugging",
 
 	// Runtime Config (1)
 	"set_config": "Runtime Config",
