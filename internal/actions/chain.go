@@ -238,6 +238,7 @@ func init() {
 		"set_working_directory":   chainSetWorkingDirectory,
 		"get_working_directory":   chainGetWorkingDirectory,
 		"get_dpi_for_point":      chainGetDPIPoint,
+		"image_diff":             chainImageDiff,
 	}
 }
 
@@ -1636,6 +1637,22 @@ func chainWaitForUIElement(args map[string]any) (any, error) {
 		return nil, err
 	}
 	return map[string]any{"element": el}, nil
+}
+
+func chainImageDiff(args map[string]any) (any, error) {
+	before, _ := getString(args, "before")
+	after, _ := getString(args, "after")
+	if before == "" || after == "" {
+		return nil, fmt.Errorf("image_diff: both 'before' and 'after' required")
+	}
+	opts := ImageDiffOpts{}
+	if t, ok := getInt(args, "threshold"); ok {
+		opts.Threshold = t
+	}
+	if gi, ok := getBool(args, "generate_image"); ok {
+		opts.GenerateImage = gi
+	}
+	return ImageDiff(before, after, opts)
 }
 
 // ── ChainFromJSON ──

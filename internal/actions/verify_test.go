@@ -5,13 +5,6 @@ import (
 	"testing"
 )
 
-func absInt(n int) int {
-	if n < 0 {
-		return -n
-	}
-	return n
-}
-
 func TestSmartRegionAround(t *testing.T) {
 	rx, ry, rw, rh := SmartRegionAround(500, 500, 400)
 	if rw == 0 || rh == 0 {

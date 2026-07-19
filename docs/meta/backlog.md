@@ -27,11 +27,11 @@
 - `record_screen` — frame polling at interval → base64 frame array
 - `ocr_window` — extract text from a specific window by handle
 - `ocr_active_window` — extract text from the current foreground window
+- `image_diff` — pixel-level diff between two screenshots (detect changes)
 
 ### NEXT
 | Tool | Why |
 |------|-----|
-| `image_diff` | pixel-level diff between two screenshots (detect changes) |
 | `image_histogram` | color histogram analysis (detect dark/bright screens) |
 | `match_template_multi` | multi-pass NCC at different scales (handle DPI variation) |
 | `color_region_analysis` | average/min/max/std dev color in a region (not just single pixel) |
@@ -571,10 +571,6 @@
 ### NEXT
 | Tool | Why |
 |------|-----|
-| **P0** `is_admin` — check if running as admin | permission awareness |
-| **P0** `get_username` — current user | identity |
-| `get_user_sid` — user security identifier | identity |
-| `get_user_groups` — group membership | permission awareness |
 | **P0** `list_tools` — list all MCP tools with metadata | tool discovery |
 | ~~`enable_tool` / `disable_tool` — per-tool allow/deny~~ | **done v0.2.37** — delivered as `tool_denylist` config field (server-level denylist) |
 | `set_auth_token` — configure bearer token for TCP transport | transport security (from Windows-MCP) |
@@ -583,8 +579,6 @@
 ### FAR
 | Tool | Why |
 |------|-----|
-| `uac_prompt` — trigger elevation dialog | admin escalation |
-| `get_logged_in_users` — active users | multi-user |
 | `get_bitlocker_status` — drive encryption | security status |
 | `get_defender_status` — antivirus status | security awareness |
 | `set_cors_origin` — restrict MCP clients by origin | remote access control |
@@ -840,11 +834,76 @@
 
 ---
 
+## 32. PERMISSIONS — Elevation & Access Control
+
+### HAVE
+— *none*
+
+### NEXT
+| Tool | Why |
+|------|-----|
+| **P0** `is_admin` — check if running as admin | permission awareness |
+| **P0** `get_username` — current user | identity |
+| `get_user_sid` — user security identifier | identity |
+| `get_user_groups` — group membership | permission awareness |
+| `get_process_elevation` — is a process elevated (admin) | UAC awareness |
+| `check_file_permission` — can current user read/write/execute a file | access control |
+| `check_registry_permission` — can current user read/write a registry key | access control |
+
+### FAR
+| Tool | Why |
+|------|-----|
+| `uac_prompt` — trigger elevation dialog | admin escalation |
+| `run_as_admin` — re-launch process with elevation | privilege escalation |
+| `get_integrity_level` — process integrity level (low/medium/high/system) | security context |
+| `impersonate_user` — temporarily act as another user | multi-user scenarios |
+
+---
+
+## 33. UPGRADE — Self-Update System (v1.3.0)
+
+> **Planned for v1.3.0** — after the backlog is cleared. Requires permission system (§32)
+> and transport system (§29) to be in place first.
+
+### Design Document
+Full spec: `docs/meta/plan-self-update.md`
+
+### HAVE
+— *none*
+
+### NEXT
+| Tool | Why |
+|------|-----|
+| `get_client_info` — detect which AI client is using the MCP server | parent process detection, restart strategy |
+| `update_server` — check for updates and optionally apply | self-update with client-aware restart |
+| `check_update_on_startup` — config field to auto-check on start | proactive version awareness |
+
+### FAR
+| Tool | Why |
+|------|-----|
+| `rollback_update` — restore previous version from `.bak` | recovery from bad updates |
+| `set_update_channel` — stable/beta/nightly | pre-release access |
+| `download_progress` — track download progress for large binaries | UX feedback |
+
+### Client Detection
+| Client | Type | Restart Strategy |
+|--------|------|-----------------|
+| OpenCode Desktop | desktop | Kill parent, relaunch |
+| Claude Desktop | desktop | Kill parent, relaunch |
+| Cursor / Windsurf | desktop | Kill parent, relaunch |
+| opencode CLI | cli | Replace binary, marker file, user restarts |
+| claude CLI | cli | Replace binary, marker file, user restarts |
+| gemini / codex / copilot CLI | cli | Replace binary, marker file, user restarts |
+| pwsh/cmd (direct) | direct | Replace binary, exit |
+| Unknown | unknown | Download to safe location, tell user to replace manually |
+
+---
+
 ## Summary
 
 | Domain | HAVE | NEXT | FAR | Total |
 |--------|------|------|-----|-------|
-| Vision | 13 | 4 | 9 | 26 |
+| Vision | 14 | 3 | 9 | 26 |
 | Mouse | 6 | 3 | 7 | 16 |
 | Keyboard | 9 | 3 | 4 | 16 |
 | Windows | 13 | 8 | 6 | 27 |
@@ -865,7 +924,7 @@
 | Time & Date | 0 | 2 | 2 | 4 |
 | Accessibility | 0 | 3 | 2 | 5 |
 | Remote Session | 0 | 2 | 1 | 3 |
-| Security & Identity | 1 | 7 | 7 | 15 |
+| Security & Identity | 1 | 4 | 4 | 9 |
 | Screen (HW) | 6 | 2 | 3 | 11 |
 | Windows Shell | 3 | 5 | 4 | 12 |
 | Chained | 12 | 12 | 5 | 29 |
@@ -875,14 +934,18 @@
 | Transport & Server | 1 | 7 | 3 | 11 |
 | Browser Automation | 7 | 7 | 8 | 22 |
 | Linux & Container | 0 | 2 | 4 | 6 |
-| **TOTAL** | **166** | **125** | **126** | **417** |
+| Permissions | 0 | 7 | 4 | 11 |
+| Upgrade (v1.3.0) | 0 | 3 | 3 | 6 |
+| **TOTAL** | **167** | **131** | **133** | **431** |
 
 ## Strategy
 
-1. **Build out NEXT items** — these are straightforward and high value (another ~145 tools)
-2. **Error wrapping audit** — remaining Slice 4 item for consistent error feedback across all tools
-3. **Security + Transport** — TLS + SSE are prerequisites for remote deployment (per-tool denylist delivered in v0.2.37)
-4. **Browser DOM mode** — CDP/Playwright integration for 10x faster web tasks (steal from Windows-MCP)
-5. **Background control** — SendInput/UIA for non-disruptive clicks (steal from Cua)
-6. **Cross-platform interface** — Linux/macOS stubs + container support (steal from Bytebot)
-7. **ML model improvement** — explore UI-specific fine-tuning of ONNX models
+1. **Build out NEXT items** — straightforward and high value (~155 tools remaining)
+2. **Error wrapping audit** — remaining Slice 4 item for consistent error feedback
+3. **Security + Transport** — TLS + SSE prerequisites for remote deployment
+4. **Browser DOM mode** — CDP/Playwright integration for 10x faster web tasks
+5. **Background control** — SendInput/UIA for non-disruptive clicks
+6. **Permissions** — `is_admin`, `get_username`, UAC awareness (§32)
+7. **Cross-platform interface** — Linux/macOS stubs + container support
+8. **ML model improvement** — explore UI-specific fine-tuning of ONNX models
+9. **Upgrade system (v1.3.0)** — self-update with client-aware restart (§33, requires §32 + §29)

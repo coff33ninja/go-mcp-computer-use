@@ -1,7 +1,12 @@
 package actions
 
 import (
+	"bytes"
+	"encoding/base64"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"strings"
 	"time"
 )
@@ -215,4 +220,132 @@ func SmartRegionAround(x, y, size int32) (int32, int32, int32, int32) {
 		rh = sh - ry
 	}
 	return rx, ry, rw, rh
+}
+
+// ── Image diff (pixel-level screenshot comparison) ──
+
+type ImageDiffResult struct {
+	ChangedPixels int     `json:"changed_pixels"`
+	TotalPixels   int     `json:"total_pixels"`
+	ChangeRatio   float64 `json:"change_ratio"`
+	MeanDiff      float64 `json:"mean_diff"`
+	MaxDiff       int     `json:"max_diff"`
+	Same          bool    `json:"same"`
+	Width         int     `json:"width"`
+	Height        int     `json:"height"`
+	DiffImageB64  string  `json:"diff_image,omitempty"`
+}
+
+type ImageDiffOpts struct {
+	Threshold     int
+	GenerateImage bool
+}
+
+func ImageDiff(beforeB64, afterB64 string, opts ImageDiffOpts) (*ImageDiffResult, error) {
+	beforeImg, err := decodePNGB64(beforeB64)
+	if err != nil {
+		return nil, fmt.Errorf("image_diff: failed to decode 'before' image: %w", err)
+	}
+	afterImg, err := decodePNGB64(afterB64)
+	if err != nil {
+		return nil, fmt.Errorf("image_diff: failed to decode 'after' image: %w", err)
+	}
+
+	threshold := opts.Threshold
+	if threshold <= 0 {
+		threshold = 30
+	}
+
+	bounds := beforeImg.Bounds()
+	aBounds := afterImg.Bounds()
+	w := minInt(bounds.Dx(), aBounds.Dx())
+	h := minInt(bounds.Dy(), aBounds.Dy())
+	if w == 0 || h == 0 {
+		return nil, fmt.Errorf("image_diff: images have no overlapping region (%dx%d vs %dx%d)",
+			bounds.Dx(), bounds.Dy(), aBounds.Dx(), aBounds.Dy())
+	}
+
+	var diffImg *image.RGBA
+	if opts.GenerateImage {
+		diffImg = image.NewRGBA(image.Rect(0, 0, w, h))
+	}
+
+	var totalDiff float64
+	var maxDiff int
+	changedPixels := 0
+
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			r1, g1, b1, _ := beforeImg.At(x, y).RGBA()
+			r2, g2, b2, _ := afterImg.At(x, y).RGBA()
+
+			dr := absInt(int(r1>>8) - int(r2>>8))
+			dg := absInt(int(g1>>8) - int(g2>>8))
+			db := absInt(int(b1>>8) - int(b2>>8))
+			dMax := maxInt(dr, maxInt(dg, db))
+			dAvg := (dr + dg + db) / 3
+
+			totalDiff += float64(dAvg)
+			if dMax > maxDiff {
+				maxDiff = dMax
+			}
+
+			isChanged := dMax >= threshold
+			if isChanged {
+				changedPixels++
+			}
+
+			if diffImg != nil {
+				if isChanged {
+					highlight := uint8(minInt(255, dMax*3))
+					diffImg.Set(x, y, color.RGBA{R: highlight, G: 0, B: 0, A: 255})
+				} else {
+					diffImg.Set(x, y, color.RGBA{R: 0, G: 0, B: 0, A: 255})
+				}
+			}
+		}
+	}
+
+	totalPixels := w * h
+	result := &ImageDiffResult{
+		ChangedPixels: changedPixels,
+		TotalPixels:   totalPixels,
+		ChangeRatio:   float64(changedPixels) / float64(totalPixels),
+		MeanDiff:      totalDiff / float64(totalPixels),
+		MaxDiff:       maxDiff,
+		Same:          changedPixels == 0,
+		Width:         w,
+		Height:        h,
+	}
+
+	if diffImg != nil {
+		var buf bytes.Buffer
+		if err := png.Encode(&buf, diffImg); err != nil {
+			return nil, fmt.Errorf("image_diff: failed to encode diff image: %w", err)
+		}
+		result.DiffImageB64 = base64.StdEncoding.EncodeToString(buf.Bytes())
+	}
+
+	return result, nil
+}
+
+func absInt(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }

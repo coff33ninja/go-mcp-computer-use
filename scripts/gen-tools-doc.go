@@ -21,7 +21,7 @@ type Tool struct {
 // categoryForTool returns the category label for a given tool name.
 // Keep this map sorted by category name, then tool name.
 var categoryForTool = map[string]string{
-	// Screenshot & Vision (10)
+	// Screenshot & Vision (11)
 	"screenshot":        "Screenshot & Vision",
 	"get_screen_size":   "Screenshot & Vision",
 	"get_pixel_color":   "Screenshot & Vision",
@@ -31,6 +31,7 @@ var categoryForTool = map[string]string{
 	"ocr_languages":     "Screenshot & Vision",
 	"find_image":        "Screenshot & Vision",
 	"find_all_images":   "Screenshot & Vision",
+	"image_diff":        "Screenshot & Vision",
 	"record_screen":     "Screenshot & Vision",
 
 	// Mouse (6)

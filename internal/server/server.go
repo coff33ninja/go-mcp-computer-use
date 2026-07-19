@@ -1824,6 +1824,13 @@ type ReportIssueArgs struct {
 	AutoLogs *bool    `json:"auto_logs,omitempty"`
 }
 
+type ImageDiffArgs struct {
+	Before        string `json:"before"`
+	After         string `json:"after"`
+	Threshold     *int   `json:"threshold,omitempty"`
+	GenerateImage *bool  `json:"generate_image,omitempty"`
+}
+
 type ListDirectoryArgs struct {
 	Path string `json:"path"`
 }
@@ -2330,6 +2337,26 @@ func reportIssueHandler(ctx context.Context, req *mcp.CallToolRequest, args Repo
 		"log_lines_included": issue.LogLines,
 		"submitted":      issue.IssueURL != "",
 	}, nil
+}
+
+func imageDiffHandler(ctx context.Context, req *mcp.CallToolRequest, args ImageDiffArgs) (*mcp.CallToolResult, any, error) {
+	if args.Before == "" || args.After == "" {
+		return nil, nil, fmt.Errorf("image_diff: both 'before' and 'after' base64 PNG images are required")
+	}
+
+	opts := actions.ImageDiffOpts{
+		GenerateImage: args.GenerateImage != nil && *args.GenerateImage,
+	}
+	if args.Threshold != nil {
+		opts.Threshold = *args.Threshold
+	}
+
+	result, err := actions.ImageDiff(args.Before, args.After, opts)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &mcp.CallToolResult{}, result, nil
 }
 
 func listDirectoryHandler(ctx context.Context, req *mcp.CallToolRequest, args ListDirectoryArgs) (*mcp.CallToolResult, any, error) {
@@ -3408,6 +3435,11 @@ func New(version string) *mcp.Server {
 		Name:        "report_issue",
 		Description: "Generate a GitHub issue report with system info, recent error logs, and context. If gh CLI is available, creates the issue automatically. Otherwise returns the markdown body for manual submission.",
 	}, safeHandler("report_issue", reportIssueHandler))
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "image_diff",
+		Description: "Compare two base64-encoded PNG screenshots pixel by pixel. Returns statistics: changed_pixels, total_pixels, change_ratio (0-1), mean_diff (0-255), max_diff (0-255), same (bool). Optionally generates a diff image with changed pixels highlighted in red. Use threshold (0-255, default 30) to control sensitivity.",
+	}, imageDiffHandler)
 
 	if len(cfg.ToolDenylist) > 0 {
 		var denied []string

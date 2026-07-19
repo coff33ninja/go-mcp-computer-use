@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.2.44] - 2026-07-19
+
+### Added
+
+- **`image_diff` tool** — pixel-level screenshot comparison. Accepts two base64 PNGs (`before`, `after`) and returns `changed_pixels`, `total_pixels`, `change_ratio` (0-1), `mean_diff` (0-255), `max_diff` (0-255), `same` (bool). Optional `threshold` (0-255, default 30) controls per-channel sensitivity. Optional `generate_image` returns a diff image with changed pixels highlighted in red. Handles mismatched dimensions by comparing the overlapping region. Lives in `verify.go` alongside `computeTextDiff`.
+
+### VERSION
+
+`0.2.43` → `0.2.44`
+
 ## [0.2.43] - 2026-07-19
 
 ### Added
