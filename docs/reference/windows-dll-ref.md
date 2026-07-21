@@ -1,6 +1,6 @@
 # Windows DLL & COM Reference
 
-All native Windows API calls are made via `syscall.SyscallN` and `windows.NewLazySystemDLL` — no CGo, no `.c`/`.h` files. CGo is used only indirectly via the Zig cc build toolchain for ONNX runtime linking.
+All native Windows API calls are made via `syscall.SyscallN` and `windows.NewLazySystemDLL` — no CGo, no `.c`/`.h` files. CGo is used only indirectly via the Zig cc build toolchain for ONNX runtime linking. The Go-native transformer engine (`ml/` module, action prediction) is pure Go via Gorgonia — no CGO or DLL dependencies.
 
 ## System DLLs
 

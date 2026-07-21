@@ -2,7 +2,7 @@
 
 ## Goal
 
-A closed-loop embodied agent for Windows — an MCP server in Go that exposes desktop computer use tools (screenshot, mouse, keyboard, window management, OCR, ONNX ML detection, memory store, data logging, adaptive engine) to AI agents via the Model Context Protocol. The system implements perception, action, memory, and self-improvement layers, trending toward a locally-hosted autonomous desktop agent.
+A closed-loop embodied agent for Windows — an MCP server in Go that exposes desktop computer use tools (screenshot, mouse, keyboard, window management, OCR, ONNX ML detection, Go-native transformer engine, memory store, data logging, adaptive engine) to AI agents via the Model Context Protocol. The system implements perception, action prediction, memory, and self-improvement layers, trending toward a locally-hosted autonomous desktop agent.
 
 ## Architecture Layers
 
@@ -24,20 +24,22 @@ Skill Library (Macros) — NEXT SLICE
      ▼
 Action Executor (MCP Server)
      │
-     ├── Mouse • Keyboard • Vision (OCR/ONNX/UIA)
-     ├── Window Management • Browser • Explorer
-     ├── Chain Tool — sequential step execution
-     └── Keylogger — input recording/replay
+      ├── Mouse • Keyboard • Vision (OCR/ONNX/UIA)
+      ├── Window Management • Browser • Explorer
+      ├── Chain Tool — sequential step execution
+      ├── Keylogger — input recording/replay
+      └── Transformer Engine — Go-native action prediction (14K params, self-improving)
      │
      ▼
 Verification & Feedback (OCR, ONNX, UIA)
      │
      ▼
 Memory & Learning
-     ├── Data Logging (commands, OCR, chains, training pairs)
-     ├── Adaptive Engine (timing stats, success rates, sequence predictions)
-     ├── SQLite Memory Store (facts, sequences, templates)
-     └── Training Data Pipeline (screenshot + label export)
+      ├── Data Logging (commands, OCR, chains, training pairs)
+      ├── Adaptive Engine (timing stats, success rates, sequence predictions)
+      ├── Go-Native Transformer (Gorgonia 14K-param model, OCR→action prediction, `model.gob`)
+      ├── SQLite Memory Store (facts, sequences, templates)
+      └── Training Data Pipeline (screenshot + label export)
      │
      ▼
 Post-Task Introspection — NEXT SLICE

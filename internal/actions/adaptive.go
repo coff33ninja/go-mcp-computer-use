@@ -3,6 +3,7 @@ package actions
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"math"
 	"sort"
 	"strings"
@@ -157,6 +158,7 @@ type AdaptiveEngine struct {
 	wordToCmds map[string]map[string]*cmdFreq
 	coordIndex map[string]map[string]*coordSample
 	persisted  map[string]*PersistedStat
+	mlEngine   *MLEngine
 	totalCmds  int
 	totalSeqs  int
 	lastTrain  time.Time
@@ -174,12 +176,14 @@ var (
 )
 
 func NewAdaptiveEngine() *AdaptiveEngine {
+	dataDir := getDataLogRoot()
 	return &AdaptiveEngine{
 		timings:    make(map[string]*ToolTiming),
 		successes:  make(map[string]*ToolSuccess),
 		wordToCmds: make(map[string]map[string]*cmdFreq),
 		coordIndex: make(map[string]map[string]*coordSample),
 		persisted:  make(map[string]*PersistedStat),
+		mlEngine:   NewMLEngine(dataDir),
 	}
 }
 
@@ -197,6 +201,9 @@ func (e *AdaptiveEngine) Reset() {
 	e.totalCmds = 0
 	e.totalSeqs = 0
 	e.lastTrain = time.Time{}
+	if e.mlEngine != nil {
+		e.mlEngine.Reset()
+	}
 }
 
 func (e *AdaptiveEngine) RecordTiming(tool string, durationMs float64) {
@@ -546,11 +553,20 @@ func (e *AdaptiveEngine) rebuildSequences() {
 }
 
 func (e *AdaptiveEngine) PredictActions(ocrText string, limit int) []PredictedAction {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
 	if limit <= 0 {
 		limit = 5
 	}
+
+	// try ML predictions first
+	if e.mlEngine != nil && e.mlEngine.IsReady() {
+		if mlPreds := e.mlEngine.Predict(ocrText, limit); len(mlPreds) > 0 {
+			return mlPreds
+		}
+	}
+
+	// fall back to statistical engine
+	e.mu.RLock()
+	defer e.mu.RUnlock()
 	tokens := tokenize(ocrText)
 	if len(tokens) == 0 {
 		return nil
@@ -803,6 +819,12 @@ func EnsureAdaptive() {
 			Adaptive.HydratePersisted()
 			if err := Adaptive.TrainFromDatalog(); err != nil {
 				return
+			}
+			// try loading existing ML model first, train if not found
+			if err := Adaptive.mlEngine.LoadModel(); err != nil {
+				if err := Adaptive.mlEngine.Train(); err != nil {
+					slog.Debug("ml: training failed", "err", err)
+				}
 			}
 		}()
 	})

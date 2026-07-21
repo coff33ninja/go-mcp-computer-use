@@ -10,6 +10,15 @@ go-mcp-computer-use/
 │   ├── mcp-server/               # Main server binary (main.go)
 │   ├── benchmark/                # Performance benchmark tool
 │   └── ocrhelper/                # OCR helper binary (WinRT OCR via COM)
+├── ml/                           # Go-native ML transformer module
+│   ├── transformer/              # Gorgonia-based 14K-param transformer model
+│   ├── predict/                  # Action predictor (softmax tools + sigmoid coords)
+│   ├── trainer/                  # Training pipeline (Adam solver, MSE loss)
+│   ├── dataloader/               # SQLite training pair loader
+│   ├── tokenizer/                # Character-level tokenizer
+│   ├── spatial/                  # 7-feature DPI-aware coordinate encoder
+│   ├── online/                   # Session-scoped learning
+│   └── export/                   # ONNX export for inference
 ├── internal/
 │   ├── server/                   # MCP server, tool registration, arg types, handlers
 │   │   └── server.go             # ~2491 lines — all tool registrations + handlers
@@ -271,6 +280,7 @@ go-mcp-computer-use/
 | File | Lines | Key Types | Key Functions |
 |------|-------|-----------|---------------|
 | `adaptive.go` | ~700 | `AdaptiveEngine`, `TimingStat`, `WordIndex`, `PredictedAction`, `EngineAnalysis` | `TrainFromDatalog`, `PredictActions`, `Analyze`, `RecordTiming/Success/Result` |
+| `ml_bridge.go` | ~200 | `MLEngine` | `Train`, `LoadModel`, `Predict`, `IsReady`, `Reset` — wraps `ml/transformer` and `ml/predict` |
 | `audio.go` | ~80 | `AudioDevice` | `ListAudioDevices`, `SetDefaultAudioDevice` (+ WinRT for volume/mute) |
 | `brightness.go` | ~30 | — | `SetBrightness`, `GetBrightness` (WinRT) |
 | `browseruse.go` | ~180 | — | `BrowserFocusURLBar`, `BrowserNewTab`, `BrowserNavigate`, `BrowserSearch` |
@@ -319,6 +329,7 @@ cmd/mcp-server/ (main)
        └─ internal/config/ (JSON config)
 
 internal/actions/ depends on:
+  ├─ ml/ (Go-native transformer — Gorgonia, tensor, no CGO needed)
   ├─ user32.dll (window management, input via SendInput)         ← docs/reference/windows-dll-ref.md
   ├─ gdi32.dll (screenshot BitBlt, DPI)
   ├─ kernel32.dll (process, idle time, thread attachment)

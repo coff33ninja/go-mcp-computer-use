@@ -55,6 +55,19 @@ The `set_config` tool can be called by the AI agent or directly by the user via 
 
 **For maximum privacy:** set `training_enabled: false` in config before starting the server.
 
+## Transformer Model Privacy
+
+The Go-native transformer engine (`ml/` module) trains from your local `training_pairs` table only. No data leaves the machine.
+
+| Concern | Control |
+|---------|---------|
+| **Model file** | `model.gob` in data directory — local only, never transmitted |
+| **Training data** | Reads from local SQLite `training_pairs` table |
+| **No network calls** | Gorgonia trains entirely in-process, no external APIs |
+| **Disable training** | Set `training_enabled: false` — stops collecting new training pairs |
+| **Delete model** | Delete `model.gob` to reset learned behavior |
+| **ONNX vs Transformer** | ONNX models are pre-trained (downloaded). Transformer is trained from YOUR data. Both stay local. |
+
 ## Agent Configuration
 
 ```json

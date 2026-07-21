@@ -11,7 +11,7 @@
   <a href="https://coff33ninja.github.io/go-mcp-computer-use/"><img src="https://img.shields.io/badge/docs-gh--pages-blue?labelColor=2d333b&logo=github" alt="Docs"></a>
 </p>
 
-> **Built iteratively** across AI-assisted development sessions, with [`v0.1.x`](https://github.com/coff33ninja/go-mcp-computer-use/tree/v0.1.x) covering 70+ bug-fixed Win32/COM tools and [`v0.2.x`](https://github.com/coff33ninja/go-mcp-computer-use/tree/v0.2.x) (default branch) adding the chained automation pipeline, SQLite memory store, ONNX ML detection, introspection engine, adaptive ML, and the training data pipeline for user-specific model fine-tuning.
+> **Built iteratively** across AI-assisted development sessions, with [`v0.1.x`](https://github.com/coff33ninja/go-mcp-computer-use/tree/v0.1.x) covering 70+ bug-fixed Win32/COM tools and [`v0.2.x`](https://github.com/coff33ninja/go-mcp-computer-use/tree/v0.2.x) (default branch) adding the chained automation pipeline, SQLite memory store, ONNX ML detection, introspection engine, adaptive ML, Go-native transformer engine for self-improving action prediction, and the training data pipeline for user-specific model fine-tuning.
 > The AI agent was guided by a curated set of quality-enforcement skills from [coff33ninja/ai-skills](https://github.com/coff33ninja/ai-skills) — anti-hallucination, anti-slop, safe-code-modifications, anti-sycophancy, code-simplification, context-engineering, don't-kill-tokens, os-awareness, anti-tool-sprawl, follow-existing-patterns, no-dead-code-removal, universal-format-lint, self-validate, verify-and-cite, and others.
 >
 > **Status:** v0.2.44 — 146 tools including `image_diff` for pixel-level screenshot comparison, file-based structured logging with rotation, `get_logs` for reading past errors, `report_issue` for GitHub issue generation, panic recovery wrappers, `chain_abort` hotkey, window lock-on, `reset_state`, `dismiss_all_menus`, enriched `find_text_and_click` errors, verified window focus with 4-attempt fallback chain, `auto_verify_focus` chain option, `focus_handle` for handle-based chain targeting, `get_dpi_for_point`, handle-based `click_menu_item` and `layout_validate`, window Z-order, UIA element tree dump, element-at-point, `ocr_window`, `ocr_active_window`, window bounding rects, statistical prior model, training pipeline, memory-backed UI element cache, ONNX detection, runtime privacy controls, key hold/release, input recording, set_config, YOLO dataset export, introspection engine, adaptive ML engine, OCR→command training bridge, ONNX cascade fallback, per-tool enable/disable, auto-retention pruning, and UIA-integrated chain step types. See [`docs/reference/tools.md`](docs/reference/tools.md) for the full listing.
@@ -46,13 +46,14 @@ MCP server for Windows desktop computer use. Exposes mouse, keyboard, screenshot
 - **Training data pipeline** — persistent screenshot collection with categorized folders (`raw/click/`, `raw/type/`, `raw/navigate/`, `watcher/elements_found/`, etc.) and SQLite metadata. Auto-saves on every UI action for model fine-tuning.
 - **Memory-backed UI element cache** — ONNX detections auto-stored as memory facts (`ui:{window}:{class}`) with TTL. AI reuses cached coordinates across sessions.
 - **`find_ui_element` tool** — cascading lookup: memory → ONNX → OCR. Self-learning: saves findings to memory + training store.
+- **Go-native ML transformer** — 14K-param transformer engine (64-dim, 2 layers, 2 heads) trained in-process via Gorgonia. Predicts optimal actions from OCR context. Self-improving: learns from each session, persists to `model.gob`. No Python, no ONNX for training.
 - **146 MCP tools** — see [`docs/reference/tools.md`](docs/reference/tools.md) for the full listing
 
 ## Tools
 
 Auto-generated reference at [`docs/reference/tools.md`](docs/reference/tools.md) — always in sync with `internal/server/server.go`. Run `go run ./scripts/gen-tools-doc.go` to regenerate.
 
-Categories: Screenshot & Vision, Mouse, Keyboard, Window Management, Chained / Composite, Chain Automation, UI Automation, Browser Automation, File Explorer, Audio, Memory & Templates, ONNX ML, Priors & Statistics, Training Pipeline, Data Export, Data Logging, Adaptive Agent, Introspection & Debugging, Runtime Config, System, Process Management, Logging & Diagnostics.
+Categories: Screenshot & Vision, Mouse, Keyboard, Window Management, Chained / Composite, Chain Automation, UI Automation, Browser Automation, File Explorer, Audio, Memory & Templates, ONNX ML, Transformer ML, Priors & Statistics, Training Pipeline, Data Export, Data Logging, Adaptive Agent, Introspection & Debugging, Runtime Config, System, Process Management, Logging & Diagnostics.
 
 ## Security
 
@@ -72,6 +73,7 @@ See [`docs/guides/build.md`](docs/guides/build.md) for:
 - Requirements (Windows 10+, Go 1.26+, Zig 0.16+)
 - Quick start & installation
 - Build commands (CGO via Zig cc — always ONNX-enabled)
+- Transformer engine (pure Go via Gorgonia — no extra deps needed)
 - Performance benchmarks
 
 ## Configuration

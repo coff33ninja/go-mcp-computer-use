@@ -18,6 +18,9 @@ The server implements the execution and perception layers of a closed-loop embod
 │  │              window system, clipboard)           │
 │  Perception ── Vision Layer (screenshot, OCR,       │
 │  │              ONNX ML detection, screen capture)  │
+│  Transformer ─ Action Prediction (Go-native 14K-   │
+│  │             param transformer via Gorgonia,      │
+│  │             learns from OCR context → actions)   │
 │  Memory ────── State Layer (SQLite facts, element   │
 │                 templates, UI position cache)       │
 │  Training ──── Data pipeline (screenshot store,     │
@@ -40,10 +43,20 @@ cmd/
   ├── benchmark/               — performance benchmark tool
   └── ocrhelper/               — WinRT OCR helper binary
 
+ml/                             — Go-native ML transformer module
+  ├── transformer/model.go     — Gorgonia-based 14K-param transformer
+  ├── predict/predictor.go     — softmax tools + sigmoid coords
+  ├── trainer/trainer.go       — training pipeline (Adam, MSE loss)
+  ├── dataloader/sqlite.go     — reads training pairs from SQLite
+  ├── tokenizer/simple.go      — character-level tokenizer
+  ├── spatial/encoder.go       — 7-feature DPI-aware coordinate encoding
+  ├── online/online.go         — session-scoped learning
+  └── export/export.go         — ONNX export for inference
+
 internal/server/server.go      — MCP tool registrations (146 tools)
 internal/config/config.go      — JSON config file (~/.config/go-mcp-computer-use/config.json)
 
-internal/actions/              — 46 files, organized by capability:
+internal/actions/              — 47 files, organized by capability:
   ├── Input:
   │   ├── mouse.go             — SendInput click/move/scroll/drag
   │   ├── keyboard.go          — SendInput KEYEVENTF_UNICODE
@@ -86,7 +99,8 @@ internal/actions/              — 46 files, organized by capability:
   ├── Automation:
   │   ├── chain.go             — chain step executor (poll, if/else, loop, variables)
   │   ├── keylogger.go         — WinEvent hook input recording
-  │   └── adaptive.go          — adaptive engine (timing, success rates, coord prediction)
+  │   ├── adaptive.go          — adaptive engine (timing, success rates, coord prediction)
+  │   └── ml_bridge.go         — Go-native transformer engine integration (MLEngine)
   │
   ├── Persistence:
   │   ├── memory.go            — SQLite facts (set/get/search/list/forget) + templates

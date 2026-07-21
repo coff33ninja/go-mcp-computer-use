@@ -32,7 +32,7 @@ Use **Go + syscall/windows** with direct Win32 API calls, plus **native COM** wh
 - **UI Automation**: Native COM calls to `UIAutomationCore.dll` (IUIAutomation, IUIAutomationElement) via raw vtable dispatch — no CGO, no go-ole
 - **OCR**: Native WinRT COM via `combase.dll` (RoGetActivationFactory, WindowsCreateString, IAsyncOperation polling) — HSTRING management, activation factories, async result extraction, all via raw syscall
 
-CGO is required for ONNX ML inference via Zig cc. All builds include the full toolset.
+CGO is required for ONNX ML inference via Zig cc. All builds include the full toolset. The Go-native transformer engine (action prediction, `ml/` module) does NOT require CGO — it's pure Go via Gorgonia.
 
 ## Consequences
 

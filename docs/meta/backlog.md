@@ -742,6 +742,7 @@
 - `onnx_status` / `onnx_detect` / `onnx_download` — ONNX runtime + YOLO detection
 - `onnx_watch_start` / `onnx_watch_stop` / `onnx_watch_status` / `onnx_watch_cache` — background ONNX watcher
 - `introspection_analyze` / `task_begin` / `task_end` — post-task mining
+- Go-native transformer engine (`ml/` module) — 14K-param transformer via Gorgonia, self-improving action prediction from OCR context, persists to `model.gob`
 
 ### NEXT
 | Tool | Why |

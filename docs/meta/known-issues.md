@@ -232,13 +232,13 @@ Firefox Multi-Account Containers changes the new-tab `+` behavior — instead of
 
 **Observation:** `go build ./...` fails with `build constraints exclude all Go files` for `github.com/yalue/onnxruntime_go` when `CGO_ENABLED=0`. The onnxruntime_go library uses cgo for native shared library bindings.
 
-**Impact:** ONNX ML tools (`onnx_detect`, `onnx_status`, `onnx_download`) are excluded from CGO-free builds. All other tools work.
+**Impact:** ONNX ML tools (`onnx_detect`, `onnx_status`, `onnx_download`) are excluded from CGO-free builds. All other tools work — including the Go-native transformer engine (action prediction), which is pure Go via Gorgonia.
 
 **Workaround:** Build with `CGO_ENABLED=1` and a C compiler:
 - **Zig cc:** `CC="zig cc" CGO_ENABLED=1 go build -o mcp-server.exe .\cmd\mcp-server\`
 - **GCC (Mingw-w64):** `CGO_ENABLED=1 go build -o mcp-server.exe .\cmd\mcp-server\`
 
-**Status:** Documented in v0.2.x. Not a bug — by design.
+**Status:** Documented in v0.2.x. Not a bug — by design. CGO only needed for ONNX; transformer is pure Go.
 
 ## ~~B14. ONNX YOLO11n model uses unsupported opset 22~~
 
@@ -308,15 +308,9 @@ AI currently has no long-term memory of what VK sequences worked in previous gam
 - Combined OCR + VK logging during keylogger recording
 - Queries for replaying sequences that succeeded in similar game states
 
-### R3. Custom ML model for adaptive gameplay timing
+### ~~R3. Custom ML model for adaptive gameplay timing~~
 
-Gemini suggested a Seq2Seq/LSTM model that takes "desired abilities" as input and outputs optimal VK code sequences + wait timings based on recorded human play.
-
-**Approach (not started):**
-- Export recorded gameplay sequences as labeled training data
-- Train lightweight model (not LLM-scale) in isolated Docker container
-- Load ONNX-exported model in Go server for real-time combo generation
-- Adaptive timing: model learns per-ability cast times from human latency patterns
+**Done v0.2.46** — Delivered as a Go-native transformer engine (`ml/` module). 14K-param transformer trained in-process via Gorgonia. Takes tokenized OCR text + spatial features, predicts optimal tool + coordinates. Persists to `model.gob`, auto-loads on startup, self-improves from each session's training pairs. No Python, no ONNX for training.
 
 ### R4. Smart cropping for OCR performance
 

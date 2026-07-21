@@ -360,6 +360,8 @@ For a detailed walkthrough of the Perceive-Reason-Act loop and agent architectur
 ```
 1. OCR to get current screen state
 2. AGENT_SUGGEST(ocr_text) to get ranked next-command predictions
+   (uses Go-native transformer: learns from past sessions, predicts
+   optimal tool + coordinates from OCR context)
 3. Pick the highest-confidence command and execute
 4. AGENT_TRAIN to rebuild index after new successful pairs
 ```
@@ -381,5 +383,5 @@ For a detailed walkthrough of the Perceive-Reason-Act loop and agent architectur
 10. **Template matching threshold** — start at 0.8 and lower if no match found
 11. **Wrap tasks** — `task_begin`/`task_end` around major work; introspection mines what went wrong automatically
 12. **Query the datalog** — `datalog_query(table="commands", success=false)` shows which tools keep failing
-13. **Let the adaptive engine help** — `agent_suggest(ocr_text)` predicts the best command based on past successes
+13. **Let the adaptive engine help** — `agent_suggest(ocr_text)` predicts the best command based on past successes (uses Go-native transformer)
 14. **Retrain after learning** — call `agent_train` after a successful new workflow to update the prediction index

@@ -343,6 +343,8 @@ Controller ─── Physical Layer (mouse, keyboard, window system)
   ↓
 Perception ─── Vision Layer (OCR + ML element detection + screen capture)
   ↓
+Transformer ── Action Prediction (Go-native 14K-param model, predicts
+  ↓             optimal tools + coordinates from OCR context)
 World ───────── Desktop / Browser / Applications
   ↑
 Memory ─────── State Layer (UI element positions, action history, confidence)
@@ -402,9 +404,9 @@ predict outcome → act → verify → repair if wrong
 | UI change tolerance | Breaks on any shift | Adapts via confidence decay |
 | Cross-machine | Tied to dev setup | Generalizes via ML |
 
-### ML Vision + Spatial Memory
+### ML Vision + Spatial Memory + Transformer
 
-**OCR tells you what text is on screen. ML vision tells you what's on screen.**
+**OCR tells you what text is on screen. ML vision tells you what's on screen. The transformer tells you what to do about it.**
 
 The addition of a computer vision model for UI element detection changes everything:
 
@@ -412,6 +414,14 @@ The addition of a computer vision model for UI element detection changes everyth
 OCR:                  "Search  Images  Gmail"
 ML Vision:            [button: "Search"] [link: "Images"] [button: "Gmail"]
                       at (x=800,y=120)    at (x=900,y=120)  at (x=1000,y=120)
+```
+
+The Go-native transformer takes this further — it learns from past sessions which actions worked in similar OCR contexts:
+
+```
+Transformer input:    OCR text "Search  Images  Gmail" + spatial features
+Transformer output:   tool="click" (0.92) + x=0.21 + y=0.13
+                      → maps to screen coordinates via DPI-aware denormalization
 ```
 
 With persistent element memory:
@@ -436,12 +446,13 @@ The agent doesn't "hunt" every time — it remembers where reality usually is, r
 | **Memory** | Probabilistic UI map | Stale positions cause incorrect decisions |
 | **Controller** | Dumb but precise execution | Adding logic where only movement is needed |
 
-### The Convergence: LLM + MCP + ML
+### The Convergence: LLM + MCP + ML + Transformer
 
-You are not building "an AI that uses a computer." You are building a **closed-loop embodied agent operating inside a GUI environment** — with perception, memory, and reasoning as separate subsystems.
+You are not building "an AI that uses a computer." You are building a **closed-loop embodied agent operating inside a GUI environment** — with perception, memory, action prediction, and reasoning as separate subsystems.
 
 ```
 Vision Model ──→ "What exists on screen"
+Transformer ───→ "What should I do about it" (learns from experience)
 Memory Layer ──→ "Where it usually is"
 MCP Skills ────→ "What can be done"
 LLM ───────────→ "What should be done"

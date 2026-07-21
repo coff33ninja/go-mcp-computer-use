@@ -8,7 +8,7 @@ A survey of the computer-use agent landscape as of mid-2026, with detailed deep-
 
 | Project | Lang | MCP | Desktop | ONNX/ML | Training | Memory | Tools | Stars | Open Source |
 |---------|------|-----|---------|---------|---------|--------|-------|-------|-------------|
-| **[go-mcp-computer-use](https://github.com/coff33ninja/go-mcp-computer-use)** | Go | ✅ | ✅ Win | ✅ YOLO11+MobileNet | ✅ auto-collect | ✅ SQLite FTS | 146 | — | ✅ MIT |
+| **[go-mcp-computer-use](https://github.com/coff33ninja/go-mcp-computer-use)** | Go | ✅ | ✅ Win | ✅ YOLO11+MobileNet + Go-native transformer | ✅ auto-collect + self-improving | ✅ SQLite FTS | 146 | — | ✅ MIT |
 | **[Cua](https://github.com/trycua/cua)** | Py/HTML | ✅ | ✅ Win/Mac/Linux | ❌ | ❌ | ❌ | SDK | 19.4k | ✅ |
 | **[Agent-S](https://github.com/simular-ai/Agent-S)** | Python | ❌ | ✅ Win/Mac/Linux | ❌ | ❌ | ✅ in-context RL | SDK | 12k | ✅ |
 | **[Bytebot](https://github.com/bytebot-ai/bytebot)** | TypeScript | ❌ | ❌ Linux container | ❌ | ❌ | ❌ | SDK | 11.1k | ✅ |
@@ -31,9 +31,9 @@ Windows-MCP is the closest direct competitor — both are MCP servers for Window
 
 | Dimension | go-mcp-computer-use | Windows-MCP |
 |-----------|-------------------|-------------|
-| **Language** | Go (static binary, ~16 MB) | Python (requires Python + deps) |
+| **Language** | Go (static binary, ~60 MB) | Python (requires Python + deps) |
 | **OCR** | Native WinRT COM (2-8x faster than PowerShell) + PowerShell fallback | PowerShell OCR via pyautogui |
-| **ML detection** | YOLO11n + MobileNetV3 ONNX inference | None |
+| **ML detection** | YOLO11n + MobileNetV3 ONNX inference + Go-native transformer (14K params, self-improving) | None |
 | **Memory cache** | SQLite FTS5 with TTL | None |
 | **Training pipeline** | Auto-screenshots per action, categorized, YOLO export | None |
 | **UI Automation** | Native COM UIAutomation (IUIAutomation) | UIA via Python |
@@ -52,12 +52,12 @@ Windows MCP Server uses a fundamentally different approach: **UI Automation tree
 
 | Approach | go-mcp-computer-use | Windows MCP Server |
 |----------|-------------------|-------------------|
-| **Element finding** | Pixels (screenshot → ONNX/OCR) | UIA tree (name/ID/type) |
+| **Element finding** | Pixels (screenshot → ONNX/OCR → transformer prediction) | UIA tree (name/ID/type) |
 | **Screenshot needed?** | Yes (every action) | No (for UIA elements) |
 | **Works with games** | ✅ Yes (pixel-based) | ❌ No |
 | **DPI independence** | ✅ Physical-pixel coordinates (BitBlt + DPI-aware process) | ✅ Automatic |
 | **Theme independence** | ❌ Retrains on theme change | ✅ Automatic |
-| **Fallback** | Memory → ONNX → OCR | UIA → mouse/keyboard (coordinates) |
+| **Fallback** | Memory → ONNX → OCR → transformer | UIA → mouse/keyboard (coordinates) |
 
 **Verdict**: go-mcp-computer-use covers the full spectrum (pixel + UIA + OCR). Windows MCP Server is more reliable for standard apps but has no fallback for apps without UIA metadata.
 
@@ -68,11 +68,11 @@ DesktopCtl is a Rust CLI tool for desktop control, not an MCP server. It uses GP
 | Feature | go-mcp-computer-use | DesktopCtl |
 |---------|-------------------|------------|
 | **Interface** | MCP protocol (146 tools) | CLI commands |
-| **Vision** | ONNX YOLO11 + MobileNetV3 | GPU-accelerated OCR (no object detection) |
+| **Vision** | ONNX YOLO11 + MobileNetV3 + Go-native transformer | GPU-accelerated OCR (no object detection) |
 | **Privacy** | Screenshots shared with AI agent | Screenshots stay local by default |
 | **Transport** | stdio (TCP optional) | CLI pipes |
 | **Language** | Go | Rust |
-| **Unique** | Training pipeline, memory, priors, 146 tools | `screen tokenize` for structured UI tokens |
+| **Unique** | Training pipeline, memory, priors, Go-native transformer (self-improving), 146 tools | `screen tokenize` for structured UI tokens |
 
 **Verdict**: DesktopCtl prioritizes privacy (screenshots not shared by default) and structured token output. go-mcp-computer-use prioritizes depth (training, memory, 146 tools).
 

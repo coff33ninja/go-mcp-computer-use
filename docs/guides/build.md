@@ -8,6 +8,8 @@
 
 CGO is mandatory — ONNX runtime requires it, and Zig `cc` serves as the C cross-compiler. Install Zig once, then any `go build` with `CC="zig cc" CGO_ENABLED=1` works.
 
+> **Note:** The Go-native transformer engine (Gorgonia) does NOT require CGO — it's pure Go. CGO is only needed for ONNX runtime (YOLO/MobileNet inference). If you build without CGO, you lose ONNX tools but the transformer and all other tools still work.
+
 ## Quick Start
 
 ```powershell
@@ -36,6 +38,8 @@ CC="zig cc" CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -o mcp-server.exe .
 ```
 
 CGO is mandatory — ONNX runtime requires it, and Zig cc handles the cross-compilation. Install Zig 0.16+ via `winget install zig`.
+
+The Go-native transformer engine (action prediction) is pure Go and builds without CGO — it only needs `go build`. ONNX tools (YOLO/MobileNet) require CGO.
 
 ## Performance
 
