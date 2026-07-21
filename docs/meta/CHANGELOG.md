@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.2.47] - 2026-07-21
+
+### Fixed
+
+- **Go 1.26 panic on startup** — updated `go4.org/unsafe/assume-no-moving-gc` to latest version. Exe no longer requires `ASSUME_NO_MOVING_GC_UNSAFE_RISK_IT_WITH` env var.
+
+### VERSION
+
+`0.2.46` → `0.2.47`
+
 ## [0.2.46] - 2026-07-21
 
 ### Added
