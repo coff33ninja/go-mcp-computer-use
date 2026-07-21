@@ -986,6 +986,27 @@ All items complete.
 
 ---
 
+## 36. MULTI-MONITOR ML AWARENESS — Spatial Intelligence Across Displays
+
+> The MCP server already has display detection (`list_displays`, `get_dpi_for_point`, `get_display_modes`), but the ML model has no concept of which monitor an action targets. This section makes the model display-aware.
+
+### NEXT
+| Component | Why |
+|-----------|-----|
+| Display index as input feature | Model receives which monitor the target is on (0, 1, 2...). Combined with per-monitor DPI/resolution for coordinate normalization. |
+| Per-display coordinate normalization | Coordinates normalized relative to the target display's bounds, not the virtual desktop. Prevents cross-monitor drift. |
+| Display-aware training targets | Training samples tagged with display index. Model learns display-specific click patterns. |
+| Multi-display chain prediction | `chain_predict` returns display context so chained actions stay on the correct monitor. |
+
+### FAR
+| Component | Why |
+|-----------|-----|
+| Cross-display drag prediction | Drag from monitor A → monitor B with coordinate transform across displays |
+| Display transition detection | Detect when user moves mouse across monitor boundaries |
+| Per-display OCR regions | OCR only the active monitor for faster, more relevant text extraction |
+
+---
+
 ## Summary
 
 | Domain | HAVE | NEXT | FAR | Total |
@@ -1025,16 +1046,18 @@ All items complete.
 | Upgrade (§33) | 0 | 0 | 6 | 6 |
 | Custom NN (§34) | 12 | 0 | 0 | 12 |
 | Action Prediction (§35) | 17 | 1 | 5 | 23 |
-| **TOTAL** | **177** | **140** | **146** | **463** |
+| Multi-Monitor ML (§36) | 0 | 4 | 3 | 7 |
+| **TOTAL** | **177** | **144** | **149** | **470** |
 
 ## Strategy
 
 1. **Action prediction expansion (§35, v0.4.x)** — All done except end-to-end chain test. Multi-coordinate output, sequence prediction, window context, spatial encoding, tool expansion, batch training, full attention all complete.
-2. **Build out NEXT items** — straightforward and high value (~143 items remaining)
-2. **Error wrapping audit** — remaining Slice 4 item for consistent error feedback
-4. **Security + Transport** — TLS + SSE prerequisites for remote deployment
-5. **Browser DOM mode** — CDP/Playwright integration for 10x faster web tasks
-6. **Background control** — SendInput/UIA for non-disruptive clicks
-7. **Permissions** — `is_admin`, `get_username`, UAC awareness (§32)
-8. **Cross-platform interface** — Linux/macOS stubs + container support
-9. **Upgrade system (§33, v1.3.0)** — self-update with client-aware restart (requires §32 + §29)
+2. **Multi-monitor ML awareness (§36)** — MCP has display detection, ML model needs display index input, per-display coordinate normalization, display-aware training targets.
+3. **Build out NEXT items** — straightforward and high value (~144 items remaining)
+4. **Error wrapping audit** — remaining Slice 4 item for consistent error feedback
+5. **Security + Transport** — TLS + SSE prerequisites for remote deployment
+6. **Browser DOM mode** — CDP/Playwright integration for 10x faster web tasks
+7. **Background control** — SendInput/UIA for non-disruptive clicks
+8. **Permissions** — `is_admin`, `get_username`, UAC awareness (§32)
+9. **Cross-platform interface** — Linux/macOS stubs + container support
+10. **Upgrade system (§33, v1.3.0)** — self-update with client-aware restart (requires §32 + §29)
