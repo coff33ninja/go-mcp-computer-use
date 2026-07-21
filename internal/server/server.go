@@ -288,12 +288,18 @@ type PingArgs struct {
 }
 
 type FindTextAndClickArgs struct {
-	Text     string  `json:"text"`
-	Language string  `json:"language,omitempty"`
-	X        *int32  `json:"x,omitempty"`
-	Y        *int32  `json:"y,omitempty"`
-	W        *int32  `json:"w,omitempty"`
-	H        *int32  `json:"h,omitempty"`
+	Text      string  `json:"text"`
+	Language  string  `json:"language,omitempty"`
+	X         *int32  `json:"x,omitempty"`
+	Y         *int32  `json:"y,omitempty"`
+	W         *int32  `json:"w,omitempty"`
+	H         *int32  `json:"h,omitempty"`
+	MaxScrolls    *int32 `json:"max_scrolls,omitempty"`
+	ScrollClicks  *int32 `json:"scroll_clicks,omitempty"`
+	ScrollDown    *bool  `json:"scroll_down,omitempty"`
+	WindowTitle   string `json:"window_title,omitempty"`
+	SkipMemory    *bool  `json:"skip_memory,omitempty"`
+	SkipSystemFind *bool `json:"skip_system_find,omitempty"`
 	VerifyArgs
 }
 
@@ -327,9 +333,12 @@ type HoverArgs struct {
 }
 
 type WaitForTextArgs struct {
-	Text      string `json:"text"`
-	TimeoutMs int32  `json:"timeout_ms,omitempty"`
-	Language  string `json:"language,omitempty"`
+	Text         string `json:"text"`
+	TimeoutMs    int32  `json:"timeout_ms,omitempty"`
+	Language     string `json:"language,omitempty"`
+	MaxScrolls   *int32 `json:"max_scrolls,omitempty"`
+	ScrollClicks *int32 `json:"scroll_clicks,omitempty"`
+	ScrollDown   *bool  `json:"scroll_down,omitempty"`
 }
 
 type SelectAllAndTypeArgs struct {
@@ -1108,6 +1117,22 @@ func findTextAndClickHandler(ctx context.Context, req *mcp.CallToolRequest, args
 	opts := actions.FindTextOpts{
 		Text: args.Text, Language: args.Language,
 		RegionX: args.X, RegionY: args.Y, RegionW: args.W, RegionH: args.H,
+		WindowTitle: args.WindowTitle,
+	}
+	if args.MaxScrolls != nil {
+		opts.MaxScrolls = *args.MaxScrolls
+	}
+	if args.ScrollClicks != nil {
+		opts.ScrollClicks = *args.ScrollClicks
+	}
+	if args.ScrollDown != nil {
+		opts.ScrollDown = *args.ScrollDown
+	}
+	if args.SkipMemory != nil {
+		opts.SkipMemory = *args.SkipMemory
+	}
+	if args.SkipSystemFind != nil {
+		opts.SkipSystemFind = *args.SkipSystemFind
 	}
 	cx, cy, err := actions.FindTextAndClick(opts)
 	if err != nil {
@@ -1173,7 +1198,12 @@ func hoverHandler(ctx context.Context, req *mcp.CallToolRequest, args HoverArgs)
 func waitForTextHandler(ctx context.Context, req *mcp.CallToolRequest, args WaitForTextArgs) (*mcp.CallToolResult, any, error) {
 	timeout := args.TimeoutMs
 	if timeout == 0 { timeout = 10000 }
-	result, err := actions.WaitForText(args.Text, timeout, args.Language)
+	var maxScrolls, scrollClicks int32
+	var scrollDown bool
+	if args.MaxScrolls != nil { maxScrolls = *args.MaxScrolls }
+	if args.ScrollClicks != nil { scrollClicks = *args.ScrollClicks }
+	if args.ScrollDown != nil { scrollDown = *args.ScrollDown }
+	result, err := actions.WaitForTextScroll(args.Text, timeout, args.Language, maxScrolls, scrollClicks, scrollDown)
 	if err != nil {
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "not_found"}}}, map[string]any{"found": false}, nil
 	}
@@ -3034,7 +3064,7 @@ func New(version string) *mcp.Server {
 
 	addToolClean(server, &mcp.Tool{
 		Name:        "find_text_and_click",
-		Description: "Find text on screen using OCR and click at its location. Optional region x,y,w,h to search within.",
+		Description: "Find text on screen using OCR and click at its location. Uses a smart cascade: checks spatial memory (where text was seen before), then system find-text (Ctrl+F in browsers/apps), then OCR with optional scrolling. Use max_scrolls=5 for scrollable pages. Returns error with visible text if not found.",
 	}, findTextAndClickHandler)
 
 	addToolClean(server, &mcp.Tool{
@@ -3059,7 +3089,7 @@ func New(version string) *mcp.Server {
 
 	addToolClean(server, &mcp.Tool{
 		Name:        "wait_for_text",
-		Description: "Wait for text to appear on screen. Polls OCR until found or timeout.",
+		Description: "Wait for text to appear on screen. Polls OCR until found or timeout. Supports scrolling with max_scrolls to find text on scrollable pages.",
 	}, waitForTextHandler)
 
 	addToolClean(server, &mcp.Tool{

@@ -35,7 +35,9 @@ template matching (falls through to ONNX + OCR if NCC fails)
 **System prompt hint:**
 > You control a Windows desktop. Take a screenshot to see the browser, then use OCR to find
 > links or buttons by their visible text and click them. Use `type_and_submit` for search bars
-> and `type` for form fields. Scroll when content is below the fold.
+> and `type` for form fields. Scroll when content is below the fold. Use `find_text_and_click`
+> with `max_scrolls=5` for scrollable pages, documents, installers, or lists where the target
+> text may not be visible on the initial screen.
 
 ---
 

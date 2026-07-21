@@ -1385,6 +1385,24 @@ func chainFindTextAndClick(args map[string]any) (any, error) {
 		v := int32(h)
 		opts.RegionH = &v
 	}
+	if ms, ok := getInt(args, "max_scrolls"); ok {
+		opts.MaxScrolls = int32(ms)
+	}
+	if sc, ok := getInt(args, "scroll_clicks"); ok {
+		opts.ScrollClicks = int32(sc)
+	}
+	if sd, ok := getBool(args, "scroll_down"); ok {
+		opts.ScrollDown = sd
+	}
+	if wt, ok := getString(args, "window_title"); ok {
+		opts.WindowTitle = wt
+	}
+	if sm, ok := getBool(args, "skip_memory"); ok {
+		opts.SkipMemory = sm
+	}
+	if sf, ok := getBool(args, "skip_system_find"); ok {
+		opts.SkipSystemFind = sf
+	}
 	_, _, err := FindTextAndClick(opts)
 	return nil, err
 }
@@ -1396,7 +1414,12 @@ func chainWaitForText(args map[string]any) (any, error) {
 	}
 	timeoutMs, _ := getInt(args, "timeout_ms")
 	lang, _ := getString(args, "language")
-	return WaitForText(text, int32(timeoutMs), lang)
+	var maxScrolls, scrollClicks int32
+	var scrollDown bool
+	if ms, ok := getInt(args, "max_scrolls"); ok { maxScrolls = int32(ms) }
+	if sc, ok := getInt(args, "scroll_clicks"); ok { scrollClicks = int32(sc) }
+	if sd, ok := getBool(args, "scroll_down"); ok { scrollDown = sd }
+	return WaitForTextScroll(text, int32(timeoutMs), lang, maxScrolls, scrollClicks, scrollDown)
 }
 
 func chainWaitForWindow(args map[string]any) (any, error) {

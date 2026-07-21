@@ -193,7 +193,7 @@ go-mcp-computer-use/
 | Tool | Handler | Action Function | File |
 |------|---------|-----------------|------|
 | `hover` | `hoverHandler` | `actions.Hover(x, y)` | `chained.go:133` |
-| `find_text_and_click` | `findTextAndClickHandler` | `actions.FindTextAndClick(FindTextOpts)` | `chained.go:19` |
+| `find_text_and_click` | `findTextAndClickHandler` | `actions.SmartFindTextAndClick(SmartFindOpts)` | `chained.go:19` → `find_text_smart.go` |
 | `type_and_submit` | `typeAndSubmitHandler` | `actions.TypeAndSubmit(text)` | `chained.go:68` |
 | `select_all_and_type` | `selectAllAndTypeHandler` | `actions.SelectAllAndType(text)` | `chained.go:181` |
 | `click_menu_item` | `clickMenuItemHandler` | `actions.ClickMenuItem(windowTitle, text, lang)` | `chained.go:198` |
@@ -304,8 +304,11 @@ go-mcp-computer-use/
 | `process.go` | ~100 | `ProcessInfo` | `ListProcesses`, `LaunchApp`, `KillProcess` |
 | `recording.go` | ~30 | `RecordedFrame`, `RecordingResult` | `RecordScreen` |
 | `screenshot.go` | — | — | `CaptureScreen` (full + region) |
+| `system_find.go` | ~120 | `findableApps` | `SystemFindText`, `SystemFindTextAndClick`, `DetectActiveWindowCategory`, `SystemFindStats` |
 | `system.go` | ~70 | `SystemInfo`, `ActiveWindowInfo` | `GetSystemInfo`, `GetActiveWindow`, `ListWindows` |
 | `template.go` | ~510 | `MatchResult` | `FindImage` (NCC → ONNX → OCR cascade), `FindAllImages` (NCC+NMS → ONNX+OCR), `CropRegion`, `ensureScreenB64`, `findImageONNXFallback`, `findAllONNXFallback` |
+| `text_location_memory.go` | ~200 | `TextLocation` | `InitTextLocationStore`, `SaveTextLocation`, `FindTextLocation`, `IncTextLocationHit`, `TextLocationStats` |
+| `find_text_smart.go` | ~100 | — | `SmartFindText`, `SmartFindTextAndClick` — 3-tier cascade: memory → system-find → OCR+scroll |
 | `timeout.go` | ~20 | — | `WithTimeout` |
 | `training.go` | — | — | `SaveTrainingSample`, `ListTrainingSamples`, `TrainingStats`, `MarkTrainingUsed` |
 | `uia.go` | — | — | `UIAFind`, `UIAGetText`, `UIAInvoke` |

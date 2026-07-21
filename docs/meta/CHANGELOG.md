@@ -1,5 +1,24 @@
 # Changelog
 
+## [Unreleased]
+
+## [0.2.48] - 2026-07-21
+
+### Added
+
+- **Smart cascade text finding** — `find_text_and_click` and `wait_for_text` now use a 3-tier strategy instead of brute-force scrolling:
+  1. **Spatial memory** — checks `text_locations` table for where text was previously seen (position, window, confidence). Instant, no OCR.
+  2. **System find-text** — injects Ctrl+F into the active app (Chrome, Firefox, Edge, Brave, Opera, Notepad, VS Code, Explorer) and OCRs the match highlight. ~500ms, zero scrolls.
+  3. **OCR + scroll** — falls back to screenshot OCR with auto-scrolling only if the first two tiers miss.
+- **`text_location_memory.go`** — SQLite-backed spatial RAG store. Every successful `find_text_and_click` auto-saves word/line text, screen position, window title, and hit count. FTS5 index for fast lookup. Confidence increases with repeated hits.
+- **`system_find.go`** — OS-level find-text via `SendInput` Ctrl+F injection. Tracks usage stats (last used timestamp, total count). 5-second timeout guard on the full Ctrl+F workflow.
+- **`find_text_smart.go`** — unified `SmartFindText()` and `SmartFindTextAndClick()` orchestrating the memory → system-find → OCR cascade. New params on `find_text_and_click`: `window_title` (for system-find), `skip_memory`, `skip_system_find`.
+- **`WaitForTextScroll`** — `wait_for_text` now scrolls when text isn't visible (pass `max_scrolls` > 0), using the same cascade.
+
+### VERSION
+
+`0.2.47` → `0.2.48`
+
 ## [0.2.47] - 2026-07-21
 
 ### Fixed

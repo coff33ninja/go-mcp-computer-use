@@ -58,9 +58,9 @@ Auto-generated from `internal/server/server.go`. Total: **146 tools**.
 ## Chained / Composite (4)
 
 - `click_menu_item` — Find a window by title, then click a menu item or button using OCR within that window.
-- `find_text_and_click` — Find text on screen using OCR and click at its location. Optional region x,y,w,h to search within.
+- `find_text_and_click` — Find text on screen using OCR and click at its location. Uses a smart cascade: checks spatial memory (where text was seen before), then system find-text (Ctrl+F in browsers/apps), then OCR with optional scrolling. Use max_scrolls=5 for scrollable pages. Returns error with visible text if not found.
 - `launch_and_wait` — Launch an application and wait for its window to appear.
-- `wait_for_text` — Wait for text to appear on screen. Polls OCR until found or timeout.
+- `wait_for_text` — Wait for text to appear on screen. Polls OCR until found or timeout. Supports scrolling with max_scrolls to find text on scrollable pages.
 
 ## Chain Automation (2)
 

@@ -14,55 +14,115 @@ type FindTextOpts struct {
 	RegionY  *int32
 	RegionW  *int32
 	RegionH  *int32
+	MaxScrolls    int32
+	ScrollClicks  int32
+	ScrollDown    bool
+	WindowTitle   string
+	SkipMemory    bool
+	SkipSystemFind bool
 }
 
 func FindTextAndClick(opts FindTextOpts) (clickX, clickY int32, err error) {
 	if opts.Text == "" {
 		return 0, 0, fmt.Errorf("find_text_and_click: empty text")
 	}
-	var result *OCRResult
 
-	if opts.RegionW != nil && opts.RegionH != nil {
-		x := int32(0)
-		y := int32(0)
-		if opts.RegionX != nil { x = *opts.RegionX }
-		if opts.RegionY != nil { y = *opts.RegionY }
-		w, h := *opts.RegionW, *opts.RegionH
-		if w < 300 || h < 300 {
-			if info, cerr := GetActiveWindowInfo(); cerr == nil && info.Handle != 0 {
-				result, err = OCRProportionalWindowRegion(info.Handle, 0.05, 0.05, 0.95, 0.95, opts.Language)
-				if err == nil {
-					goto search
-				}
+	maxScrolls := opts.MaxScrolls
+	if maxScrolls < 0 {
+		maxScrolls = 0
+	}
+	scrollClicks := opts.ScrollClicks
+	if scrollClicks == 0 {
+		scrollClicks = 5
+	}
+
+	windowTitle := opts.WindowTitle
+	if windowTitle == "" {
+		if info, cerr := GetActiveWindowInfo(); cerr == nil {
+			windowTitle = info.Title
+		}
+	}
+
+	if !opts.SkipMemory {
+		if loc := FindTextLocation(opts.Text, windowTitle); loc != nil {
+			cx, cy := loc.X+loc.W/2, loc.Y+loc.H/2
+			if clickErr := Click(ClickInput{X: cx, Y: cy, Button: "left", Clicks: 1}); clickErr == nil {
+				return cx, cy, nil
 			}
 		}
-		result, err = OCRRegion(x, y, w, h, opts.Language)
-	} else {
-		result, err = OCRScreen(opts.Language)
+		if loc := FindTextLocationAny(opts.Text); loc != nil {
+			cx, cy := loc.X+loc.W/2, loc.Y+loc.H/2
+			if clickErr := Click(ClickInput{X: cx, Y: cy, Button: "left", Clicks: 1}); clickErr == nil {
+				return cx, cy, nil
+			}
+		}
 	}
-	if err != nil {
-		return 0, 0, fmt.Errorf("find_text_and_click ocr: %w", err)
-	}
-search:
 
-	lowerText := strings.ToLower(opts.Text)
-	for _, word := range result.Words {
-		if strings.Contains(strings.ToLower(word.Text), lowerText) {
-			cx := int32(word.X + word.W/2)
-			cy := int32(word.Y + word.H/2)
+	if !opts.SkipSystemFind && windowTitle != "" {
+		if found, fx, fy, sysErr := SystemFindTextAndClick(opts.Text, windowTitle); sysErr == nil && found {
+			StoreTextLocation(opts.Text, windowTitle, fx, fy, 10, 10)
+			return fx, fy, nil
+		}
+	}
+
+	doSearch := func() (*OCRResult, error) {
+		if opts.RegionW != nil && opts.RegionH != nil {
+			x := int32(0)
+			y := int32(0)
+			if opts.RegionX != nil { x = *opts.RegionX }
+			if opts.RegionY != nil { y = *opts.RegionY }
+			w, h := *opts.RegionW, *opts.RegionH
+			if w < 300 || h < 300 {
+				if info, cerr := GetActiveWindowInfo(); cerr == nil && info.Handle != 0 {
+					r, e := OCRProportionalWindowRegion(info.Handle, 0.05, 0.05, 0.95, 0.95, opts.Language)
+					if e == nil {
+						return r, nil
+					}
+				}
+			}
+			return OCRRegion(x, y, w, h, opts.Language)
+		}
+		return OCRScreen(opts.Language)
+	}
+
+	findInResult := func(result *OCRResult) (int32, int32, bool) {
+		lowerText := strings.ToLower(opts.Text)
+		for _, word := range result.Words {
+			if strings.Contains(strings.ToLower(word.Text), lowerText) {
+				return int32(word.X + word.W/2), int32(word.Y + word.H/2), true
+			}
+		}
+		for _, line := range result.Lines {
+			if strings.Contains(strings.ToLower(line.Text), lowerText) {
+				return int32(line.X + line.W/2), int32(line.Y + line.H/2), true
+			}
+		}
+		return 0, 0, false
+	}
+
+	var lastResult *OCRResult
+	for attempt := int32(0); attempt <= maxScrolls; attempt++ {
+		if attempt > 0 {
+			scrollDir := scrollClicks
+			if !opts.ScrollDown {
+				scrollDir = -scrollClicks
+			}
+			Scroll(scrollDir, false)
+			Wait(300)
+		}
+		result, ocrErr := doSearch()
+		if ocrErr != nil {
+			return 0, 0, fmt.Errorf("find_text_and_click ocr: %w", ocrErr)
+		}
+		lastResult = result
+		if cx, cy, found := findInResult(result); found {
+			StoreTextLocation(opts.Text, windowTitle, cx, cy, 10, 10)
 			return cx, cy, Click(ClickInput{X: cx, Y: cy, Button: "left", Clicks: 1})
 		}
 	}
-	for _, line := range result.Lines {
-		if strings.Contains(strings.ToLower(line.Text), lowerText) {
-			cx := int32(line.X + line.W/2)
-			cy := int32(line.Y + line.H/2)
-			return cx, cy, Click(ClickInput{X: cx, Y: cy, Button: "left", Clicks: 1})
-		}
-	}
-	// Enrich error with visible text so the AI can see what IS on screen
-	visible := make([]string, 0, min(len(result.Lines), 15))
-	for _, line := range result.Lines {
+
+	visible := make([]string, 0, min(len(lastResult.Lines), 15))
+	for _, line := range lastResult.Lines {
 		t := strings.TrimSpace(line.Text)
 		if t != "" {
 			visible = append(visible, t)
@@ -72,9 +132,9 @@ search:
 		}
 	}
 	if len(visible) > 0 {
-		return 0, 0, fmt.Errorf("find_text_and_click: text %q not found on screen. Visible text: %q", opts.Text, strings.Join(visible, " | "))
+		return 0, 0, fmt.Errorf("find_text_and_click: text %q not found after %d scroll attempts. Visible text: %q", opts.Text, maxScrolls, strings.Join(visible, " | "))
 	}
-	return 0, 0, fmt.Errorf("find_text_and_click: text %q not found on screen (no text detected via OCR)", opts.Text)
+	return 0, 0, fmt.Errorf("find_text_and_click: text %q not found after %d scroll attempts (no text detected via OCR)", opts.Text, maxScrolls)
 }
 
 func TypeAndSubmit(text string) error {
@@ -162,19 +222,30 @@ func Hover(x, y int32) (err error) {
 }
 
 func WaitForText(text string, timeoutMs int32, language string) (*OCRResult, error) {
+	return WaitForTextScroll(text, timeoutMs, language, 0, 5, true)
+}
+
+func WaitForTextScroll(text string, timeoutMs int32, language string, maxScrolls, scrollClicks int32, scrollDown bool) (*OCRResult, error) {
 	if text == "" {
 		return nil, fmt.Errorf("wait_for_text: empty text")
 	}
 	if timeoutMs <= 0 {
 		timeoutMs = 10000
 	}
+	if maxScrolls < 0 {
+		maxScrolls = 0
+	}
+	if scrollClicks == 0 {
+		scrollClicks = 5
+	}
 	deadline := time.Now().Add(time.Duration(timeoutMs) * time.Millisecond)
+	lowerText := strings.ToLower(text)
+	scrollAttempts := int32(0)
 	for time.Now().Before(deadline) {
 		result, err := OCRScreen(language)
 		if err != nil {
 			return nil, fmt.Errorf("wait_for_text ocr: %w", err)
 		}
-		lowerText := strings.ToLower(text)
 		for _, word := range result.Words {
 			if strings.Contains(strings.ToLower(word.Text), lowerText) {
 				return result, nil
@@ -185,9 +256,19 @@ func WaitForText(text string, timeoutMs int32, language string) (*OCRResult, err
 				return result, nil
 			}
 		}
-		Wait(500)
+		if scrollAttempts < maxScrolls {
+			scrollDir := scrollClicks
+			if !scrollDown {
+				scrollDir = -scrollClicks
+			}
+			Scroll(scrollDir, false)
+			scrollAttempts++
+			Wait(300)
+		} else {
+			Wait(500)
+		}
 	}
-	return nil, fmt.Errorf("wait_for_text: text %q not found within %dms", text, timeoutMs)
+	return nil, fmt.Errorf("wait_for_text: text %q not found within %dms (scrolled %d times)", text, timeoutMs, scrollAttempts)
 }
 
 func SelectAllAndType(text string) error {
@@ -264,4 +345,43 @@ func FocusWindowByTitle(title string) error {
 		return fmt.Errorf("window not found: %s", title)
 	}
 	return focusAndActivateWindow(hwnd)
+}
+
+type ScrollSearchOpts struct {
+	MaxScrolls   int32
+	ScrollClicks int32
+	ScrollDown   bool
+	Language     string
+}
+
+func ScrollUntilFound(opts ScrollSearchOpts, searchFn func(*OCRResult) bool) (*OCRResult, error) {
+	maxScrolls := opts.MaxScrolls
+	if maxScrolls <= 0 {
+		maxScrolls = 0
+	}
+	scrollClicks := opts.ScrollClicks
+	if scrollClicks == 0 {
+		scrollClicks = 5
+	}
+
+	var lastResult *OCRResult
+	for attempt := int32(0); attempt <= maxScrolls; attempt++ {
+		if attempt > 0 {
+			scrollDir := scrollClicks
+			if !opts.ScrollDown {
+				scrollDir = -scrollClicks
+			}
+			Scroll(scrollDir, false)
+			Wait(300)
+		}
+		result, err := OCRScreen(opts.Language)
+		if err != nil {
+			return nil, fmt.Errorf("scroll_search ocr: %w", err)
+		}
+		lastResult = result
+		if searchFn(result) {
+			return result, nil
+		}
+	}
+	return lastResult, nil
 }

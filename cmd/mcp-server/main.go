@@ -68,6 +68,13 @@ func runInit() {
 		fmt.Println("OK")
 	}
 
+	fmt.Print("[*] Initializing text location memory... ")
+	if err := actions.InitTextLocationStore(); err != nil {
+		fmt.Printf("FAILED: %v\n", err)
+	} else {
+		fmt.Println("OK")
+	}
+
 	// Download models & ONNX Runtime DLL first (network needed)
 	fmt.Println("[*] Checking model downloads...")
 	dlResult, dlErr := actions.ONNXDownload()

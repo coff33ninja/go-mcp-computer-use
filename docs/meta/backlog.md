@@ -669,7 +669,7 @@
 | `fill_form` — map field labels→values | form filling |
 | `drag_and_drop_file` — drag file from Explorer | file operation |
 | `download_and_open` — download URL then open | remote file workflow |
-| `scroll_until_text_visible` — scroll + OCR poll | infinite scroll |
+| ~~`scroll_until_text_visible` — scroll + OCR poll~~ | ~~infinite scroll~~ | **Done** — built into `find_text_and_click` and `wait_for_text` via `max_scrolls`/`scroll_clicks`/`scroll_down` params |
 | `click_all_matching_text` — click every occurrence | bulk dismissals |
 | `dismiss_all_notifications` — find+close | cleanup |
 | `type_password` — type from env var | secure input |
