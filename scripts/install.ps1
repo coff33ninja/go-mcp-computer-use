@@ -94,6 +94,12 @@ try {
 # Clean up source
 Remove-Item -Recurse -Force $srcDir -ErrorAction SilentlyContinue
 
+# Copy launcher
+$launchSrc = "$srcDir\launch.ps1"
+if (Test-Path -LiteralPath $launchSrc) {
+    Copy-Item $launchSrc "$InstallDir\launch.ps1" -Force
+}
+
 # Create default config
 $configDir = "$env:USERPROFILE\.config\go-mcp-computer-use"
 $configPath = "$configDir\config.json"
@@ -112,10 +118,11 @@ if (-not (Test-Path -LiteralPath $configPath)) {
 
 Write-Host ""
 Write-Host "Installed: $exePath" -ForegroundColor Green
+Write-Host "Launcher:  $InstallDir\launch.ps1" -ForegroundColor Green
 Write-Host "Config:    $configPath" -ForegroundColor Green
 Write-Host ""
 Write-Host "Add to opencode.json:" -ForegroundColor Cyan
-Write-Host "  `"command`": `"$exePath`"" -ForegroundColor Gray
+Write-Host "  `"command`": `"powershell`", `"args`": [""-ExecutionPolicy"", ""Bypass"", ""-File"", ""$InstallDir\launch.ps1""]" -ForegroundColor Gray
 if ($UseZig) {
     Write-Host ""
     Write-Host "Cross-compile for ARM64 Windows:" -ForegroundColor Cyan

@@ -4,6 +4,8 @@ How to load `go-mcp-computer-use` as an MCP server in various AI agents.
 
 All config examples below use `C:\Users\YourUsername\Downloads\mcp-server.exe` as a placeholder — **replace the path with the actual location of your `mcp-server.exe`**.
 
+> **Gorgonia env var (go1.26+):** The transformer engine requires `ASSUME_NO_MOVING_GC_UNSAFE_RISK_IT_WITH=go1.26`. Add it to the `env` field in your MCP config (shown in the common config block below). Alternatively, use `launch.ps1` which sets it automatically.
+
 ## Quick Start — Common Config Block
 
 All stdio-based clients use the same JSON shape:
@@ -13,7 +15,9 @@ All stdio-based clients use the same JSON shape:
   "mcpServers": {
     "computer-use": {
       "command": "C:\\Users\\YourUsername\\Downloads\\mcp-server.exe",
-      "env": {}
+      "env": {
+        "ASSUME_NO_MOVING_GC_UNSAFE_RISK_IT_WITH": "go1.26"
+      }
     }
   }
 }
@@ -48,7 +52,10 @@ Some clients use different top-level keys. The table below shows them.
 {
   "mcpServers": {
     "computer-use": {
-      "command": "C:\\Users\\YourUsername\\Downloads\\mcp-server.exe"
+      "command": "C:\\Users\\YourUsername\\Downloads\\mcp-server.exe",
+      "env": {
+        "ASSUME_NO_MOVING_GC_UNSAFE_RISK_IT_WITH": "go1.26"
+      }
     }
   }
 }
@@ -75,7 +82,9 @@ Some clients use different top-level keys. The table below shows them.
     "computer-use": {
       "type": "stdio",
       "command": "C:\\Users\\YourUsername\\Downloads\\mcp-server.exe",
-      "env": {}
+      "env": {
+        "ASSUME_NO_MOVING_GC_UNSAFE_RISK_IT_WITH": "go1.26"
+      }
     }
   }
 }
@@ -99,7 +108,9 @@ Some clients use different top-level keys. The table below shows them.
   "mcpServers": {
     "computer-use": {
       "command": "C:\\Users\\YourUsername\\Downloads\\mcp-server.exe",
-      "env": {}
+      "env": {
+        "ASSUME_NO_MOVING_GC_UNSAFE_RISK_IT_WITH": "go1.26"
+      }
     }
   }
 }
@@ -124,7 +135,9 @@ Some clients use different top-level keys. The table below shows them.
   "mcpServers": {
     "computer-use": {
       "command": "C:\\Users\\YourUsername\\Downloads\\mcp-server.exe",
-      "env": {}
+      "env": {
+        "ASSUME_NO_MOVING_GC_UNSAFE_RISK_IT_WITH": "go1.26"
+      }
     }
   }
 }
@@ -149,7 +162,9 @@ Some clients use different top-level keys. The table below shows them.
   "servers": {
     "computer-use": {
       "command": "C:\\Users\\YourUsername\\Downloads\\mcp-server.exe",
-      "env": {}
+      "env": {
+        "ASSUME_NO_MOVING_GC_UNSAFE_RISK_IT_WITH": "go1.26"
+      }
     }
   }
 }
@@ -161,7 +176,9 @@ Some clients use different top-level keys. The table below shows them.
   "github.copilot.chat.mcp.servers": {
     "computer-use": {
       "command": "C:\\Users\\YourUsername\\Downloads\\mcp-server.exe",
-      "env": {}
+      "env": {
+        "ASSUME_NO_MOVING_GC_UNSAFE_RISK_IT_WITH": "go1.26"
+      }
     }
   }
 }
@@ -188,7 +205,9 @@ Some clients use different top-level keys. The table below shows them.
       "name": "computer-use",
       "command": "C:\\Users\\YourUsername\\Downloads\\mcp-server.exe",
       "args": [],
-      "env": {}
+      "env": {
+        "ASSUME_NO_MOVING_GC_UNSAFE_RISK_IT_WITH": "go1.26"
+      }
     }
   ]
 }
@@ -212,6 +231,9 @@ Some clients use different top-level keys. The table below shows them.
   "mcpServers": {
     "computer-use": {
       "command": "C:\\Users\\YourUsername\\Downloads\\mcp-server.exe",
+      "env": {
+        "ASSUME_NO_MOVING_GC_UNSAFE_RISK_IT_WITH": "go1.26"
+      },
       "disabled": false,
       "autoApprove": []
     }
@@ -237,7 +259,9 @@ Some clients use different top-level keys. The table below shows them.
   "mcpServers": {
     "computer-use": {
       "command": "C:\\Users\\YourUsername\\Downloads\\mcp-server.exe",
-      "env": {}
+      "env": {
+        "ASSUME_NO_MOVING_GC_UNSAFE_RISK_IT_WITH": "go1.26"
+      }
     }
   }
 }
@@ -316,7 +340,9 @@ agent = Agent(
       "type": "local",
       "command": ["C:\\Users\\YourUsername\\Downloads\\mcp-server.exe"],
       "enabled": true,
-      "environment": {}
+      "environment": {
+        "ASSUME_NO_MOVING_GC_UNSAFE_RISK_IT_WITH": "go1.26"
+      }
     }
   }
 }
@@ -352,7 +378,9 @@ agent = Agent(
   "mcpServers": {
     "computer-use": {
       "command": "C:\\Users\\YourUsername\\Downloads\\mcp-server.exe",
-      "env": {}
+      "env": {
+        "ASSUME_NO_MOVING_GC_UNSAFE_RISK_IT_WITH": "go1.26"
+      }
     }
   }
 }
@@ -379,6 +407,9 @@ agent = Agent(
   "mcpServers": {
     "computer-use": {
       "command": "C:\\Users\\YourUsername\\Downloads\\mcp-server.exe",
+      "env": {
+        "ASSUME_NO_MOVING_GC_UNSAFE_RISK_IT_WITH": "go1.26"
+      },
       "disabled": false,
       "alwaysAllow": []
     }
@@ -423,7 +454,9 @@ This is a role reversal — Android Studio (and all JetBrains IDEs v2025.2+) can
       "source": "custom",
       "command": "C:\\Users\\YourUsername\\Downloads\\mcp-server.exe",
       "args": [],
-      "env": {}
+      "env": {
+        "ASSUME_NO_MOVING_GC_UNSAFE_RISK_IT_WITH": "go1.26"
+      }
     }
   }
 }
@@ -451,7 +484,9 @@ This is a role reversal — Android Studio (and all JetBrains IDEs v2025.2+) can
   "mcpServers": {
     "computer-use": {
       "command": "C:\\Users\\YourUsername\\Downloads\\mcp-server.exe",
-      "env": {}
+      "env": {
+        "ASSUME_NO_MOVING_GC_UNSAFE_RISK_IT_WITH": "go1.26"
+      }
     }
   }
 }
@@ -512,10 +547,11 @@ Requires two components: the **Local REST API** community plugin (inside Obsidia
 
 ```elisp
 (setq mcp-hub-servers
-      '(("computer-use" . (:command "C:\\Users\\YourUsername\\Downloads\\mcp-server.exe"))))
+      '(("computer-use" . (:command "C:\\Users\\YourUsername\\Downloads\\mcp-server.exe"
+                           :env (:ASSUME_NO_MOVING_GC_UNSAFE_RISK_IT_WITH "go1.26")))))
 ```
 
-> The `:env` plist key uses keyword-prefixed symbols: `(:API_KEY "value")`, not a JSON object.
+> The `:env` plist key uses keyword-prefixed symbols: `(:KEY "value")`, not a JSON object.
 
 ---
 
@@ -537,7 +573,9 @@ Requires two components: the **Local REST API** community plugin (inside Obsidia
     "computer-use": {
       "command": "C:\\Users\\YourUsername\\Downloads\\mcp-server.exe",
       "args": [],
-      "env": {},
+      "env": {
+        "ASSUME_NO_MOVING_GC_UNSAFE_RISK_IT_WITH": "go1.26"
+      },
       "disabledTools": []
     }
   }

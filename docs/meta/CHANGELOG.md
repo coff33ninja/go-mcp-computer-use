@@ -7,6 +7,7 @@
 - **Go-native ML prediction engine** — real transformer neural network (Gorgonia) replaces statistical word-counting for UI automation predictions. 9-package `ml/` sub-module: transformer (FFN + residuals + Adam optimizer), tokenizer, spatial encoder (7-feature DPI-aware), SQLite dataloader, training pipeline, softmax/sigmoid inference. Model trains from `training_pairs` SQLite table on first run, persists to `model.gob`, loads on restart. Falls back to existing statistical engine when ML model is unavailable.
 - **`ml_bridge.go`** — integration layer wiring ML transformer into `AdaptiveEngine`. `PredictActions()` tries ML inference first, falls back to statistical engine. `EnsureAdaptive()` loads or trains model on startup.
 - **Self-improving per-machine models** — each installation builds its own personalized model from local usage history. No pre-trained model shipped.
+- **`launch.ps1`** — launcher wrapper that sets `ASSUME_NO_MOVING_GC_UNSAFE_RISK_IT_WITH=go1.26` automatically. Use this or add the env var to your MCP client config's `env` field (all examples updated).
 
 ### VERSION
 

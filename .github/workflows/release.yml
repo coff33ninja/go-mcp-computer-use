@@ -93,5 +93,6 @@ jobs:
           files: |
             mcp-server.exe
             mcp-server.exe.sha256
+            launch.ps1
           fail_on_unmatched_files: false
           generate_release_notes: false

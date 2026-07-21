@@ -74,10 +74,13 @@ The Go-native transformer engine (`ml/` module) trains from your local `training
 {
   "mcpServers": {
     "computer-use": {
-      "command": "C:\\tools\\mcp-server.exe"
+      "command": "C:\\tools\\mcp-server.exe",
+      "env": {
+        "ASSUME_NO_MOVING_GC_UNSAFE_RISK_IT_WITH": "go1.26"
+      }
     }
   }
 }
 ```
 
-See [`reference/mcp-client-configs.md`](reference/mcp-client-configs.md) for per-agent config examples.
+The `env` field sets `ASSUME_NO_MOVING_GC_UNSAFE_RISK_IT_WITH=go1.26` for the Gorgonia transformer engine (required on Go 1.26+). See [`reference/mcp-client-configs.md`](reference/mcp-client-configs.md) for per-agent config examples.
