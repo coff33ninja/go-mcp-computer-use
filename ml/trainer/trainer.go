@@ -64,7 +64,7 @@ func (t *Trainer) TrainEpoch(loader *dataloader.SQLiteLoader) (*EpochResult, err
 
 	// compute initial loss
 	tokens, coords, targets := t.prepareBatch(samples[:1])
-	logits, err := t.model.Forward(tokens, coords)
+	logits, err := t.model.Forward(tokens, coords, nil)
 	if err != nil {
 		return nil, fmt.Errorf("trainer: initial forward: %w", err)
 	}
@@ -73,7 +73,7 @@ func (t *Trainer) TrainEpoch(loader *dataloader.SQLiteLoader) (*EpochResult, err
 	// train on each sample
 	for i, s := range samples {
 		tokens, coords, targets := t.prepareBatch([]dataloader.Sample{s})
-		_, err := t.model.Forward(tokens, coords)
+		_, err := t.model.Forward(tokens, coords, nil)
 		if err != nil {
 			return nil, fmt.Errorf("trainer: forward %d: %w", i, err)
 		}
@@ -84,7 +84,7 @@ func (t *Trainer) TrainEpoch(loader *dataloader.SQLiteLoader) (*EpochResult, err
 
 	// compute final loss
 	tokens, coords, targets = t.prepareBatch(samples[:1])
-	logits, err = t.model.Forward(tokens, coords)
+	logits, err = t.model.Forward(tokens, coords, nil)
 	if err != nil {
 		return nil, fmt.Errorf("trainer: final forward: %w", err)
 	}

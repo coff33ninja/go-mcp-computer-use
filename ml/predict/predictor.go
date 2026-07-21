@@ -77,7 +77,16 @@ func (e *Engine) Predict(ocrText string, topK int) ([]Prediction, error) {
 func (e *Engine) PredictWithContext(ocrText string, history []string, topK int) ([]Prediction, error) {
 	tokens := e.tokenizer.Encode(ocrText, e.maxLen)
 	coordFeatures := make([]float64, e.encoder.FeatureDimValue())
-	logits, err := e.model.Forward([][]int{tokens}, [][]float64{coordFeatures})
+
+	// encode history actions into token sequences
+	var historyTokens [][]int
+	if len(history) > 0 {
+		for _, action := range history {
+			historyTokens = append(historyTokens, e.tokenizer.Encode(action, e.maxLen))
+		}
+	}
+
+	logits, err := e.model.Forward([][]int{tokens}, [][]float64{coordFeatures}, historyTokens)
 	if err != nil {
 		return nil, err
 	}

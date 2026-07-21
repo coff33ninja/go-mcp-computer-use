@@ -3,6 +3,7 @@ package transformer
 import (
 	"encoding/gob"
 	"fmt"
+	"math"
 	"math/rand"
 	"os"
 
@@ -19,6 +20,7 @@ type Config struct {
 	FFNDim     int
 	CoordDim   int
 	OutputDim  int
+	HistoryLen int // number of recent actions for sequence context (0 = disabled)
 }
 
 func DefaultConfig() Config {
@@ -31,11 +33,46 @@ func DefaultConfig() Config {
 		FFNDim:     512,
 		CoordDim:   7,
 		OutputDim:  50,
+		HistoryLen: 5,
+	}
+}
+
+// ModelSize presets for different model capacities.
+type ModelSize string
+
+const (
+	SizeSmall  ModelSize = "small"  // ~14K params — fast, low memory
+	SizeMedium ModelSize = "medium" // ~80K params — balanced
+	SizeLarge  ModelSize = "large"  // ~300K params — high accuracy
+)
+
+// ConfigForSize returns a Config pre-filled for the given model size.
+// CoordDim and OutputDim must be set separately based on the task.
+func ConfigForSize(size ModelSize, coordDim, outputDim int) Config {
+	switch size {
+	case SizeSmall:
+		return Config{
+			VocabSize: 2000, MaxLen: 128,
+			EmbedDim: 64, NumHeads: 2, NumLayers: 2, FFNDim: 128,
+			CoordDim: coordDim, OutputDim: outputDim, HistoryLen: 5,
+		}
+	case SizeLarge:
+		return Config{
+			VocabSize: 2000, MaxLen: 128,
+			EmbedDim: 128, NumHeads: 4, NumLayers: 4, FFNDim: 256,
+			CoordDim: coordDim, OutputDim: outputDim, HistoryLen: 5,
+		}
+	default: // medium
+		return Config{
+			VocabSize: 2000, MaxLen: 128,
+			EmbedDim: 96, NumHeads: 3, NumLayers: 3, FFNDim: 192,
+			CoordDim: coordDim, OutputDim: outputDim, HistoryLen: 5,
+		}
 	}
 }
 
 type Model interface {
-	Forward(tokens [][]int, coords [][]float64) ([][]float64, error)
+	Forward(tokens [][]int, coords [][]float64, history [][]int) ([][]float64, error)
 	Backward(loss float64, lr float64) error
 	BackwardWithTarget(target []float64, lr float64) error
 	Parameters() []float64
@@ -69,6 +106,7 @@ type transformerModel struct {
 
 	embInput *gorgonia.Node // [1, embedDim] float64
 	coordIn  *gorgonia.Node // [1, coordDim] float64
+	historyIn *gorgonia.Node // [1, historyLen * embedDim] float64 (flattened history embeddings)
 	targetIn *gorgonia.Node // [1, outputDim] float64
 
 	logits *gorgonia.Node
@@ -77,8 +115,10 @@ type transformerModel struct {
 	// embedding table (not in graph — looked up in Go)
 	embedTable *tensor.Dense // [vocabSize, embedDim]
 
-	coordProjW *gorgonia.Node
-	coordProjB *gorgonia.Node
+	coordProjW  *gorgonia.Node
+	coordProjB  *gorgonia.Node
+	historyProjW *gorgonia.Node
+	historyProjB *gorgonia.Node
 
 	layers []layerDef
 	headW  *gorgonia.Node
@@ -106,13 +146,23 @@ func newRealModel(cfg Config) (*transformerModel, error) {
 	m.coordIn = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(1, cfg.CoordDim), gorgonia.WithName("coordIn"))
 	m.targetIn = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(1, cfg.OutputDim), gorgonia.WithName("targetIn"))
 
+	// history input: flattened history embeddings [1, historyLen * embedDim]
+	histDim := cfg.HistoryLen * d
+	if histDim > 0 {
+		m.historyIn = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(1, histDim), gorgonia.WithName("historyIn"))
+		m.historyProjW = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(histDim, d),
+			gorgonia.WithName("historyProjW"), gorgonia.WithInit(gorgonia.GlorotU(1.0)))
+		m.historyProjB = gorgonia.NewVector(g, tensor.Float64, gorgonia.WithShape(d),
+			gorgonia.WithName("historyProjB"), gorgonia.WithInit(gorgonia.Zeroes()))
+	}
+
 	// coord projection
 	m.coordProjW = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(cfg.CoordDim, d),
 		gorgonia.WithName("coordProjW"), gorgonia.WithInit(gorgonia.GlorotU(1.0)))
 	m.coordProjB = gorgonia.NewVector(g, tensor.Float64, gorgonia.WithShape(d),
 		gorgonia.WithName("coordProjB"), gorgonia.WithInit(gorgonia.Zeroes()))
 
-	// combine: embInput + coords @ W + b
+	// combine: embInput + coordProj [+ historyProj]
 	coordProj, err := gorgonia.Mul(m.coordIn, m.coordProjW)
 	if err != nil {
 		return nil, err
@@ -124,6 +174,22 @@ func newRealModel(cfg Config) (*transformerModel, error) {
 	x, err := gorgonia.Add(m.embInput, coordProj)
 	if err != nil {
 		return nil, err
+	}
+
+	// add history mixing if enabled
+	if cfg.HistoryLen > 0 {
+		histProj, err := gorgonia.Mul(m.historyIn, m.historyProjW)
+		if err != nil {
+			return nil, err
+		}
+		histProj, err = gorgonia.Add(histProj, m.historyProjB)
+		if err != nil {
+			return nil, err
+		}
+		x, err = gorgonia.Add(x, histProj)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// layers
@@ -215,6 +281,10 @@ func newRealModel(cfg Config) (*transformerModel, error) {
 	}
 	addVG(m.coordProjW)
 	addVG(m.coordProjB)
+	if m.cfg.HistoryLen > 0 {
+		addVG(m.historyProjW)
+		addVG(m.historyProjB)
+	}
 	addVG(m.headW)
 	addVG(m.headB)
 	for i := range m.layers {
@@ -251,7 +321,7 @@ func (m *transformerModel) lookupEmbed(tokens []int) []float64 {
 	return emb
 }
 
-func (m *transformerModel) Forward(tokens [][]int, coords [][]float64) ([][]float64, error) {
+func (m *transformerModel) Forward(tokens [][]int, coords [][]float64, history [][]int) ([][]float64, error) {
 	if len(tokens) != len(coords) {
 		return nil, fmt.Errorf("transformer: batch size mismatch: %d vs %d", len(tokens), len(coords))
 	}
@@ -273,6 +343,23 @@ func (m *transformerModel) Forward(tokens [][]int, coords [][]float64) ([][]floa
 	coordT := tensor.New(tensor.WithShape(1, m.cfg.CoordDim), tensor.WithBacking(cb))
 	if err := gorgonia.Let(m.coordIn, coordT); err != nil {
 		return nil, err
+	}
+
+	// history embedding: average each action's token embedding, flatten
+	if m.cfg.HistoryLen > 0 && m.historyIn != nil {
+		histEmb := make([]float64, m.cfg.HistoryLen*m.cfg.EmbedDim)
+		if len(history) > 0 {
+			d := m.cfg.EmbedDim
+			for i := 0; i < m.cfg.HistoryLen && i < len(history); i++ {
+				actionEmb := m.lookupEmbed(history[i])
+				base := i * d
+				copy(histEmb[base:base+d], actionEmb)
+			}
+		}
+		histT := tensor.New(tensor.WithShape(1, m.cfg.HistoryLen*m.cfg.EmbedDim), tensor.WithBacking(histEmb))
+		if err := gorgonia.Let(m.historyIn, histT); err != nil {
+			return nil, err
+		}
 	}
 
 	targetT := tensor.New(tensor.WithShape(1, m.cfg.OutputDim), tensor.WithBacking(make([]float64, m.cfg.OutputDim)))
@@ -317,7 +404,11 @@ func (m *transformerModel) BackwardWithTarget(target []float64, lr float64) erro
 
 func (m *transformerModel) allLearnableNodes() []*gorgonia.Node {
 	var nodes []*gorgonia.Node
-	nodes = append(nodes, m.coordProjW, m.coordProjB, m.headW, m.headB)
+	nodes = append(nodes, m.coordProjW, m.coordProjB)
+	if m.cfg.HistoryLen > 0 {
+		nodes = append(nodes, m.historyProjW, m.historyProjB)
+	}
+	nodes = append(nodes, m.headW, m.headB)
 	for i := range m.layers {
 		nodes = append(nodes, m.layers[i].wo, m.layers[i].ff1W, m.layers[i].ff1B, m.layers[i].ff2W, m.layers[i].ff2B)
 	}
@@ -398,6 +489,74 @@ func (m *transformerModel) Load(path string) error {
 		return err
 	}
 	return m.LoadParameters(params)
+}
+
+// ParamCount returns the total number of trainable parameters for a given config.
+func ParamCount(cfg Config) int {
+	d := cfg.EmbedDim
+	count := 0
+	// embedding table
+	count += cfg.VocabSize * d
+	// coord projection
+	count += cfg.CoordDim*d + d
+	// history projection
+	if cfg.HistoryLen > 0 {
+		histDim := cfg.HistoryLen * d
+		count += histDim*d + d
+	}
+	// transformer layers
+	for i := 0; i < cfg.NumLayers; i++ {
+		// self-attention: Q, K, V, O
+		count += 4 * (d*d + d)
+		// FFN
+		count += d*cfg.FFNDim + cfg.FFNDim + cfg.FFNDim*d + d
+		// layer norm (2 per layer)
+		count += 2 * (d + d)
+	}
+	// output head
+	count += d*cfg.OutputDim + cfg.OutputDim
+	return count
+}
+
+// DebugInfo contains diagnostic information from a forward pass.
+type DebugInfo struct {
+	Logits       []float64 `json:"logits"`        // raw output logits
+	ToolProbs    []float64 `json:"tool_probs"`    // softmax over tool logits
+	EmbedNorm    float64   `json:"embed_norm"`    // L2 norm of input embedding
+	OutputNorm   float64   `json:"output_norm"`   // L2 norm of output logits
+	ParamCount   int       `json:"param_count"`   // total trainable parameters
+}
+
+// DebugForward runs a forward pass and returns diagnostic info.
+func DebugForward(m Model, tokens []int, coords []float64) (*DebugInfo, error) {
+	logits, err := m.Forward([][]int{tokens}, [][]float64{coords}, nil)
+	if err != nil {
+		return nil, err
+	}
+	if len(logits) == 0 || len(logits[0]) == 0 {
+		return &DebugInfo{}, nil
+	}
+
+	out := logits[0]
+	toolProbs := Softmax(out)
+
+	// compute norms
+	var embedNorm, outNorm float64
+	for _, v := range coords {
+		embedNorm += v * v
+	}
+	for _, v := range out {
+		outNorm += v * v
+	}
+
+	cfg := Config{} // can't extract from interface, but that's ok
+	return &DebugInfo{
+		Logits:     out,
+		ToolProbs:  toolProbs,
+		EmbedNorm:  math.Sqrt(embedNorm),
+		OutputNorm: math.Sqrt(outNorm),
+		ParamCount: ParamCount(cfg),
+	}, nil
 }
 
 func init() {

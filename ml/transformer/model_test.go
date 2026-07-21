@@ -46,7 +46,7 @@ func TestForward_OutputShape(t *testing.T) {
 		{1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 	}
 	coords := [][]float64{make([]float64, cfg.CoordDim)}
-	logits, err := model.Forward(tokens, coords)
+	logits, err := model.Forward(tokens, coords, nil)
 	if err != nil {
 		t.Fatalf("Forward failed: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestForward_AllZeros_ProducesValidOutput(t *testing.T) {
 	tokens[0] = make([]int, cfg.MaxLen)
 	coords := make([][]float64, 1)
 	coords[0] = make([]float64, cfg.CoordDim)
-	logits, err := model.Forward(tokens, coords)
+	logits, err := model.Forward(tokens, coords, nil)
 	if err != nil {
 		t.Fatalf("Forward failed: %v", err)
 	}
@@ -90,7 +90,7 @@ func TestBackward_UpdatesWeights(t *testing.T) {
 
 	tokens := [][]int{{1, 2, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}}
 	coords := [][]float64{make([]float64, cfg.CoordDim)}
-	_, err = model.Forward(tokens, coords)
+	_, err = model.Forward(tokens, coords, nil)
 	if err != nil {
 		t.Fatalf("Forward failed: %v", err)
 	}
@@ -185,8 +185,8 @@ func TestForward_BatchConsistency(t *testing.T) {
 	coord := make([]float64, cfg.CoordDim)
 
 	// call forward twice with same input — outputs should match
-	logits1, _ := model.Forward([][]int{tok}, [][]float64{coord})
-	logits2, _ := model.Forward([][]int{tok}, [][]float64{coord})
+	logits1, _ := model.Forward([][]int{tok}, [][]float64{coord}, nil)
+	logits2, _ := model.Forward([][]int{tok}, [][]float64{coord}, nil)
 
 	for i := range logits1[0] {
 		if math.Abs(logits1[0][i]-logits2[0][i]) > 1e-6 {
@@ -223,7 +223,7 @@ func TestForward_MismatchedBatchSize(t *testing.T) {
 	}
 	tokens := [][]int{{1, 2, 3}}
 	coords := [][]float64{make([]float64, cfg.CoordDim), make([]float64, cfg.CoordDim)}
-	_, err = model.Forward(tokens, coords)
+	_, err = model.Forward(tokens, coords, nil)
 	if err == nil {
 		t.Error("expected error for mismatched batch/token length")
 	}

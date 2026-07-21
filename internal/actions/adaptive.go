@@ -152,18 +152,21 @@ type PersistedStat struct {
 }
 
 type AdaptiveEngine struct {
-	timings    map[string]*ToolTiming
-	successes  map[string]*ToolSuccess
-	sequences  []SequenceExample
-	wordToCmds map[string]map[string]*cmdFreq
-	coordIndex map[string]map[string]*coordSample
-	persisted  map[string]*PersistedStat
-	mlEngine   *MLEngine
-	totalCmds  int
-	totalSeqs  int
-	lastTrain  time.Time
-	mu         sync.RWMutex
+	timings       map[string]*ToolTiming
+	successes     map[string]*ToolSuccess
+	sequences     []SequenceExample
+	wordToCmds    map[string]map[string]*cmdFreq
+	coordIndex    map[string]map[string]*coordSample
+	persisted     map[string]*PersistedStat
+	mlEngine      *MLEngine
+	recentActions []string
+	totalCmds     int
+	totalSeqs     int
+	lastTrain     time.Time
+	mu            sync.RWMutex
 }
+
+const maxRecentActions = 10
 
 type cmdFreq struct {
 	success int
@@ -198,6 +201,7 @@ func (e *AdaptiveEngine) Reset() {
 	e.wordToCmds = make(map[string]map[string]*cmdFreq)
 	e.coordIndex = make(map[string]map[string]*coordSample)
 	e.persisted = make(map[string]*PersistedStat)
+	e.recentActions = nil
 	e.totalCmds = 0
 	e.totalSeqs = 0
 	e.lastTrain = time.Time{}
@@ -559,7 +563,8 @@ func (e *AdaptiveEngine) PredictActions(ocrText string, limit int) []PredictedAc
 
 	// try ML predictions first
 	if e.mlEngine != nil && e.mlEngine.IsReady() {
-		if mlPreds := e.mlEngine.Predict(ocrText, limit); len(mlPreds) > 0 {
+		history := e.GetRecentActions(5)
+		if mlPreds := e.mlEngine.Predict(ocrText, limit, history); len(mlPreds) > 0 {
 			return mlPreds
 		}
 	}
@@ -796,7 +801,31 @@ func (e *AdaptiveEngine) RecordCommand(tool, argsJSON string, success bool, dura
 		return
 	}
 	e.RecordResult(tool, float64(durationMs), success)
+	e.RecordAction(tool)
 	LogCommand(tool, argsJSON, success, "", "", durationMs)
+	e.mlEngine.RecordExperience("", tool, success, 0, 0)
+}
+
+// RecordAction appends a tool name to the recent actions ring buffer.
+func (e *AdaptiveEngine) RecordAction(tool string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.recentActions = append(e.recentActions, tool)
+	if len(e.recentActions) > maxRecentActions {
+		e.recentActions = e.recentActions[1:]
+	}
+}
+
+// GetRecentActions returns a copy of the last N action tool names.
+func (e *AdaptiveEngine) GetRecentActions(n int) []string {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	if n <= 0 || n > len(e.recentActions) {
+		n = len(e.recentActions)
+	}
+	out := make([]string, n)
+	copy(out, e.recentActions[len(e.recentActions)-n:])
+	return out
 }
 
 // HydratePersisted loads the durable per-tool stat aggregates from the

@@ -18,7 +18,7 @@ func TestNewMLEngine(t *testing.T) {
 func TestMLEngine_Predict_NotReady(t *testing.T) {
 	dir := t.TempDir()
 	engine := NewMLEngine(dir)
-	preds := engine.Predict("hello world", 5)
+	preds := engine.Predict("hello world", 5, nil)
 	if preds != nil {
 		t.Error("expected nil predictions when not ready")
 	}
@@ -58,7 +58,7 @@ func TestMLEngine_Train_InsufficientData(t *testing.T) {
 func TestMLEngine_Predict_LimitZero(t *testing.T) {
 	dir := t.TempDir()
 	engine := NewMLEngine(dir)
-	preds := engine.Predict("test", 0)
+	preds := engine.Predict("test", 0, nil)
 	if preds != nil {
 		t.Error("expected nil predictions when not ready")
 	}
@@ -70,7 +70,7 @@ func TestMLEngine_ConcurrentPredict(t *testing.T) {
 	done := make(chan bool, 5)
 	for i := 0; i < 5; i++ {
 		go func() {
-			_ = engine.Predict("test text", 3)
+			_ = engine.Predict("test text", 3, nil)
 			done <- true
 		}()
 	}

@@ -13,7 +13,7 @@ func TestRealTransformer_ForwardProducesNonZeroOutput(t *testing.T) {
 	}
 	tokens := [][]int{{1, 2, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}}
 	coords := [][]float64{make([]float64, cfg.CoordDim)}
-	logits, err := m.Forward(tokens, coords)
+	logits, err := m.Forward(tokens, coords, nil)
 	if err != nil {
 		t.Fatalf("Forward failed: %v", err)
 	}
@@ -38,8 +38,8 @@ func TestRealTransformer_DifferentInputsProduceDifferentOutputs(t *testing.T) {
 	tok2 := [][]int{{50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}}
 	coord := [][]float64{make([]float64, cfg.CoordDim)}
 
-	out1, _ := m.Forward(tok1, coord)
-	out2, _ := m.Forward(tok2, coord)
+	out1, _ := m.Forward(tok1, coord, nil)
+	out2, _ := m.Forward(tok2, coord, nil)
 
 	same := true
 	for i := range out1[0] {
@@ -66,12 +66,12 @@ func TestRealTransformer_TrainingReducesLoss(t *testing.T) {
 	target[0] = 1.0 // target one-hot
 
 	// measure initial loss
-	logits, _ := m.Forward(tokens, coords)
+	logits, _ := m.Forward(tokens, coords, nil)
 	initialLoss := mseLoss(logits[0], target)
 
 	// train for several steps
 	for i := 0; i < 20; i++ {
-		logits, err = m.Forward(tokens, coords)
+		logits, err = m.Forward(tokens, coords, nil)
 		if err != nil {
 			t.Fatalf("Forward failed: %v", err)
 		}
@@ -82,7 +82,7 @@ func TestRealTransformer_TrainingReducesLoss(t *testing.T) {
 	}
 
 	// measure final loss
-	logits, _ = m.Forward(tokens, coords)
+	logits, _ = m.Forward(tokens, coords, nil)
 	finalLoss := mseLoss(logits[0], target)
 
 	if finalLoss >= initialLoss {
@@ -120,7 +120,7 @@ func TestRealTransformer_SaveLoadRoundTrip(t *testing.T) {
 	target := make([]float64, cfg.OutputDim)
 	target[0] = 1.0
 	for i := 0; i < 5; i++ {
-		m.Forward(tokens, coords)
+		m.Forward(tokens, coords, nil)
 		m.BackwardWithTarget(target, 0.01)
 	}
 
@@ -139,8 +139,8 @@ func TestRealTransformer_SaveLoadRoundTrip(t *testing.T) {
 	}
 
 	// outputs should match
-	out1, _ := m.Forward(tokens, coords)
-	out2, _ := m2.Forward(tokens, coords)
+	out1, _ := m.Forward(tokens, coords, nil)
+	out2, _ := m2.Forward(tokens, coords, nil)
 	for i := range out1[0] {
 		if math.Abs(out1[0][i]-out2[0][i]) > 1e-6 {
 			t.Errorf("output mismatch at dim %d after Save/Load: %f vs %f", i, out1[0][i], out2[0][i])
