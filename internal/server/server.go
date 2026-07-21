@@ -1802,7 +1802,7 @@ func trainingListSamplesHandler(ctx context.Context, req *mcp.CallToolRequest, a
 		return nil, nil, fmt.Errorf("training_list_samples: %w", err)
 	}
 	if samples == nil {
-		samples = []actions.TrainingSample{}
+		samples = []actions.TrainingSampleMeta{}
 	}
 	return &mcp.CallToolResult{}, map[string]any{"samples": samples}, nil
 }

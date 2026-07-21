@@ -532,13 +532,17 @@ func TrainingCleanupNoise(maxAgeHours int, dryRun bool) (map[string]int, error) 
 		result["dry_run"] = 1
 	}
 
-	if maxAgeHours <= 0 {
-		maxAgeHours = 24
+	var rows *sql.Rows
+	var err error
+	if maxAgeHours > 0 {
+		rows, err = trainDB.Query(`SELECT id, image_path FROM training_samples
+			WHERE signal_level = 0 AND created_at < datetime('now', ?)
+			LIMIT 500`, fmt.Sprintf("-%d hours", maxAgeHours))
+	} else {
+		rows, err = trainDB.Query(`SELECT id, image_path FROM training_samples
+			WHERE signal_level = 0
+			LIMIT 500`)
 	}
-
-	rows, err := trainDB.Query(`SELECT id, image_path FROM training_samples
-		WHERE signal_level = 0 AND created_at < datetime('now', ?)
-		LIMIT 500`, fmt.Sprintf("-%d hours", maxAgeHours))
 	if err != nil {
 		return nil, fmt.Errorf("query noise: %w", err)
 	}
@@ -573,8 +577,8 @@ func TrainingCleanupNoise(maxAgeHours int, dryRun bool) (map[string]int, error) 
 		for _, id := range ids {
 			trainDB.Exec("DELETE FROM training_samples WHERE id = ?", id)
 		}
-		result["deleted"] = len(ids)
 	}
+	result["deleted"] = len(ids)
 
 	return result, nil
 }

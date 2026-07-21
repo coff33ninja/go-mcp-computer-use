@@ -2,6 +2,7 @@ package actions
 
 import (
 	"fmt"
+	"strings"
 	"syscall"
 	"time"
 	"unsafe"
@@ -207,7 +208,25 @@ func GetWindowZOrder(hwnd uintptr) int {
 func FindWindowByTitle(title string) uintptr {
 	t := syscall.StringToUTF16Ptr(title)
 	hwnd, _, _ := findWindowW.Call(0, uintptr(unsafe.Pointer(t)))
-	return hwnd
+	if hwnd != 0 {
+		return hwnd
+	}
+
+	lowerTitle := strings.ToLower(title)
+	var found uintptr
+	enumCallbackOld := enumCallback
+	defer func() { enumCallback = enumCallbackOld }()
+
+	enumCallback = func(h uintptr) bool {
+		wt := getWindowTitle(h)
+		if strings.Contains(strings.ToLower(wt), lowerTitle) {
+			found = h
+			return false
+		}
+		return true
+	}
+	enumWindows.Call(syscall.NewCallback(windowEnumProc), 0)
+	return found
 }
 
 func WaitForWindow(title string, timeoutMs int32) (uintptr, error) {

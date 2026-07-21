@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [0.2.51] - 2026-07-21
+
+### Fixed
+
+- `training_list_samples` no longer returns massive payloads. List endpoint now returns lightweight metadata only (omits `onnx_detections`, `normalized_coords`, `ocr_text`, `window_rect`). Added `TrainingSampleMeta` struct.
+- `training_cleanup_noise` with `max_age_hours=0` now means "delete all noise" (no age filter) instead of silently defaulting to 24 hours.
+- `training_cleanup_noise` dry-run mode now reports `deleted` count (files that would be deleted) alongside `freed_bytes`.
+- `find_window` now supports case-insensitive substring matching. Tries exact match first via `FindWindowW`, falls back to `EnumWindows` substring search. Handles backslashes in window titles.
+
 ## [0.2.50] - 2026-07-21
 
 ### Added

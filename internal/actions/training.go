@@ -272,6 +272,19 @@ func computeSignalLevel(detCount int, category, taskPrompt string) int {
 	return 1
 }
 
+type TrainingSampleMeta struct {
+	ID              int64  `json:"id"`
+	Source          string `json:"source"`
+	Category        string `json:"category"`
+	ImagePath       string `json:"image_path"`
+	TaskPrompt      string `json:"task_prompt,omitempty"`
+	WindowTitle     string `json:"window_title,omitempty"`
+	ElementsCount   int    `json:"elements_count"`
+	SignalLevel     int    `json:"signal_level"`
+	CreatedAt       string `json:"created_at"`
+	UsedForTraining bool   `json:"used_for_training"`
+}
+
 type TrainingListInput struct {
 	Source      string `json:"source,omitempty"`
 	Category    string `json:"category,omitempty"`
@@ -288,7 +301,7 @@ type TrainingStats struct {
 	DiskUsageMB   float64        `json:"disk_usage_mb"`
 }
 
-func TrainingSampleList(in TrainingListInput) ([]TrainingSample, error) {
+func TrainingSampleList(in TrainingListInput) ([]TrainingSampleMeta, error) {
 	trainMu.Lock()
 	defer trainMu.Unlock()
 
@@ -319,8 +332,8 @@ func TrainingSampleList(in TrainingListInput) ([]TrainingSample, error) {
 		where = append(where, "used_for_training = 0")
 	}
 
-	query := `SELECT id, source, category, image_path, task_prompt, window_title, window_rect,
-		ocr_text, onnx_detections, normalized_coords, elements_count, signal_level, created_at, used_for_training
+	query := `SELECT id, source, category, image_path, task_prompt, window_title,
+		elements_count, signal_level, created_at, used_for_training
 		FROM training_samples`
 	if len(where) > 0 {
 		query += " WHERE " + joinWhere(where)
@@ -334,18 +347,14 @@ func TrainingSampleList(in TrainingListInput) ([]TrainingSample, error) {
 	}
 	defer rows.Close()
 
-	var samples []TrainingSample
+	var samples []TrainingSampleMeta
 	for rows.Next() {
-		var s TrainingSample
-		var detJSON, normJSON string
+		var s TrainingSampleMeta
 		if err := rows.Scan(&s.ID, &s.Source, &s.Category, &s.ImagePath,
-			&s.TaskPrompt, &s.WindowTitle, &s.WindowRect, &s.OCRText,
-			&detJSON, &normJSON,
+			&s.TaskPrompt, &s.WindowTitle,
 			&s.ElementsCount, &s.SignalLevel, &s.CreatedAt, &s.UsedForTraining); err != nil {
 			return nil, fmt.Errorf("scan sample: %w", err)
 		}
-		json.Unmarshal([]byte(detJSON), &s.ONNXDetections)
-		json.Unmarshal([]byte(normJSON), &s.NormalizedCoords)
 		samples = append(samples, s)
 	}
 	return samples, rows.Err()
