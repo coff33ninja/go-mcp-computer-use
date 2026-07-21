@@ -50,11 +50,11 @@ func NewEncoder(cfg ScreenConfig) *Encoder {
 }
 
 // FeatureDim is the number of output features per coordinate.
-// [normX, normY, dpiAdjX, dpiAdjY, relX, relY, isValid]
-const FeatureDim = 7
+// [normX, normY, dpiAdjX, dpiAdjY, relX, relY, isValid, distFromCenter, isCenter, isEdge, windowAspect, isDialog]
+const FeatureDim = 12
 
 // Encode converts a raw pixel coordinate into a normalized feature vector.
-// Returns [normX, normY, dpiAdjX, dpiAdjY, relX, relY, isValid].
+// Returns [normX, normY, dpiAdjX, dpiAdjY, relX, relY, isValid, distFromCenter, isCenter, isEdge, windowAspect, isDialog].
 func (e *Encoder) Encode(x, y int) []float64 {
 	nx := float64(x) / e.screenW
 	ny := float64(y) / e.screenH
@@ -72,7 +72,46 @@ func (e *Encoder) Encode(x, y int) []float64 {
 		isValid = 1.0
 	}
 
-	return []float64{nx, ny, dax, day, rx, ry, isValid}
+	// distance from window center (0 = at center, 1 = at corner)
+	distFromCenter := 0.0
+	if e.windowW > 0 && e.windowH > 0 {
+		cx := e.windowX + e.windowW/2
+		cy := e.windowY + e.windowH/2
+		dx := (float64(x) - cx) / e.windowW
+		dy := (float64(y) - cy) / e.windowH
+		distFromCenter = math.Sqrt(dx*dx+dy*dy) * 2 // normalize to 0-1 range
+		if distFromCenter > 1.0 {
+			distFromCenter = 1.0
+		}
+	}
+
+	// isCenter: 1.0 if within 20% of window center
+	isCenter := 0.0
+	if rx >= 0.3 && rx <= 0.7 && ry >= 0.3 && ry <= 0.7 {
+		isCenter = 1.0
+	}
+
+	// isEdge: 1.0 if within 10% of window edge
+	isEdge := 0.0
+	if rx < 0.1 || rx > 0.9 || ry < 0.1 || ry > 0.9 {
+		isEdge = 1.0
+	}
+
+	// windowAspect: aspect ratio normalized to 0-1 (0.5 = square, <0.5 = tall, >0.5 = wide)
+	windowAspect := 0.5
+	if e.windowH > 0 {
+		windowAspect = e.windowW / (e.windowW + e.windowH) // normalize to [0,1]
+	}
+
+	// isDialog: 1.0 if window is small (likely a dialog)
+	isDialog := 0.0
+	if e.windowW > 0 && e.windowH > 0 {
+		if e.windowW < e.screenW*0.5 && e.windowH < e.screenH*0.5 {
+			isDialog = 1.0
+		}
+	}
+
+	return []float64{nx, ny, dax, day, rx, ry, isValid, distFromCenter, isCenter, isEdge, windowAspect, isDialog}
 }
 
 // Decode reverses the encoding to recover approximate pixel coordinates.

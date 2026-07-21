@@ -139,6 +139,64 @@ func (l *SQLiteLoader) Stats(ctx context.Context) (map[string]int, error) {
 	return stats, rows.Err()
 }
 
+func (l *SQLiteLoader) LoadSequences(ctx context.Context, minLen int) ([]Sequence, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("dataloader: %w", err)
+	}
+	db, err := l.openDB()
+	if err != nil {
+		return nil, fmt.Errorf("dataloader: open: %w", err)
+	}
+	rows, err := db.QueryContext(ctx,
+		`SELECT session_id, ocr_before_text, command_json
+		 FROM training_pairs
+		 WHERE session_id != '' AND session_id IS NOT NULL
+		 ORDER BY session_id, id ASC`)
+	if err != nil {
+		return nil, fmt.Errorf("dataloader: sequences query: %w", err)
+	}
+	defer rows.Close()
+
+	type row struct {
+		sessionID string
+		ocrBefore string
+		cmdJSON   string
+	}
+	var all []row
+	for rows.Next() {
+		var r row
+		if err := rows.Scan(&r.sessionID, &r.ocrBefore, &r.cmdJSON); err != nil {
+			continue
+		}
+		all = append(all, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// group by session_id
+	var sequences []Sequence
+	var cur Sequence
+	var curSession string
+	for _, r := range all {
+		if r.sessionID != curSession {
+			if len(cur.Actions) >= minLen {
+				sequences = append(sequences, cur)
+			}
+			curSession = r.sessionID
+			cur = Sequence{Context: r.ocrBefore}
+		}
+		tool := extractTool(r.cmdJSON)
+		if tool != "" {
+			cur.Actions = append(cur.Actions, Action{Action: tool, ArgsJSON: r.cmdJSON})
+		}
+	}
+	if len(cur.Actions) >= minLen {
+		sequences = append(sequences, cur)
+	}
+	return sequences, nil
+}
+
 func (l *SQLiteLoader) queryDB(ctx context.Context, db *sql.DB, query string, args []interface{}) ([]Sample, error) {
 	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {

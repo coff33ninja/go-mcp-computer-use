@@ -215,3 +215,45 @@ func TestPredict_ContextHistoryLonger(t *testing.T) {
 		t.Fatalf("PredictWithContext failed with long history: %v", err)
 	}
 }
+
+func TestPredictSequence_BasicOutput(t *testing.T) {
+	engine := setup()
+	seq, err := engine.PredictSequence("click button Submit", nil)
+	if err != nil {
+		t.Fatalf("PredictSequence failed: %v", err)
+	}
+	if seq == nil {
+		t.Fatal("expected non-nil sequence prediction")
+	}
+	if seq.Primary.Tool == "" {
+		t.Error("expected primary prediction with a tool")
+	}
+}
+
+func TestPredictSequence_NoSequenceHead(t *testing.T) {
+	engine := setup()
+	// setup() engine has sequenceLen=0 (default)
+	seq, err := engine.PredictSequence("click button Submit", nil)
+	if err != nil {
+		t.Fatalf("PredictSequence failed: %v", err)
+	}
+	if seq == nil {
+		t.Fatal("expected non-nil sequence prediction")
+	}
+	// with sequenceLen=0, Next should be empty
+	if len(seq.Next) != 0 {
+		t.Errorf("expected empty Next for sequenceLen=0, got %d", len(seq.Next))
+	}
+}
+
+func TestPredictSequence_WithHistory(t *testing.T) {
+	engine := setup()
+	history := []string{"click button Open", "type_text filename.txt"}
+	seq, err := engine.PredictSequence("click button Submit", history)
+	if err != nil {
+		t.Fatalf("PredictSequence failed: %v", err)
+	}
+	if seq == nil || seq.Primary.Tool == "" {
+		t.Error("expected valid primary prediction")
+	}
+}

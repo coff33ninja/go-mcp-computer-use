@@ -15,6 +15,18 @@ type Sample struct {
 	CreatedAt   string  // timestamp of the sample
 }
 
+// Sequence represents a chain of consecutive actions from the same session.
+type Sequence struct {
+	Context  string   // OCR text before the first action
+	Actions  []Action // ordered actions in the sequence
+}
+
+// Action is a single step in a Sequence.
+type Action struct {
+	Action  string // tool name
+	ArgsJSON string // tool arguments as JSON
+}
+
 // Loader reads training samples from the SQLite datalog database.
 type Loader interface {
 	// LoadAll returns all available training samples.
@@ -25,6 +37,10 @@ type Loader interface {
 
 	// LoadByTool returns training samples filtered by tool name.
 	LoadByTool(ctx context.Context, tool string) ([]Sample, error)
+
+	// LoadSequences returns consecutive action sequences grouped by session_id.
+	// minLen is the minimum number of actions in a sequence to include.
+	LoadSequences(ctx context.Context, minLen int) ([]Sequence, error)
 
 	// Count returns the total number of training samples.
 	Count(ctx context.Context) (int, error)

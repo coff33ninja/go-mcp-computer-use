@@ -2,6 +2,57 @@
 
 ## [Unreleased]
 
+## [0.2.50] - 2026-07-21
+
+### Added
+
+- **§34 Custom Neural Network (12/12 items done)**:
+  - **Multi-task output head** — model now predicts scroll direction (up/down/left/right) and key category (modifier/navigation/function/alpha/numeric/special) alongside tool and coordinates. `predict.Prediction` includes `Args` field with `ArgPrediction` struct. Trainer fills arg one-hot targets from `ArgsJSON`.
+  - **Transfer learning** — `MLEngine.FinetuneForApp(appName, epochs)` fine-tunes the base model on app-specific samples filtered by window title. `PredictForApp()` uses app-specific model when available, falls back to base. `LoadAppModels()` restores all app models from `app_models/` directory on startup.
+  - **Model compression** — `ml/compress` package with magnitude-based weight pruning (`Prune()`, `IterativePrune()`) and weight quantization (`Quantize()`, 2–8 bit). Compression ratio utilities. Supports prune+quantize stacking.
+  - **Neural architecture search** — `ml/nas` package with grid search over EmbedDim/NumHeads/NumLayers/FFNDim. `Search()` evaluates configs, `BestConfig()` picks best under parameter budget. Parameter count utility.
+
+- **§35 Action Prediction — Tool Expansion, Batch Training, Full Attention**:
+  - **Expand tool set** — `mlDefaultTools` expanded from 11 to 25 tools. New: `move_window`, `maximize_window`, `minimize_window`, `close_window`, `find_window`, `set_clipboard`, `get_clipboard`, `type_and_submit`, `select_all_and_type`, `ocr`, `screenshot`, `click_menu_item`, `launch_app`. OutputDim = tool(25) + from_xy(2) + to_xy(2) + arg(10) + window(6) = 45.
+  - **Batch training** — `TrainerConfig.BatchSize` controls mini-batch size. Trainer accumulates samples into batches, calls `model.ForwardBackward(target)` per sample, then `model.Step(lr)` + `model.ResetGradients()` once per batch.
+  - **Full attention (Q/K/V/O)** — Each transformer layer now has separate Q, K, V, O weight matrices (`layerDef{qW, kW, vW, oW}`). Scaled dot-product attention computed via `Q @ (Kᵀ @ V / √d)` using MatMul-only path to avoid Gorgonia shape squeeze. Layer norm weights changed from `[d]` vectors to `[1,d]` matrices for same reason.
+- **§35 Action Prediction — Sequence Prediction**:
+  - **Sequence head** — `Config.SequenceLen` controls output: primary = tool + from_xy + to_xy + arg, sequence = N×(tool + to_xy + arg). `PrimaryDim()`, `SeqSlotDim()`, `TotalOutputDim()` layout helpers. `predict.SequencePrediction{Primary, Next[]}` struct.
+  - **Sequence training** — `dataloader.LoadSequences(ctx, minLen)` groups consecutive training_pairs by session_id. `makeSequenceTargets()` fills sequence section of target vector in trainer.
+  - **Sequence prediction** — `PredictSequence()` returns `SequencePrediction` with primary + next-N predictions. `decodePrimary()` and `decodeSlot()` methods in predictor. Wired through `MLEngine.PredictSequence()` → `AdaptiveEngine.PredictSequenceActions()`. Helper functions: `mlPredictedAction()`, `predictedCoordFromPrediction()`, `predictedArgsFromPrediction()`.
+  - **Chain integration** — `chain_predict` MCP tool calls `PredictSequenceActions(ocr_text)`, returns primary + future actions as structured JSON for chain execution.
+  - **Confidence-gated sequences** — `SeqConfidenceThreshold=0.15`. Steps below threshold truncate the sequence, providing fallback to shorter prediction when model is uncertain.
+
+- **§35 Action Prediction — Window Context & Spatial Encoding**:
+  - **Window category output** — `Config.WindowDim=6`, window category one-hot in primary head. `WindowCategories` = [browser, editor, terminal, file_manager, dialog, other]. Predictor decodes `WindowCategory` + `WindowConf` fields. Trainer defaults to "other" category.
+  - **Window title as input** — `PredictWithWindow()`/`PredictSequenceWithWindow()` prepend window title to OCR text before tokenization. `chain_predict` accepts optional `window_title` parameter. MLEngine + AdaptiveEngine wired.
+  - **Spatial relationship encoding** — Encoder expanded 7→12 features: added `distFromCenter`, `isCenter`, `isEdge`, `windowAspect`, `isDialog`. `spatial.FeatureDim=12`. `DefaultConfig()` updated.
+  - **Multi-window awareness** — `WindowInfo{Title,Category,Active}` struct. `PredictWithWindows()`/`PredictSequenceWithWindows()` encode top-3 visible windows as `[ACTIVE][category]title` prefix. Wired through MLEngine + AdaptiveEngine.
+  - **4-coordinate output** — extended output head from `tool(11)+xy(2)+arg(10)=23` to `tool(11)+from_xy(2)+to_xy(2)+arg(10)=25` dims. `Config.FromCoordDim` field added. Predictor decodes 4 normalized coordinates. Trainer fills both from/to coordinate targets normalized via spatial encoder.
+  - **Action template schema** — `decodeCoords()` per-tool coordinate extraction: drag uses `{from_x,from_y,to_x,to_y}`, other tools use `{x,y}` as destination. Trainer normalizes both pairs through the spatial encoder.
+  - **Drag prediction** — `Prediction.FromCoordX/Y` fields, `PredictedAction.FromCoord` struct, bridge populates both coordinate pairs from model output.
+  - **Drag-and-drop** — `drag` tool already in `mlDefaultTools` with full from/to coordinate support. `drag_and_drop` alias handled in trainer's `decodeCoords()`.
+  - **Backward compatibility** — existing models with old OutputDim (23) fail `LoadParameters` (param count mismatch) → gracefully recreated and retrained with new 25-dim layout.
+
+### Changed
+
+- `ml/transformer/model.go` — `Config.ArgDim`, `Config.FromCoordDim`, `Config.SequenceLen` fields. `PrimaryDim()`, `SeqSlotDim()`, `TotalOutputDim()` layout helpers.
+- `ml/predict/predictor.go` — `Prediction.Args`, `Prediction.FromCoordX/Y` fields. `SequencePrediction{Primary, Next}` struct. `PredictSequence()` method with `decodePrimary()`/`decodeSlot()`. `SeqConfidenceThreshold=0.15`. `ArgCategories` constants.
+- `ml/trainer/trainer.go` — `FinetuneEpoch()`. `makeTarget()` fills arg one-hot + sequence targets. `decodeCoords()` per-tool coordinate extraction. `Trainer.sequenceLen`, `Trainer.primaryDim`, `Trainer.fromCoordDim` fields. `makeSequenceTargets()` fills sequence section.
+- `ml/dataloader/loader.go` — `Sequence`, `Action` types. `LoadSequences(ctx, minLen)` interface method.
+- `ml/dataloader/sqlite.go` — `LoadSequences()` implementation grouping consecutive training_pairs by session_id.
+- `internal/actions/ml_bridge.go` — `MLEngine.PredictSequence()` returns `SequencePredictionResult`. Helper functions: `mlPredictedAction()`, `predictedCoordFromPrediction()`, `predictedArgsFromPrediction()`.
+- `internal/actions/adaptive.go` — `PredictedAction.Args`/`FromCoord` fields. `PredictSequenceActions(ocrText)` wrapper. `PredictActionsWithWindow`, `PredictSequenceActionsWithWindow`, `PredictActionsWithWindows`, `PredictSequenceActionsWithWindows`.
+- `ml/spatial/encoder.go` — `FeatureDim` expanded 7→12. New features: `distFromCenter`, `isCenter`, `isEdge`, `windowAspect`, `isDialog`.
+- `ml/transformer/model.go` — `Config.WindowDim` field. `PrimaryDim()` includes WindowDim. `ConfigForSize()` accepts `windowDim`, `seqLen` params. `DefaultConfig CoordDim` updated to 12.
+- `ml/predict/predictor.go` — `WindowInfo{Title,Category,Active}` struct. `Predictor` interface extended with `PredictWithWindow`, `PredictSequenceWithWindow`, `PredictWithWindows`, `PredictSequenceWithWindows`. `Prediction.WindowCategory`/`WindowConf` fields. `WindowCategories` constants. `encodeWindowContext()` helper.
+- `ml/trainer/trainer.go` — `Trainer.windowDim` field. `makeTarget()` fills window category one-hot (defaults to "other").
+- `internal/actions/ml_bridge.go` — `WindowInfoForPrediction` struct. `MLEngine.PredictWithWindows()`, `PredictSequenceWithWindows()`, `PredictWithWindow()`, `PredictSequenceWithWindow()`. `chain_predict` handler accepts optional `window_title`.
+
+### VERSION
+
+`0.2.50` → `0.2.51`
+
 ## [0.2.49] - 2026-07-21
 
 ### Added
@@ -32,11 +83,6 @@
 - Deleted 6 persona files from repo root (AGENTS.md, SOUL.md, USER.md, IDENTITY.md, TOOLS.md, HEARTBEAT.md).
 - Deleted `ml/DESIGN.md` — content merged into `docs/reference/models-setup.md`.
 - §33 UPGRADE restored — all 6 tools moved to FAR (nice to have), NEXT emptied.
-
-### In Progress
-
-- **Phase 2.3**: Multi-task output head (predict scroll direction, key names, type text content) — deferred, needs Model interface redesign.
-- **Phase 4**: Transfer learning, model compression, NAS — not started.
 
 ### VERSION
 

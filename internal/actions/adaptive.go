@@ -128,6 +128,13 @@ type PredictedAction struct {
 	SampleSize  int              `json:"sample_size"`
 	SuccessRate float64          `json:"success_rate"`
 	Coord       *PredictedCoord  `json:"coord,omitempty"`
+	FromCoord   *PredictedCoord  `json:"from_coord,omitempty"` // for drag operations
+	Args        *PredictedArgs   `json:"args,omitempty"`
+}
+
+type PredictedArgs struct {
+	ScrollDir   string `json:"scroll_dir,omitempty"`
+	KeyCategory string `json:"key_category,omitempty"`
 }
 
 type EngineAnalysis struct {
@@ -633,6 +640,63 @@ func (e *AdaptiveEngine) PredictActions(ocrText string, limit int) []PredictedAc
 		results = results[:limit]
 	}
 	return results
+}
+
+// PredictSequenceActions returns the primary prediction plus predicted future actions.
+// Uses the ML engine's sequence head when available.
+func (e *AdaptiveEngine) PredictSequenceActions(ocrText string) *SequencePredictionResult {
+	if e.mlEngine != nil && e.mlEngine.IsReady() {
+		history := e.GetRecentActions(5)
+		return e.mlEngine.PredictSequence(ocrText, history)
+	}
+	return nil
+}
+
+// PredictActionsWithWindow includes the active window title as context for ML predictions.
+func (e *AdaptiveEngine) PredictActionsWithWindow(ocrText string, windowTitle string, limit int) []PredictedAction {
+	if limit <= 0 {
+		limit = 5
+	}
+	if e.mlEngine != nil && e.mlEngine.IsReady() {
+		history := e.GetRecentActions(5)
+		if mlPreds := e.mlEngine.PredictWithWindow(ocrText, windowTitle, limit, history); len(mlPreds) > 0 {
+			return mlPreds
+		}
+	}
+	// fall back to non-window prediction
+	return e.PredictActions(ocrText, limit)
+}
+
+// PredictSequenceActionsWithWindow includes the active window title as context for sequence predictions.
+func (e *AdaptiveEngine) PredictSequenceActionsWithWindow(ocrText string, windowTitle string) *SequencePredictionResult {
+	if e.mlEngine != nil && e.mlEngine.IsReady() {
+		history := e.GetRecentActions(5)
+		return e.mlEngine.PredictSequenceWithWindow(ocrText, history, windowTitle)
+	}
+	return e.PredictSequenceActions(ocrText)
+}
+
+// PredictActionsWithWindows includes top-3 visible window titles as context for multi-window prediction.
+func (e *AdaptiveEngine) PredictActionsWithWindows(ocrText string, windows []WindowInfoForPrediction, limit int) []PredictedAction {
+	if limit <= 0 {
+		limit = 5
+	}
+	if e.mlEngine != nil && e.mlEngine.IsReady() {
+		history := e.GetRecentActions(5)
+		if mlPreds := e.mlEngine.PredictWithWindows(ocrText, windows, limit, history); len(mlPreds) > 0 {
+			return mlPreds
+		}
+	}
+	return e.PredictActions(ocrText, limit)
+}
+
+// PredictSequenceActionsWithWindows includes top-3 visible window titles for sequence prediction.
+func (e *AdaptiveEngine) PredictSequenceActionsWithWindows(ocrText string, windows []WindowInfoForPrediction) *SequencePredictionResult {
+	if e.mlEngine != nil && e.mlEngine.IsReady() {
+		history := e.GetRecentActions(5)
+		return e.mlEngine.PredictSequenceWithWindows(ocrText, history, windows)
+	}
+	return e.PredictSequenceActions(ocrText)
 }
 
 func (e *AdaptiveEngine) predictCoord(tool string, tokens []string) *PredictedCoord {

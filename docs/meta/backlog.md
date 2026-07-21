@@ -905,30 +905,84 @@
 
 ## 34. CUSTOM NEURAL NETWORK — Self-Designing Model (v0.3.x)
 
-> **Next major milestone.** v0.2.46 delivered the Go-native transformer engine (14K-param Gorgonia model).
-> v0.3.x: expand architecture, improve accuracy, add sequence awareness, and build toward a purpose-built model for computer use automation.
+> **Complete.** v0.2.46-50 delivered the full Go-native transformer engine: 14K-param Gorgonia model,
+> ml_bridge, tokenizer, spatial encoder, training pipeline, online learning, model export, smart cascade,
+> sequence context, DPI auto-detect, data augmentation, model versioning, multi-task output head,
+> transfer learning, model compression, NAS. 12/12 items in HAVE.
 
 ### HAVE
 See §28 Memory & ML — transformer engine, ml_bridge, tokenizer, spatial encoder, training pipeline, online learning, model export, smart cascade text finding, text_location_memory all delivered in v0.2.46-48.
+- Sequence context (action history ring buffer → model.Forward)
+- Auto-detect screen config (ScreenSize + GetDPIScaleForPoint)
+- Improved tokenizer (OCR normalization, [NUM] token, bigram subword fallback)
+- Online learning (ReplayBuffer 10K, 30s background retrain)
+- Model versioning (versioned checkpoints, auto-rollback on >5% regression)
+- Data augmentation (DPI scaling, OCR noise, coord jitter)
+- Model presets (small/medium/large), DebugForward, ParamCount
+- Multi-task output head (scroll direction + key category prediction)
+- Transfer learning (FinetuneForApp, per-app models)
+- Model compression (Prune, Quantize, IterativePrune)
+- Neural architecture search (grid search over configs)
+
+### NEXT
+All items complete.
+
+### FAR
+All items complete.
+
+---
+
+## 35. ACTION PREDICTION EXPANSION — Drag, Sequences, Spatial (v0.4.x)
+
+> **Next major milestone.** §34 built the model; §35 makes it predict complex actions.
+> Fixes: 1-coord limitation (can't predict drag), 11-tool ceiling (chain has 51), no sequence prediction, no window targeting, no spatial relationships.
+
+### DONE (Multi-Coordinate Output)
+| Component | Description |
+|-----------|-------------|
+| 4-coordinate output | Config.FromCoordDim, OutputDim=tool(11)+from_xy(2)+to_xy(2)+arg(10)=25. Predictor decodes 4 coords, trainer fills from_xy+to_xy targets |
+| Action template schema | `decodeCoords()` per-tool schema: drag→from_x/from_y+to_x/to_y, others→x/y as destination |
+| Drag prediction | `Prediction.FromCoordX/Y` fields, `PredictedAction.FromCoord` struct, bridge populates both coord pairs |
+| Drag-and-drop | `drag` tool already in mlDefaultTools with from_x/from_y/to_x/to_y. `drag_and_drop` alias in trainer decodeCoords |
+| Backward compat | Old models fail LoadParameters (param count mismatch) → recreated and retrained with new layout |
+
+### DONE (Sequence Prediction)
+| Component | Description |
+|-----------|-------------|
+| Sequence head | `Config.SequenceLen`, output layout helpers `PrimaryDim()`, `SeqSlotDim()`, `TotalOutputDim()`. Slot = tool(numTools)+to_xy(2)+arg(argDim) |
+| Sequence training | `LoadSequences(ctx, minLen)` groups consecutive training_pairs by session_id. `makeSequenceTargets()` fills sequence section of target vector |
+| Sequence prediction | `PredictSequence()` returns `SequencePrediction{Primary, Next[]}`. `decodePrimary()`, `decodeSlot()` methods. Wired through `MLEngine.PredictSequence()` and `AdaptiveEngine.PredictSequenceActions()` |
+| Chain integration | `chain_predict` MCP tool — calls `PredictSequenceActions(ocr_text)`, returns primary + future actions as JSON |
+| Confidence-gated sequences | `SeqConfidenceThreshold=0.15`. Steps below threshold truncate the sequence |
+
+### DONE (Window Context & Spatial Encoding)
+| Component | Description |
+|-----------|-------------|
+| Window category output | `Config.WindowDim=6`, window category one-hot in primary head (browser/editor/terminal/file_manager/dialog/other). `WindowCategories` constants. Predictor decodes `WindowCategory` + `WindowConf` |
+| Window title as input | `PredictWithWindow()`/`PredictSequenceWithWindow()` prepend window title to OCR text. `chain_predict` accepts optional `window_title` param |
+| Spatial relationship encoding | Encoder expanded 7→12 features: added `distFromCenter`, `isCenter`, `isEdge`, `windowAspect`, `isDialog`. `spatial.FeatureDim=12` |
+| Multi-window awareness | `WindowInfo{Title,Category,Active}` struct. `PredictWithWindows()`/`PredictSequenceWithWindows()` encode top-3 windows as `[ACTIVE][cat]title` prefix. Wired through MLEngine + AdaptiveEngine |
+
+### DONE (Tool Expansion, Batch Training, Full Attention)
+| Component | Description |
+|-----------|-------------|
+| Expand tool set | 11→25 tools: click, move_mouse, scroll, drag, type, key_press, key_down, key_up, hover, focus_window, launch_and_wait, close_window, minimize_window, maximize_window, restore_window, move_window, find_window, set_clipboard, get_clipboard, type_and_submit, select_all_and_type, ocr, screenshot, click_menu_item, launch_app |
+| Batch training | `TrainerConfig.BatchSize`, mini-batch loop with `ForwardBackward()` + `Step()` + `ResetGradients()` per batch |
+| Full attention (Q/K/V/O) | Separate Q/K/V/O weight matrices per layer. Scaled dot-product via `Q @ (Kᵀ @ V / √d)` using MatMul-only path (avoids Gorgonia shape squeeze). Layer norm uses `[1,d]` matrices instead of `[d]` vectors to prevent `HadamardProd` squeezing. |
 
 ### NEXT
 | Component | Why |
 |-----------|-----|
-| Sequence context in predictions | Use preceding action history as transformer input features |
-| Larger model experiments | Test 128-dim / 4-layer variants for better accuracy |
-| Multi-task output head | Predict tool + args + coordinates in single forward pass |
-| Training data augmentation | Synthesize OCR variations, DPI scales, window layouts |
-| Model versioning | Track accuracy across model versions, auto-rollback on regression |
+| End-to-end chain test | OCR → predict sequence → auto-chain → verify. Accuracy measurement on common workflows |
 
 ### FAR
 | Component | Why |
 |-----------|-----|
-| Online learning activation | Enable replay buffer training during live sessions (currently batch-only) |
-| Multi-task training | OCR recognition + element detection + action prediction simultaneously |
-| Model compression | Quantize/prune for faster inference on low-end hardware |
-| Transfer learning | Fine-tune from a base model for specific UI patterns (e.g., Outlook, VS Code) |
-| Attention visualization | Expose attention weights for debugging predictions |
-| Custom architecture search | NAS (neural architecture search) for optimal transformer config |
+| Conditional sequences | If/else branching in predicted sequences based on OCR state |
+| Multi-modal input | Screenshot pixels + OCR text combined (CNN feature extractor) |
+| Reinforcement learning | Reward-based training from action outcomes (success/failure) |
+| Cross-app transfer | Pre-trained model shipped, fine-tuned per-app on first run |
+| Real-time streaming | Predict while screen changes (video-like OCR feed) |
 
 ---
 
@@ -969,14 +1023,15 @@ See §28 Memory & ML — transformer engine, ml_bridge, tokenizer, spatial encod
 | Linux & Container | 0 | 2 | 4 | 6 |
 | Permissions | 0 | 7 | 4 | 11 |
 | Upgrade (§33) | 0 | 0 | 6 | 6 |
-| Custom NN (§34) | 0 | 5 | 6 | 11 |
-| **TOTAL** | **160** | **139** | **141** | **440** |
+| Custom NN (§34) | 12 | 0 | 0 | 12 |
+| Action Prediction (§35) | 17 | 1 | 5 | 23 |
+| **TOTAL** | **177** | **140** | **146** | **463** |
 
 ## Strategy
 
-1. **Custom neural network (§34, v0.3.x)** — expand transformer architecture, improve accuracy, add sequence context (next major milestone)
-2. **Build out NEXT items** — straightforward and high value (~139 items remaining)
-3. **Error wrapping audit** — remaining Slice 4 item for consistent error feedback
+1. **Action prediction expansion (§35, v0.4.x)** — All done except end-to-end chain test. Multi-coordinate output, sequence prediction, window context, spatial encoding, tool expansion, batch training, full attention all complete.
+2. **Build out NEXT items** — straightforward and high value (~143 items remaining)
+2. **Error wrapping audit** — remaining Slice 4 item for consistent error feedback
 4. **Security + Transport** — TLS + SSE prerequisites for remote deployment
 5. **Browser DOM mode** — CDP/Playwright integration for 10x faster web tasks
 6. **Background control** — SendInput/UIA for non-disruptive clicks

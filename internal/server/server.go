@@ -2098,6 +2098,32 @@ type AgentSuggestArgs struct {
 }
 type AgentTrainArgs struct{}
 
+type ChainPredictArgs struct {
+	OCRText     string `json:"ocr_text"`
+	WindowTitle string `json:"window_title,omitempty"`
+}
+
+func chainPredictHandler(ctx context.Context, req *mcp.CallToolRequest, args ChainPredictArgs) (*mcp.CallToolResult, any, error) {
+	if args.OCRText == "" {
+		return nil, nil, fmt.Errorf("ocr_text is required")
+	}
+	var result *actions.SequencePredictionResult
+	if args.WindowTitle != "" {
+		result = actions.Adaptive.PredictSequenceActionsWithWindow(args.OCRText, args.WindowTitle)
+	} else {
+		result = actions.Adaptive.PredictSequenceActions(args.OCRText)
+	}
+	if result == nil {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: "no predictions available — ML model not trained yet. Run agent_train first."}},
+		}, map[string]any{"primary": nil, "next": []any{}}, nil
+	}
+	b, _ := json.MarshalIndent(result, "", "  ")
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: string(b)}},
+	}, result, nil
+}
+
 func agentAnalyzeHandler(ctx context.Context, req *mcp.CallToolRequest, _ AgentAnalyzeArgs) (*mcp.CallToolResult, any, error) {
 	analysis := actions.Adaptive.Analyze()
 	b, _ := json.MarshalIndent(analysis, "", "  ")
@@ -3429,6 +3455,11 @@ func New(version string) *mcp.Server {
 		Name:        "bridge_debug",
 		Description: "Debug the OCR→command bridge state — shows recent OCR buffer, pending command, and timing info.",
 	}, bridgeDebugHandler)
+
+	addToolClean(server, &mcp.Tool{
+		Name:        "chain_predict",
+		Description: "Predict the next action plus future actions from OCR text using the transformer model. Returns the primary prediction (tool, coordinates, args) and optionally a sequence of N future actions. Use the sequence to auto-generate chain steps.",
+	}, chainPredictHandler)
 
 	addToolClean(server, &mcp.Tool{
 		Name:        "set_config",

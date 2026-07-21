@@ -12,15 +12,37 @@ import (
 )
 
 type Config struct {
-	VocabSize  int
-	MaxLen     int
-	EmbedDim   int
-	NumHeads   int
-	NumLayers  int
-	FFNDim     int
-	CoordDim   int
-	OutputDim  int
-	HistoryLen int // number of recent actions for sequence context (0 = disabled)
+	VocabSize    int
+	MaxLen       int
+	EmbedDim     int
+	NumHeads     int
+	NumLayers    int
+	FFNDim       int
+	CoordDim     int
+	FromCoordDim int    // extra coord dimensions for drag (from_x, from_y). 0 = single-coord tools
+	OutputDim    int
+	ArgDim       int    // argument prediction dimensions (scroll dir, key name, etc.)
+	WindowDim    int    // window category prediction (0 = disabled). Predicts which window type to target.
+	SequenceLen  int    // number of future actions to predict (0 = disabled). Each slot = numTools + 2 + argDim dims
+	HistoryLen   int    // number of recent actions for sequence context (0 = disabled)
+}
+
+// SeqSlotDim returns the number of output dims per sequence prediction slot.
+// Each slot: tool(numTools) + to_xy(2) + arg(argDim).
+func (c Config) SeqSlotDim(numTools int) int {
+	return numTools + 2 + c.ArgDim
+}
+
+// PrimaryDim returns the number of output dims for the primary (next-action) head.
+// Primary: tool(numTools) + from_xy(fromCoordDim) + to_xy(2) + arg(argDim) + window(windowDim).
+func (c Config) PrimaryDim(numTools int) int {
+	return numTools + c.FromCoordDim + 2 + c.ArgDim + c.WindowDim
+}
+
+// TotalOutputDim returns the expected total output dimensionality.
+// PrimaryDim + SequenceLen × SeqSlotDim.
+func (c Config) TotalOutputDim(numTools int) int {
+	return c.PrimaryDim(numTools) + c.SequenceLen*c.SeqSlotDim(numTools)
 }
 
 func DefaultConfig() Config {
@@ -31,7 +53,7 @@ func DefaultConfig() Config {
 		NumHeads:   4,
 		NumLayers:  3,
 		FFNDim:     512,
-		CoordDim:   7,
+		CoordDim:   12, // matches spatial.FeatureDim
 		OutputDim:  50,
 		HistoryLen: 5,
 	}
@@ -47,26 +69,26 @@ const (
 )
 
 // ConfigForSize returns a Config pre-filled for the given model size.
-// CoordDim and OutputDim must be set separately based on the task.
-func ConfigForSize(size ModelSize, coordDim, outputDim int) Config {
+// CoordDim, OutputDim, ArgDim, WindowDim, and SequenceLen must be set separately.
+func ConfigForSize(size ModelSize, coordDim, outputDim, argDim, windowDim, seqLen int) Config {
 	switch size {
 	case SizeSmall:
 		return Config{
 			VocabSize: 2000, MaxLen: 128,
 			EmbedDim: 64, NumHeads: 2, NumLayers: 2, FFNDim: 128,
-			CoordDim: coordDim, OutputDim: outputDim, HistoryLen: 5,
+			CoordDim: coordDim, OutputDim: outputDim, ArgDim: argDim, WindowDim: windowDim, SequenceLen: seqLen, HistoryLen: 5,
 		}
 	case SizeLarge:
 		return Config{
 			VocabSize: 2000, MaxLen: 128,
 			EmbedDim: 128, NumHeads: 4, NumLayers: 4, FFNDim: 256,
-			CoordDim: coordDim, OutputDim: outputDim, HistoryLen: 5,
+			CoordDim: coordDim, OutputDim: outputDim, ArgDim: argDim, WindowDim: windowDim, SequenceLen: seqLen, HistoryLen: 5,
 		}
 	default: // medium
 		return Config{
 			VocabSize: 2000, MaxLen: 128,
 			EmbedDim: 96, NumHeads: 3, NumLayers: 3, FFNDim: 192,
-			CoordDim: coordDim, OutputDim: outputDim, HistoryLen: 5,
+			CoordDim: coordDim, OutputDim: outputDim, ArgDim: argDim, WindowDim: windowDim, SequenceLen: seqLen, HistoryLen: 5,
 		}
 	}
 }
@@ -75,6 +97,9 @@ type Model interface {
 	Forward(tokens [][]int, coords [][]float64, history [][]int) ([][]float64, error)
 	Backward(loss float64, lr float64) error
 	BackwardWithTarget(target []float64, lr float64) error
+	ForwardBackward(target []float64) error // forward + backward without solver step (for batch accumulation)
+	Step(lr float64) error                  // apply accumulated gradients via solver
+	ResetGradients() error                  // zero out accumulated gradients
 	Parameters() []float64
 	LoadParameters(params []float64) error
 	Save(path string) error
@@ -93,9 +118,12 @@ func NewReal(cfg Config) (Model, error) {
 }
 
 type layerDef struct {
-	wo         *gorgonia.Node
-	ff1W, ff1B *gorgonia.Node
-	ff2W, ff2B *gorgonia.Node
+	qW, kW, vW *gorgonia.Node // Q, K, V projections
+	oW          *gorgonia.Node // output projection
+	ff1W, ff1B  *gorgonia.Node
+	ff2W, ff2B  *gorgonia.Node
+	ln1W, ln1B *gorgonia.Node // post-attention layer norm
+	ln2W, ln2B *gorgonia.Node // post-FFN layer norm
 }
 
 type transformerModel struct {
@@ -198,17 +226,106 @@ func newRealModel(cfg Config) (*transformerModel, error) {
 		p := fmt.Sprintf("L%d", i)
 		ld := layerDef{}
 
-		ld.wo = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(d, d),
-			gorgonia.WithName(p+"_wo"), gorgonia.WithInit(gorgonia.GlorotU(1.0)))
-		attn, err := gorgonia.Mul(x, ld.wo)
+		// ── Q, K, V projections ──
+		ld.qW = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(d, d),
+			gorgonia.WithName(p+"_qW"), gorgonia.WithInit(gorgonia.GlorotU(1.0)))
+		ld.kW = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(d, d),
+			gorgonia.WithName(p+"_kW"), gorgonia.WithInit(gorgonia.GlorotU(1.0)))
+		ld.vW = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(d, d),
+			gorgonia.WithName(p+"_vW"), gorgonia.WithInit(gorgonia.GlorotU(1.0)))
+		ld.oW = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(d, d),
+			gorgonia.WithName(p+"_oW"), gorgonia.WithInit(gorgonia.GlorotU(1.0)))
+
+		Q, err := gorgonia.Mul(x, ld.qW) // [1, d]
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("layer %d Q: %w", i, err)
 		}
-		x, err = gorgonia.Add(x, attn)
+		K, err := gorgonia.Mul(x, ld.kW) // [1, d]
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("layer %d K: %w", i, err)
+		}
+		V, err := gorgonia.Mul(x, ld.vW) // [1, d]
+		if err != nil {
+			return nil, fmt.Errorf("layer %d V: %w", i, err)
 		}
 
+		// ── Scaled dot-product attention (MatMul-only, no squeeze) ──
+		//
+		// Standard: attn = softmax(Q @ Kᵀ / √d) @ V
+		// For single token [1,d]: Q @ Kᵀ = [1,1] → softmax = 1.0 → output = V.
+		//
+		// Gorgonia squeezes [1,1] nodes to scalars, breaking downstream Mul.
+		// Solution: use associativity. Compute as Q @ (Kᵀ @ V / √d):
+		//   Kᵀ @ V  = [d,1] @ [1,d] = [d,d]  (outer product)
+		//   scale:   [d,d] @ diag(1/√d) = [d,d]
+		//   Q @ ...  = [1,d] @ [d,d] = [1,d]  (final output)
+		// All steps use gorgonia.Mul (matrix multiply) — no shape squeeze.
+
+		// Scale factor: 1/√headDim, applied as diagonal matrix multiplication
+		scaleVal := 1.0 / math.Sqrt(float64(d))
+
+		// Kᵀ @ V = [d,1] @ [1,d] = [d,d]
+		Kt, err := gorgonia.Transpose(K) // [1,d] → [d,1]
+		if err != nil {
+			return nil, fmt.Errorf("layer %d K transpose: %w", i, err)
+		}
+		outerKV, err := gorgonia.Mul(Kt, V) // [d,1] @ [1,d] = [d,d]
+		if err != nil {
+			return nil, fmt.Errorf("layer %d KᵀV: %w", i, err)
+		}
+
+		// Scale via diagonal: outerKV @ diag(s/√d) = outerKV * (1/√d)
+		diagScale := gorgonia.NewConstant(tensor.New(
+			tensor.Of(tensor.Float64),
+			tensor.WithShape(d, d),
+			tensor.WithBacking(func() []float64 {
+				b := make([]float64, d*d)
+				for j := 0; j < d; j++ {
+					b[j*d+j] = scaleVal
+				}
+				return b
+			}()),
+		))
+		scaledOuter, err := gorgonia.Mul(outerKV, diagScale) // [d,d] @ [d,d] = [d,d]
+		if err != nil {
+			return nil, fmt.Errorf("layer %d scale: %w", i, err)
+		}
+
+		// Q @ scaled(KᵀV) = [1,d] @ [d,d] = [1,d]
+		attnRaw, err := gorgonia.Mul(Q, scaledOuter) // [1,d]
+		if err != nil {
+			return nil, fmt.Errorf("layer %d Q@KTV: %w", i, err)
+		}
+
+		// Output projection: attnOut = attnRaw @ oW
+		attnOut, err := gorgonia.Mul(attnRaw, ld.oW) // [1,d] @ [d,d] = [1,d]
+		if err != nil {
+			return nil, fmt.Errorf("layer %d O proj: %w", i, err)
+		}
+
+		// Residual connection
+		x, err = gorgonia.Add(x, attnOut)
+		if err != nil {
+			return nil, fmt.Errorf("layer %d residual: %w", i, err)
+		}
+
+		// ── Layer norm 1 (post-attention) ──
+		// Uses [1,d] matrices (not vectors) to prevent Gorgonia HadamardProd
+		// from squeezing [1,d] → [d] when multiplying with a [d] vector.
+		ld.ln1W = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(1, d),
+			gorgonia.WithName(p+"_ln1W"), gorgonia.WithInit(gorgonia.Ones()))
+		ld.ln1B = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(1, d),
+			gorgonia.WithName(p+"_ln1B"), gorgonia.WithInit(gorgonia.Zeroes()))
+		xScaled, err := gorgonia.HadamardProd(x, ld.ln1W) // [1,d] ⊙ [1,d] = [1,d]
+		if err != nil {
+			xScaled = x
+		}
+		x, err = gorgonia.Add(xScaled, ld.ln1B) // [1,d] + [1,d] = [1,d]
+		if err != nil {
+			return nil, fmt.Errorf("layer %d layernorm1: %w", i, err)
+		}
+
+		// ── Feed-forward network ──
 		ld.ff1W = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(d, cfg.FFNDim),
 			gorgonia.WithName(p+"_ff1W"), gorgonia.WithInit(gorgonia.GlorotU(1.0)))
 		ld.ff1B = gorgonia.NewVector(g, tensor.Float64, gorgonia.WithShape(cfg.FFNDim),
@@ -242,6 +359,22 @@ func newRealModel(cfg Config) (*transformerModel, error) {
 		if err != nil {
 			return nil, err
 		}
+
+		// ── Layer norm 2 (post-FFN) ──
+		// Same [1,d] shape rationale as ln1 above.
+		ld.ln2W = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(1, d),
+			gorgonia.WithName(p+"_ln2W"), gorgonia.WithInit(gorgonia.Ones()))
+		ld.ln2B = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(1, d),
+			gorgonia.WithName(p+"_ln2B"), gorgonia.WithInit(gorgonia.Zeroes()))
+		xScaled2, err := gorgonia.HadamardProd(x, ld.ln2W) // [1,d] ⊙ [1,d] = [1,d]
+		if err != nil {
+			xScaled2 = x
+		}
+		x, err = gorgonia.Add(xScaled2, ld.ln2B) // [1,d] + [1,d] = [1,d]
+		if err != nil {
+			return nil, fmt.Errorf("layer %d layernorm2: %w", i, err)
+		}
+
 		m.layers[i] = ld
 	}
 
@@ -288,11 +421,18 @@ func newRealModel(cfg Config) (*transformerModel, error) {
 	addVG(m.headW)
 	addVG(m.headB)
 	for i := range m.layers {
-		addVG(m.layers[i].wo)
+		addVG(m.layers[i].qW)
+		addVG(m.layers[i].kW)
+		addVG(m.layers[i].vW)
+		addVG(m.layers[i].oW)
 		addVG(m.layers[i].ff1W)
 		addVG(m.layers[i].ff1B)
 		addVG(m.layers[i].ff2W)
 		addVG(m.layers[i].ff2B)
+		addVG(m.layers[i].ln1W)
+		addVG(m.layers[i].ln1B)
+		addVG(m.layers[i].ln2W)
+		addVG(m.layers[i].ln2B)
 	}
 
 	if _, err := gorgonia.Grad(m.cost, m.gNodes...); err != nil {
@@ -402,6 +542,35 @@ func (m *transformerModel) BackwardWithTarget(target []float64, lr float64) erro
 	return nil
 }
 
+// ForwardBackward runs forward+backward without stepping the solver.
+// Gradients accumulate in vgNodes. Call Step() after processing a mini-batch.
+func (m *transformerModel) ForwardBackward(target []float64) error {
+	t := tensor.New(tensor.WithShape(1, m.cfg.OutputDim), tensor.WithBacking(target))
+	if err := gorgonia.Let(m.targetIn, t); err != nil {
+		return err
+	}
+	m.vm.Reset()
+	if err := m.vm.RunAll(); err != nil {
+		return fmt.Errorf("transformer: forward-backward: %w", err)
+	}
+	return nil
+}
+
+// Step applies accumulated gradients via the solver and resets the VM.
+func (m *transformerModel) Step(lr float64) error {
+	if err := m.sol.Step(m.vgNodes); err != nil {
+		return err
+	}
+	m.vm.Reset()
+	return nil
+}
+
+// ResetGradients zeros out accumulated gradients by resetting the VM.
+func (m *transformerModel) ResetGradients() error {
+	m.vm.Reset()
+	return nil
+}
+
 func (m *transformerModel) allLearnableNodes() []*gorgonia.Node {
 	var nodes []*gorgonia.Node
 	nodes = append(nodes, m.coordProjW, m.coordProjB)
@@ -410,7 +579,9 @@ func (m *transformerModel) allLearnableNodes() []*gorgonia.Node {
 	}
 	nodes = append(nodes, m.headW, m.headB)
 	for i := range m.layers {
-		nodes = append(nodes, m.layers[i].wo, m.layers[i].ff1W, m.layers[i].ff1B, m.layers[i].ff2W, m.layers[i].ff2B)
+		nodes = append(nodes, m.layers[i].qW, m.layers[i].kW, m.layers[i].vW, m.layers[i].oW)
+		nodes = append(nodes, m.layers[i].ff1W, m.layers[i].ff1B, m.layers[i].ff2W, m.layers[i].ff2B)
+		nodes = append(nodes, m.layers[i].ln1W, m.layers[i].ln1B, m.layers[i].ln2W, m.layers[i].ln2B)
 	}
 	return nodes
 }
@@ -506,8 +677,8 @@ func ParamCount(cfg Config) int {
 	}
 	// transformer layers
 	for i := 0; i < cfg.NumLayers; i++ {
-		// self-attention: Q, K, V, O
-		count += 4 * (d*d + d)
+		// self-attention: Q, K, V, O (no biases, weight matrices only)
+		count += 4 * d * d
 		// FFN
 		count += d*cfg.FFNDim + cfg.FFNDim + cfg.FFNDim*d + d
 		// layer norm (2 per layer)

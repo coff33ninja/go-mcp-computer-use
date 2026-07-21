@@ -23,7 +23,10 @@ func testCfg() transformer.Config {
 		NumLayers:  2,
 		FFNDim:     64,
 		CoordDim:   7,
-		OutputDim:  7,
+		OutputDim:  5 + 2 + 10 + 6, // 5 tools + 2 to_xy + 10 args + 6 window (FromCoordDim=0)
+		ArgDim:     10,
+		WindowDim:  6,
+		HistoryLen: 0,
 	}
 }
 
@@ -271,5 +274,128 @@ func TestTrainer_TempDirCleanup(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "model.bin")); os.IsNotExist(err) {
 		t.Error("model file not created")
+	}
+}
+
+func TestDecodeArgIndex_Scroll(t *testing.T) {
+	tests := []struct {
+		argsJSON string
+		expected int
+	}{
+		{`{"clicks":5}`, 0},   // up
+		{`{"clicks":-3}`, 1},  // down
+		{`{"clicks":0}`, 1},   // default down
+		{`{"clicks":100}`, 0}, // up
+	}
+	for _, tt := range tests {
+		idx := decodeArgIndex("scroll", tt.argsJSON)
+		if idx != tt.expected {
+			t.Errorf("scroll %s: got %d, want %d", tt.argsJSON, idx, tt.expected)
+		}
+	}
+}
+
+func TestDecodeArgIndex_KeyPress(t *testing.T) {
+	tests := []struct {
+		argsJSON string
+		expected int
+	}{
+		{`{"keys":["Ctrl"]}`, 4},         // modifier
+		{`{"keys":["Shift"]}`, 4},         // modifier
+		{`{"keys":["Up"]}`, 5},            // navigation
+		{`{"keys":["Tab"]}`, 5},           // navigation
+		{`{"keys":["F5"]}`, 6},            // function
+		{`{"keys":["a"]}`, 7},             // alpha
+		{`{"keys":["Z"]}`, 7},             // alpha
+		{`{"keys":["3"]}`, 8},             // numeric
+		{`{"keys":["Enter"]}`, 9},         // special
+		{`{"keys":["Escape"]}`, 9},        // special
+		{`{"keys":["Backspace"]}`, 9},     // special
+	}
+	for _, tt := range tests {
+		idx := decodeArgIndex("key_press", tt.argsJSON)
+		if idx != tt.expected {
+			t.Errorf("key_press %s: got %d, want %d", tt.argsJSON, idx, tt.expected)
+		}
+	}
+}
+
+func TestDecodeArgIndex_OtherTool(t *testing.T) {
+	idx := decodeArgIndex("click", `{"x":100,"y":200}`)
+	if idx != -1 {
+		t.Errorf("click should return -1, got %d", idx)
+	}
+	idx = decodeArgIndex("hover", `{"x":50,"y":50}`)
+	if idx != -1 {
+		t.Errorf("hover should return -1, got %d", idx)
+	}
+}
+
+func TestMakeTarget_ArgDim(t *testing.T) {
+	cfg := testCfg()
+	model, _ := transformer.New(cfg)
+	tok := tokenizer.NewSimpleTokenizer()
+	enc := spatial.NewEncoder(spatial.ScreenConfig{})
+
+	tr := NewTrainer(TrainerConfig{
+		Model:        model,
+		ModelConfig:  cfg,
+		Tokenizer:    tok,
+		Encoder:      enc,
+		Tools:        []string{"click", "scroll", "key_press", "hover", "type_text"},
+		LearningRate: 0.01,
+	})
+
+	// scroll down → tool index 1 = 1.0, arg index 1 (scroll_down) = 1.0
+	target := tr.makeTarget("scroll", `{"clicks":-5}`)
+	numTools := 5
+	if target[1] != 1.0 {
+		t.Errorf("scroll tool: got %.1f, want 1.0", target[1])
+	}
+	if target[numTools+2+1] != 1.0 {
+		t.Errorf("scroll_down arg: got %.1f, want 1.0 at index %d", target[numTools+2+1], numTools+2+1)
+	}
+
+	// key_press Enter → tool index 2 = 1.0, arg index 9 (special) = 1.0
+	target = tr.makeTarget("key_press", `{"keys":["Enter"]}`)
+	if target[2] != 1.0 {
+		t.Errorf("key_press tool: got %.1f, want 1.0", target[2])
+	}
+	if target[numTools+2+9] != 1.0 {
+		t.Errorf("key_special arg: got %.1f, want 1.0 at index %d", target[numTools+2+9], numTools+2+9)
+	}
+
+	// click → no arg set
+	target = tr.makeTarget("click", `{"x":100,"y":200}`)
+	if target[0] != 1.0 {
+		t.Errorf("click tool: got %.1f, want 1.0", target[0])
+	}
+	// all arg dims should be 0
+	for i := numTools + 2; i < numTools+2+10; i++ {
+		if target[i] != 0.0 {
+			t.Errorf("click arg[%d] should be 0, got %.1f", i, target[i])
+		}
+	}
+}
+
+func TestClassifyKey_Comprehensive(t *testing.T) {
+	tests := []struct {
+		key      string
+		expected int
+	}{
+		{"ctrl", 4}, {"alt", 4}, {"shift", 4}, {"win", 4},
+		{"Ctrl+C", 4}, {"Alt+Tab", 4}, {"Shift+A", 4},
+		{"up", 5}, {"down", 5}, {"left", 5}, {"right", 5},
+		{"home", 5}, {"end", 5}, {"pageup", 5}, {"pagedown", 5}, {"tab", 5},
+		{"f1", 6}, {"f12", 6},
+		{"a", 7}, {"z", 7}, {"m", 7},
+		{"0", 8}, {"9", 8},
+		{"enter", 9}, {"space", 9}, {"escape", 9}, {"backspace", 9}, {"delete", 9},
+	}
+	for _, tt := range tests {
+		got := classifyKey(tt.key)
+		if got != tt.expected {
+			t.Errorf("classifyKey(%q) = %d, want %d", tt.key, got, tt.expected)
+		}
 	}
 }
