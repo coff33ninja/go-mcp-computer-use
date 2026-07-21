@@ -50,8 +50,8 @@ ml/                             — Go-native ML transformer module
   ├── dataloader/sqlite.go     — reads training pairs from SQLite
   ├── tokenizer/simple.go      — character-level tokenizer
   ├── spatial/encoder.go       — 7-feature DPI-aware coordinate encoding
-  ├── online/online.go         — session-scoped learning
-  └── export/export.go         — ONNX export for inference
+  ├── online/learner.go        — experience replay buffer (circular, 10K samples)
+  └── export/serializer.go     — gob weight serialization
 
 internal/server/server.go      — MCP tool registrations (146 tools)
 internal/config/config.go      — JSON config file (~/.config/go-mcp-computer-use/config.json)

@@ -730,6 +730,8 @@
 
 ## 28. MEMORY & ML — Learn and Adapt
 
+> **Note**: ONNX models (YOLO, MobileNet) are temporary placeholders. Custom neural network planned in §34.
+
 ### HAVE
 - `memory_set` / `memory_get` / `memory_search` / `memory_list` / `memory_forget` — SQLite FTS5 persistent fact store with TTL
 - `agent_analyze` / `agent_suggest` / `agent_train` — adaptive engine (timing stats, success rates, coordinate prediction)
@@ -868,25 +870,21 @@
 
 ## 33. UPGRADE — Self-Update System (v1.3.0)
 
-> **Planned for v1.3.0** — after the backlog is cleared. Requires permission system (§32)
-> and transport system (§29) to be in place first.
-
-### Design Document
-Full spec: `docs/meta/plan-self-update.md`
+> Nice to have. Requires permission system (§32) and transport system (§29) first.
+> Full spec: `docs/meta/plan-self-update.md`
 
 ### HAVE
 — *none*
 
 ### NEXT
+— *none*
+
+### FAR
 | Tool | Why |
 |------|-----|
 | `get_client_info` — detect which AI client is using the MCP server | parent process detection, restart strategy |
 | `update_server` — check for updates and optionally apply | self-update with client-aware restart |
 | `check_update_on_startup` — config field to auto-check on start | proactive version awareness |
-
-### FAR
-| Tool | Why |
-|------|-----|
 | `rollback_update` — restore previous version from `.bak` | recovery from bad updates |
 | `set_update_channel` — stable/beta/nightly | pre-release access |
 | `download_progress` — track download progress for large binaries | UX feedback |
@@ -902,6 +900,35 @@ Full spec: `docs/meta/plan-self-update.md`
 | gemini / codex / copilot CLI | cli | Replace binary, marker file, user restarts |
 | pwsh/cmd (direct) | direct | Replace binary, exit |
 | Unknown | unknown | Download to safe location, tell user to replace manually |
+
+---
+
+## 34. CUSTOM NEURAL NETWORK — Self-Designing Model (v0.3.x)
+
+> **Next major milestone.** v0.2.46 delivered the Go-native transformer engine (14K-param Gorgonia model).
+> v0.3.x: expand architecture, improve accuracy, add sequence awareness, and build toward a purpose-built model for computer use automation.
+
+### HAVE
+See §28 Memory & ML — transformer engine, ml_bridge, tokenizer, spatial encoder, training pipeline, online learning, model export, smart cascade text finding, text_location_memory all delivered in v0.2.46-48.
+
+### NEXT
+| Component | Why |
+|-----------|-----|
+| Sequence context in predictions | Use preceding action history as transformer input features |
+| Larger model experiments | Test 128-dim / 4-layer variants for better accuracy |
+| Multi-task output head | Predict tool + args + coordinates in single forward pass |
+| Training data augmentation | Synthesize OCR variations, DPI scales, window layouts |
+| Model versioning | Track accuracy across model versions, auto-rollback on regression |
+
+### FAR
+| Component | Why |
+|-----------|-----|
+| Online learning activation | Enable replay buffer training during live sessions (currently batch-only) |
+| Multi-task training | OCR recognition + element detection + action prediction simultaneously |
+| Model compression | Quantize/prune for faster inference on low-end hardware |
+| Transfer learning | Fine-tune from a base model for specific UI patterns (e.g., Outlook, VS Code) |
+| Attention visualization | Expose attention weights for debugging predictions |
+| Custom architecture search | NAS (neural architecture search) for optimal transformer config |
 
 ---
 
@@ -941,17 +968,18 @@ Full spec: `docs/meta/plan-self-update.md`
 | Browser Automation | 7 | 7 | 8 | 22 |
 | Linux & Container | 0 | 2 | 4 | 6 |
 | Permissions | 0 | 7 | 4 | 11 |
-| Upgrade (v1.3.0) | 0 | 3 | 3 | 6 |
-| **TOTAL** | **160** | **142** | **132** | **434** |
+| Upgrade (§33) | 0 | 0 | 6 | 6 |
+| Custom NN (§34) | 0 | 5 | 6 | 11 |
+| **TOTAL** | **160** | **139** | **141** | **440** |
 
 ## Strategy
 
-1. **Build out NEXT items** — straightforward and high value (~142 items remaining)
-2. **Error wrapping audit** — remaining Slice 4 item for consistent error feedback
-3. **Security + Transport** — TLS + SSE prerequisites for remote deployment
-4. **Browser DOM mode** — CDP/Playwright integration for 10x faster web tasks
-5. **Background control** — SendInput/UIA for non-disruptive clicks
-6. **Permissions** — `is_admin`, `get_username`, UAC awareness (§32)
-7. **Cross-platform interface** — Linux/macOS stubs + container support
-8. **ML model improvement** — explore UI-specific fine-tuning of ONNX models
-9. **Upgrade system (v1.3.0)** — self-update with client-aware restart (§33, requires §32 + §29)
+1. **Custom neural network (§34, v0.3.x)** — expand transformer architecture, improve accuracy, add sequence context (next major milestone)
+2. **Build out NEXT items** — straightforward and high value (~139 items remaining)
+3. **Error wrapping audit** — remaining Slice 4 item for consistent error feedback
+4. **Security + Transport** — TLS + SSE prerequisites for remote deployment
+5. **Browser DOM mode** — CDP/Playwright integration for 10x faster web tasks
+6. **Background control** — SendInput/UIA for non-disruptive clicks
+7. **Permissions** — `is_admin`, `get_username`, UAC awareness (§32)
+8. **Cross-platform interface** — Linux/macOS stubs + container support
+9. **Upgrade system (§33, v1.3.0)** — self-update with client-aware restart (requires §32 + §29)
