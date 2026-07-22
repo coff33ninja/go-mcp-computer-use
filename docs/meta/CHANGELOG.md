@@ -2,6 +2,37 @@
 
 ## [Unreleased]
 
+## [0.2.54] - 2026-07-22
+
+### Changed
+
+- **Multi-token attention** — transformer now processes all `MaxLen` token positions simultaneously instead of averaging embeddings into a single `[1,d]` vector. Previously Q/K/V operated on one row — attention was trivially `softmax([1,1]) = 1.0` so output was always just `V`, making Q/K dead weights. Now each of the `MaxLen` token positions gets its own embedding, coordinate, and history projection, and attention genuinely mixes information across positions.
+
+  **Attention mechanism** (built entirely in the Gorgonia computation graph so gradients flow to Q/K):
+  ```
+  scores = Q @ Kᵀ / √d        ← [MaxLen, MaxLen]
+  weights = softmax(scores)     ← row-wise via Exp → Sum(axis=1) → HadamardDiv
+  output = weights @ V          ← [MaxLen, d]
+  ```
+
+  **Pooling** collapses `[MaxLen, d]` back to `[1, d]` for the output head:
+  ```
+  pooled = Mean(transformer_output, axis=0) → reshape to [1, d]
+  logits = pooled @ headW + headB
+  ```
+
+  **Gorgonia broadcasting constraint**: Gorgonia doesn't support element-wise broadcasting (e.g. `[MaxLen,d] / [d]` fails). All biases and layer norms changed from vectors to `[MaxLen, d]` matrices. Row-wise softmax uses trick: `row_sum_2d @ ones[1,MaxLen]` produces a `[MaxLen, MaxLen]` denominator, then `HadamardDiv` divides element-wise.
+
+  **Result**: Q/K now genuinely participate in attention. Test config: 16K → 27K params. Loss: 0.099 → 0.082 in 20 training steps.
+  - `embInput` shape `[1,d]` → `[MaxLen,d]` (per-token embeddings)
+  - `coordIn` shape `[1,coordDim]` → `[MaxLen,coordDim]` (coords repeated per token)
+  - `coordProjB`/`historyProjB` shape `[d]` → `[MaxLen,d]` (per-position biases)
+  - Layer norm params `ln1W/ln1B/ln2W/ln2B` shape `[1,d]` → `[MaxLen,d]`
+  - FFN biases `ff1B`/`ff2B` shape `[d]` → `[MaxLen,FFNDim]`/`[MaxLen,d]`
+  - Mean-pool via `gorgonia.Mean(x, 0)` + `Reshape` → `[1,d]` before output head
+- Removed Q/K L2 regularization hack (connected through attention path now)
+- Removed Go-side `softmax2D`, `computeAttentionWeights`, `getWeight` helpers
+
 ## [0.2.53] - 2026-07-22
 
 ### Fixed

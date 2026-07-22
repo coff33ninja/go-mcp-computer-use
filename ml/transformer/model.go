@@ -19,28 +19,22 @@ type Config struct {
 	NumLayers    int
 	FFNDim       int
 	CoordDim     int
-	FromCoordDim int    // extra coord dimensions for drag (from_x, from_y). 0 = single-coord tools
+	FromCoordDim int
 	OutputDim    int
-	ArgDim       int    // argument prediction dimensions (scroll dir, key name, etc.)
-	WindowDim    int    // window category prediction (0 = disabled). Predicts which window type to target.
-	SequenceLen  int    // number of future actions to predict (0 = disabled). Each slot = numTools + 2 + argDim dims
-	HistoryLen   int    // number of recent actions for sequence context (0 = disabled)
+	ArgDim       int
+	WindowDim    int
+	SequenceLen  int
+	HistoryLen   int
 }
 
-// SeqSlotDim returns the number of output dims per sequence prediction slot.
-// Each slot: tool(numTools) + to_xy(2) + arg(argDim).
 func (c Config) SeqSlotDim(numTools int) int {
 	return numTools + 2 + c.ArgDim
 }
 
-// PrimaryDim returns the number of output dims for the primary (next-action) head.
-// Primary: tool(numTools) + from_xy(fromCoordDim) + to_xy(2) + arg(argDim) + window(windowDim).
 func (c Config) PrimaryDim(numTools int) int {
 	return numTools + c.FromCoordDim + 2 + c.ArgDim + c.WindowDim
 }
 
-// TotalOutputDim returns the expected total output dimensionality.
-// PrimaryDim + SequenceLen × SeqSlotDim.
 func (c Config) TotalOutputDim(numTools int) int {
 	return c.PrimaryDim(numTools) + c.SequenceLen*c.SeqSlotDim(numTools)
 }
@@ -53,23 +47,20 @@ func DefaultConfig() Config {
 		NumHeads:   4,
 		NumLayers:  3,
 		FFNDim:     512,
-		CoordDim:   12, // matches spatial.FeatureDim
+		CoordDim:   12,
 		OutputDim:  50,
 		HistoryLen: 5,
 	}
 }
 
-// ModelSize presets for different model capacities.
 type ModelSize string
 
 const (
-	SizeSmall  ModelSize = "small"  // ~14K params — fast, low memory
-	SizeMedium ModelSize = "medium" // ~80K params — balanced
-	SizeLarge  ModelSize = "large"  // ~300K params — high accuracy
+	SizeSmall  ModelSize = "small"
+	SizeMedium ModelSize = "medium"
+	SizeLarge  ModelSize = "large"
 )
 
-// ConfigForSize returns a Config pre-filled for the given model size.
-// CoordDim, OutputDim, ArgDim, WindowDim, and SequenceLen must be set separately.
 func ConfigForSize(size ModelSize, coordDim, outputDim, argDim, windowDim, seqLen int) Config {
 	switch size {
 	case SizeSmall:
@@ -84,7 +75,7 @@ func ConfigForSize(size ModelSize, coordDim, outputDim, argDim, windowDim, seqLe
 			EmbedDim: 128, NumHeads: 4, NumLayers: 4, FFNDim: 256,
 			CoordDim: coordDim, OutputDim: outputDim, ArgDim: argDim, WindowDim: windowDim, SequenceLen: seqLen, HistoryLen: 5,
 		}
-	default: // medium
+	default:
 		return Config{
 			VocabSize: 2000, MaxLen: 128,
 			EmbedDim: 96, NumHeads: 3, NumLayers: 3, FFNDim: 192,
@@ -97,9 +88,9 @@ type Model interface {
 	Forward(tokens [][]int, coords [][]float64, history [][]int) ([][]float64, error)
 	Backward(loss float64, lr float64) error
 	BackwardWithTarget(target []float64, lr float64) error
-	ForwardBackward(target []float64) error // forward + backward without solver step (for batch accumulation)
-	Step(lr float64) error                  // apply accumulated gradients via solver
-	ResetGradients() error                  // zero out accumulated gradients
+	ForwardBackward(target []float64) error
+	Step(lr float64) error
+	ResetGradients() error
 	Parameters() []float64
 	LoadParameters(params []float64) error
 	Save(path string) error
@@ -118,12 +109,16 @@ func NewReal(cfg Config) (Model, error) {
 }
 
 type layerDef struct {
-	qW, kW, vW *gorgonia.Node // Q, K, V projections
-	oW          *gorgonia.Node // output projection
-	ff1W, ff1B  *gorgonia.Node
-	ff2W, ff2B  *gorgonia.Node
-	ln1W, ln1B *gorgonia.Node // post-attention layer norm
-	ln2W, ln2B *gorgonia.Node // post-FFN layer norm
+	qW, kW, vW *gorgonia.Node
+	oW         *gorgonia.Node
+	ff1W       *gorgonia.Node
+	ff1B       *gorgonia.Node // [MaxLen, FFNDim]
+	ff2W       *gorgonia.Node
+	ff2B       *gorgonia.Node // [MaxLen, d]
+	ln1W       *gorgonia.Node // [MaxLen, d]
+	ln1B       *gorgonia.Node // [MaxLen, d]
+	ln2W       *gorgonia.Node // [MaxLen, d]
+	ln2B       *gorgonia.Node // [MaxLen, d]
 }
 
 type transformerModel struct {
@@ -132,19 +127,18 @@ type transformerModel struct {
 	vm   gorgonia.VM
 	sol  gorgonia.Solver
 
-	embInput *gorgonia.Node // [1, embedDim] float64
-	coordIn  *gorgonia.Node // [1, coordDim] float64
-	historyIn *gorgonia.Node // [1, historyLen * embedDim] float64 (flattened history embeddings)
-	targetIn *gorgonia.Node // [1, outputDim] float64
+	embInput  *gorgonia.Node // [MaxLen, embedDim]
+	coordIn   *gorgonia.Node // [MaxLen, coordDim]
+	historyIn *gorgonia.Node // [MaxLen, historyLen*embedDim] (if HistoryLen > 0)
+	targetIn  *gorgonia.Node // [1, outputDim]
 
 	logits *gorgonia.Node
 	cost   *gorgonia.Node
 
-	// embedding table (not in graph — looked up in Go)
-	embedTable *tensor.Dense // [vocabSize, embedDim]
+	embedTable *tensor.Dense
 
-	coordProjW  *gorgonia.Node
-	coordProjB  *gorgonia.Node
+	coordProjW   *gorgonia.Node
+	coordProjB   *gorgonia.Node
 	historyProjW *gorgonia.Node
 	historyProjB *gorgonia.Node
 
@@ -160,37 +154,32 @@ func newRealModel(cfg Config) (*transformerModel, error) {
 	g := gorgonia.NewGraph()
 	m := &transformerModel{cfg: cfg, g: g}
 	d := cfg.EmbedDim
+	ml := cfg.MaxLen
 
-	// embedding table (owned by Go, not in graph)
 	m.embedTable = tensor.New(tensor.WithShape(cfg.VocabSize, d), tensor.Of(tensor.Float64))
-	// Glorot init for embeddings
-	scale := 1.0
+	limit := math.Sqrt(6.0 / float64(cfg.VocabSize+d))
 	for i := 0; i < cfg.VocabSize*d; i++ {
-		m.embedTable.Data().([]float64)[i] = rand.NormFloat64() * scale
+		m.embedTable.Data().([]float64)[i] = (rand.Float64()*2 - 1) * limit
 	}
 
-	// graph inputs
-	m.embInput = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(1, d), gorgonia.WithName("embInput"))
-	m.coordIn = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(1, cfg.CoordDim), gorgonia.WithName("coordIn"))
+	m.embInput = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(ml, d), gorgonia.WithName("embInput"))
+	m.coordIn = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(ml, cfg.CoordDim), gorgonia.WithName("coordIn"))
 	m.targetIn = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(1, cfg.OutputDim), gorgonia.WithName("targetIn"))
 
-	// history input: flattened history embeddings [1, historyLen * embedDim]
 	histDim := cfg.HistoryLen * d
 	if histDim > 0 {
-		m.historyIn = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(1, histDim), gorgonia.WithName("historyIn"))
+		m.historyIn = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(ml, histDim), gorgonia.WithName("historyIn"))
 		m.historyProjW = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(histDim, d),
 			gorgonia.WithName("historyProjW"), gorgonia.WithInit(gorgonia.GlorotU(1.0)))
-		m.historyProjB = gorgonia.NewVector(g, tensor.Float64, gorgonia.WithShape(d),
+		m.historyProjB = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(ml, d),
 			gorgonia.WithName("historyProjB"), gorgonia.WithInit(gorgonia.Zeroes()))
 	}
 
-	// coord projection
 	m.coordProjW = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(cfg.CoordDim, d),
 		gorgonia.WithName("coordProjW"), gorgonia.WithInit(gorgonia.GlorotU(1.0)))
-	m.coordProjB = gorgonia.NewVector(g, tensor.Float64, gorgonia.WithShape(d),
+	m.coordProjB = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(ml, d),
 		gorgonia.WithName("coordProjB"), gorgonia.WithInit(gorgonia.Zeroes()))
 
-	// combine: embInput + coordProj [+ historyProj]
 	coordProj, err := gorgonia.Mul(m.coordIn, m.coordProjW)
 	if err != nil {
 		return nil, err
@@ -204,7 +193,6 @@ func newRealModel(cfg Config) (*transformerModel, error) {
 		return nil, err
 	}
 
-	// add history mixing if enabled
 	if cfg.HistoryLen > 0 {
 		histProj, err := gorgonia.Mul(m.historyIn, m.historyProjW)
 		if err != nil {
@@ -220,13 +208,11 @@ func newRealModel(cfg Config) (*transformerModel, error) {
 		}
 	}
 
-	// layers
 	m.layers = make([]layerDef, cfg.NumLayers)
 	for i := 0; i < cfg.NumLayers; i++ {
 		p := fmt.Sprintf("L%d", i)
 		ld := layerDef{}
 
-		// ── Q, K, V projections ──
 		ld.qW = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(d, d),
 			gorgonia.WithName(p+"_qW"), gorgonia.WithInit(gorgonia.GlorotU(1.0)))
 		ld.kW = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(d, d),
@@ -236,99 +222,92 @@ func newRealModel(cfg Config) (*transformerModel, error) {
 		ld.oW = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(d, d),
 			gorgonia.WithName(p+"_oW"), gorgonia.WithInit(gorgonia.GlorotU(1.0)))
 
-		Q, err := gorgonia.Mul(x, ld.qW) // [1, d]
+		Q, err := gorgonia.Mul(x, ld.qW)
 		if err != nil {
 			return nil, fmt.Errorf("layer %d Q: %w", i, err)
 		}
-		K, err := gorgonia.Mul(x, ld.kW) // [1, d]
+		K, err := gorgonia.Mul(x, ld.kW)
 		if err != nil {
 			return nil, fmt.Errorf("layer %d K: %w", i, err)
 		}
-		V, err := gorgonia.Mul(x, ld.vW) // [1, d]
+		V, err := gorgonia.Mul(x, ld.vW)
 		if err != nil {
 			return nil, fmt.Errorf("layer %d V: %w", i, err)
 		}
 
-		// ── Scaled dot-product attention (MatMul-only, no squeeze) ──
-		//
-		// Standard: attn = softmax(Q @ Kᵀ / √d) @ V
-		// For single token [1,d]: Q @ Kᵀ = [1,1] → softmax = 1.0 → output = V.
-		//
-		// Gorgonia squeezes [1,1] nodes to scalars, breaking downstream Mul.
-		// Solution: use associativity. Compute as Q @ (Kᵀ @ V / √d):
-		//   Kᵀ @ V  = [d,1] @ [1,d] = [d,d]  (outer product)
-		//   scale:   [d,d] @ diag(1/√d) = [d,d]
-		//   Q @ ...  = [1,d] @ [d,d] = [1,d]  (final output)
-		// All steps use gorgonia.Mul (matrix multiply) — no shape squeeze.
-
-		// Scale factor: 1/√headDim, applied as diagonal matrix multiplication
-		scaleVal := 1.0 / math.Sqrt(float64(d))
-
-		// Kᵀ @ V = [d,1] @ [1,d] = [d,d]
-		Kt, err := gorgonia.Transpose(K) // [1,d] → [d,1]
+		// attention scores: Q @ K^T / sqrt(d)
+		KT, err := gorgonia.Transpose(K, 1, 0)
 		if err != nil {
-			return nil, fmt.Errorf("layer %d K transpose: %w", i, err)
+			return nil, fmt.Errorf("layer %d K^T: %w", i, err)
 		}
-		outerKV, err := gorgonia.Mul(Kt, V) // [d,1] @ [1,d] = [d,d]
+		scores, err := gorgonia.Mul(Q, KT)
 		if err != nil {
-			return nil, fmt.Errorf("layer %d KᵀV: %w", i, err)
+			return nil, fmt.Errorf("layer %d scores: %w", i, err)
 		}
-
-		// Scale via diagonal: outerKV @ diag(s/√d) = outerKV * (1/√d)
-		diagScale := gorgonia.NewConstant(tensor.New(
-			tensor.Of(tensor.Float64),
-			tensor.WithShape(d, d),
-			tensor.WithBacking(func() []float64 {
-				b := make([]float64, d*d)
-				for j := 0; j < d; j++ {
-					b[j*d+j] = scaleVal
-				}
-				return b
-			}()),
-		))
-		scaledOuter, err := gorgonia.Mul(outerKV, diagScale) // [d,d] @ [d,d] = [d,d]
+		scaleConst := gorgonia.NewConstant(1.0 / math.Sqrt(float64(d)))
+		scores, err = gorgonia.HadamardProd(scores, scaleConst)
 		if err != nil {
 			return nil, fmt.Errorf("layer %d scale: %w", i, err)
 		}
 
-		// Q @ scaled(KᵀV) = [1,d] @ [d,d] = [1,d]
-		attnRaw, err := gorgonia.Mul(Q, scaledOuter) // [1,d]
+		// row-wise softmax: exp / row_sum
+		expScores, err := gorgonia.Exp(scores)
 		if err != nil {
-			return nil, fmt.Errorf("layer %d Q@KTV: %w", i, err)
+			return nil, fmt.Errorf("layer %d exp: %w", i, err)
+		}
+		rowSums, err := gorgonia.Sum(expScores, 1)
+		if err != nil {
+			return nil, fmt.Errorf("layer %d rowSum: %w", i, err)
+		}
+		rowSums2d, err := gorgonia.Reshape(rowSums, tensor.Shape{ml, 1})
+		if err != nil {
+			return nil, fmt.Errorf("layer %d rowSum reshape: %w", i, err)
+		}
+		onesData := make([]float64, ml)
+		for idx := range onesData {
+			onesData[idx] = 1.0
+		}
+		ones := gorgonia.NewConstant(tensor.New(tensor.WithShape(1, ml), tensor.WithBacking(onesData)))
+		outer, err := gorgonia.Mul(rowSums2d, ones)
+		if err != nil {
+			return nil, fmt.Errorf("layer %d outer: %w", i, err)
+		}
+		attnWeights, err := gorgonia.HadamardDiv(expScores, outer)
+		if err != nil {
+			return nil, fmt.Errorf("layer %d softmax div: %w", i, err)
 		}
 
-		// Output projection: attnOut = attnRaw @ oW
-		attnOut, err := gorgonia.Mul(attnRaw, ld.oW) // [1,d] @ [d,d] = [1,d]
+		attnOut, err := gorgonia.Mul(attnWeights, V)
+		if err != nil {
+			return nil, fmt.Errorf("layer %d attn: %w", i, err)
+		}
+
+		attnProj, err := gorgonia.Mul(attnOut, ld.oW)
 		if err != nil {
 			return nil, fmt.Errorf("layer %d O proj: %w", i, err)
 		}
 
-		// Residual connection
-		x, err = gorgonia.Add(x, attnOut)
+		x, err = gorgonia.Add(x, attnProj)
 		if err != nil {
 			return nil, fmt.Errorf("layer %d residual: %w", i, err)
 		}
 
-		// ── Layer norm 1 (post-attention) ──
-		// Uses [1,d] matrices (not vectors) to prevent Gorgonia HadamardProd
-		// from squeezing [1,d] → [d] when multiplying with a [d] vector.
-		ld.ln1W = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(1, d),
+		ld.ln1W = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(ml, d),
 			gorgonia.WithName(p+"_ln1W"), gorgonia.WithInit(gorgonia.Ones()))
-		ld.ln1B = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(1, d),
+		ld.ln1B = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(ml, d),
 			gorgonia.WithName(p+"_ln1B"), gorgonia.WithInit(gorgonia.Zeroes()))
-		xScaled, err := gorgonia.HadamardProd(x, ld.ln1W) // [1,d] ⊙ [1,d] = [1,d]
+		xScaled, err := gorgonia.HadamardProd(x, ld.ln1W)
 		if err != nil {
 			xScaled = x
 		}
-		x, err = gorgonia.Add(xScaled, ld.ln1B) // [1,d] + [1,d] = [1,d]
+		x, err = gorgonia.Add(xScaled, ld.ln1B)
 		if err != nil {
 			return nil, fmt.Errorf("layer %d layernorm1: %w", i, err)
 		}
 
-		// ── Feed-forward network ──
 		ld.ff1W = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(d, cfg.FFNDim),
 			gorgonia.WithName(p+"_ff1W"), gorgonia.WithInit(gorgonia.GlorotU(1.0)))
-		ld.ff1B = gorgonia.NewVector(g, tensor.Float64, gorgonia.WithShape(cfg.FFNDim),
+		ld.ff1B = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(ml, cfg.FFNDim),
 			gorgonia.WithName(p+"_ff1B"), gorgonia.WithInit(gorgonia.Zeroes()))
 		ff1, err := gorgonia.Mul(x, ld.ff1W)
 		if err != nil {
@@ -345,7 +324,7 @@ func newRealModel(cfg Config) (*transformerModel, error) {
 
 		ld.ff2W = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(cfg.FFNDim, d),
 			gorgonia.WithName(p+"_ff2W"), gorgonia.WithInit(gorgonia.GlorotU(1.0)))
-		ld.ff2B = gorgonia.NewVector(g, tensor.Float64, gorgonia.WithShape(d),
+		ld.ff2B = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(ml, d),
 			gorgonia.WithName(p+"_ff2B"), gorgonia.WithInit(gorgonia.Zeroes()))
 		ff2, err := gorgonia.Mul(ff1, ld.ff2W)
 		if err != nil {
@@ -360,17 +339,15 @@ func newRealModel(cfg Config) (*transformerModel, error) {
 			return nil, err
 		}
 
-		// ── Layer norm 2 (post-FFN) ──
-		// Same [1,d] shape rationale as ln1 above.
-		ld.ln2W = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(1, d),
+		ld.ln2W = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(ml, d),
 			gorgonia.WithName(p+"_ln2W"), gorgonia.WithInit(gorgonia.Ones()))
-		ld.ln2B = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(1, d),
+		ld.ln2B = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(ml, d),
 			gorgonia.WithName(p+"_ln2B"), gorgonia.WithInit(gorgonia.Zeroes()))
-		xScaled2, err := gorgonia.HadamardProd(x, ld.ln2W) // [1,d] ⊙ [1,d] = [1,d]
+		xScaled2, err := gorgonia.HadamardProd(x, ld.ln2W)
 		if err != nil {
 			xScaled2 = x
 		}
-		x, err = gorgonia.Add(xScaled2, ld.ln2B) // [1,d] + [1,d] = [1,d]
+		x, err = gorgonia.Add(xScaled2, ld.ln2B)
 		if err != nil {
 			return nil, fmt.Errorf("layer %d layernorm2: %w", i, err)
 		}
@@ -378,13 +355,22 @@ func newRealModel(cfg Config) (*transformerModel, error) {
 		m.layers[i] = ld
 	}
 
-	// output head
+	// mean-pool: x [MaxLen, d] → mean over axis 0 → [d] → reshape [1, d]
+	pooled, err := gorgonia.Mean(x, 0)
+	if err != nil {
+		return nil, fmt.Errorf("pooling mean: %w", err)
+	}
+	pooled, err = gorgonia.Reshape(pooled, tensor.Shape{1, d})
+	if err != nil {
+		return nil, fmt.Errorf("pooling reshape: %w", err)
+	}
+
 	m.headW = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(d, cfg.OutputDim),
 		gorgonia.WithName("headW"), gorgonia.WithInit(gorgonia.GlorotU(1.0)))
 	m.headB = gorgonia.NewVector(g, tensor.Float64, gorgonia.WithShape(cfg.OutputDim),
 		gorgonia.WithName("headB"), gorgonia.WithInit(gorgonia.Zeroes()))
 
-	m.logits, err = gorgonia.Mul(x, m.headW)
+	m.logits, err = gorgonia.Mul(pooled, m.headW)
 	if err != nil {
 		return nil, err
 	}
@@ -393,7 +379,6 @@ func newRealModel(cfg Config) (*transformerModel, error) {
 		return nil, err
 	}
 
-	// loss
 	diff, err := gorgonia.Sub(m.logits, m.targetIn)
 	if err != nil {
 		return nil, err
@@ -407,7 +392,6 @@ func newRealModel(cfg Config) (*transformerModel, error) {
 		return nil, err
 	}
 
-	// collect all learnable as ValueGrad slice
 	addVG := func(n *gorgonia.Node) {
 		m.gNodes = append(m.gNodes, n)
 		m.vgNodes = append(m.vgNodes, n)
@@ -445,10 +429,29 @@ func newRealModel(cfg Config) (*transformerModel, error) {
 	return m, nil
 }
 
+func (m *transformerModel) lookupEmbedAll(tokens []int) []float64 {
+	d := m.cfg.EmbedDim
+	ml := m.cfg.MaxLen
+	out := make([]float64, ml*d)
+	data := m.embedTable.Data().([]float64)
+	for pos := 0; pos < ml; pos++ {
+		tok := 0
+		if pos < len(tokens) {
+			tok = tokens[pos]
+		}
+		if tok > 0 && tok < m.cfg.VocabSize {
+			base := tok * d
+			copy(out[pos*d:(pos+1)*d], data[base:base+d])
+		}
+	}
+	return out
+}
+
 func (m *transformerModel) lookupEmbed(tokens []int) []float64 {
 	d := m.cfg.EmbedDim
 	emb := make([]float64, d)
 	data := m.embedTable.Data().([]float64)
+	count := 0
 	for _, tok := range tokens {
 		if tok <= 0 || tok >= m.cfg.VocabSize {
 			continue
@@ -456,6 +459,13 @@ func (m *transformerModel) lookupEmbed(tokens []int) []float64 {
 		base := tok * d
 		for j := 0; j < d; j++ {
 			emb[j] += data[base+j]
+		}
+		count++
+	}
+	if count > 1 {
+		inv := 1.0 / float64(count)
+		for j := 0; j < d; j++ {
+			emb[j] *= inv
 		}
 	}
 	return emb
@@ -472,31 +482,37 @@ func (m *transformerModel) Forward(tokens [][]int, coords [][]float64, history [
 		return nil, fmt.Errorf("transformer: token len %d != maxLen %d", len(tokens[0]), m.cfg.MaxLen)
 	}
 
-	emb := m.lookupEmbed(tokens[0])
-	embT := tensor.New(tensor.WithShape(1, m.cfg.EmbedDim), tensor.WithBacking(emb))
+	d := m.cfg.EmbedDim
+	ml := m.cfg.MaxLen
+
+	embData := m.lookupEmbedAll(tokens[0])
+	embT := tensor.New(tensor.WithShape(ml, d), tensor.WithBacking(embData))
 	if err := gorgonia.Let(m.embInput, embT); err != nil {
 		return nil, err
 	}
 
-	cb := make([]float64, m.cfg.CoordDim)
-	copy(cb, coords[0])
-	coordT := tensor.New(tensor.WithShape(1, m.cfg.CoordDim), tensor.WithBacking(cb))
+	// coords: repeat for each token position
+	coordData := make([]float64, ml*m.cfg.CoordDim)
+	for i := 0; i < ml; i++ {
+		copy(coordData[i*m.cfg.CoordDim:(i+1)*m.cfg.CoordDim], coords[0])
+	}
+	coordT := tensor.New(tensor.WithShape(ml, m.cfg.CoordDim), tensor.WithBacking(coordData))
 	if err := gorgonia.Let(m.coordIn, coordT); err != nil {
 		return nil, err
 	}
 
-	// history embedding: average each action's token embedding, flatten
 	if m.cfg.HistoryLen > 0 && m.historyIn != nil {
-		histEmb := make([]float64, m.cfg.HistoryLen*m.cfg.EmbedDim)
+		histEmb := make([]float64, ml*m.cfg.HistoryLen*d)
 		if len(history) > 0 {
-			d := m.cfg.EmbedDim
 			for i := 0; i < m.cfg.HistoryLen && i < len(history); i++ {
 				actionEmb := m.lookupEmbed(history[i])
-				base := i * d
-				copy(histEmb[base:base+d], actionEmb)
+				for pos := 0; pos < ml; pos++ {
+					base := pos*m.cfg.HistoryLen*d + i*d
+					copy(histEmb[base:base+d], actionEmb)
+				}
 			}
 		}
-		histT := tensor.New(tensor.WithShape(1, m.cfg.HistoryLen*m.cfg.EmbedDim), tensor.WithBacking(histEmb))
+		histT := tensor.New(tensor.WithShape(ml, m.cfg.HistoryLen*d), tensor.WithBacking(histEmb))
 		if err := gorgonia.Let(m.historyIn, histT); err != nil {
 			return nil, err
 		}
@@ -542,8 +558,6 @@ func (m *transformerModel) BackwardWithTarget(target []float64, lr float64) erro
 	return nil
 }
 
-// ForwardBackward runs forward+backward without stepping the solver.
-// Gradients accumulate in vgNodes. Call Step() after processing a mini-batch.
 func (m *transformerModel) ForwardBackward(target []float64) error {
 	t := tensor.New(tensor.WithShape(1, m.cfg.OutputDim), tensor.WithBacking(target))
 	if err := gorgonia.Let(m.targetIn, t); err != nil {
@@ -556,8 +570,8 @@ func (m *transformerModel) ForwardBackward(target []float64) error {
 	return nil
 }
 
-// Step applies accumulated gradients via the solver and resets the VM.
 func (m *transformerModel) Step(lr float64) error {
+	clipGradients(m.vgNodes, 1.0)
 	if err := m.sol.Step(m.vgNodes); err != nil {
 		return err
 	}
@@ -565,7 +579,49 @@ func (m *transformerModel) Step(lr float64) error {
 	return nil
 }
 
-// ResetGradients zeros out accumulated gradients by resetting the VM.
+func clipGradients(vgNodes []gorgonia.ValueGrad, maxNorm float64) {
+	var totalNorm2 float64
+	for _, vg := range vgNodes {
+		grad, err := vg.Grad()
+		if err != nil || grad == nil {
+			continue
+		}
+		d, ok := grad.(*tensor.Dense)
+		if !ok {
+			continue
+		}
+		data, ok := d.Data().([]float64)
+		if !ok {
+			continue
+		}
+		for _, v := range data {
+			totalNorm2 += v * v
+		}
+	}
+	totalNorm := math.Sqrt(totalNorm2)
+	if totalNorm <= maxNorm {
+		return
+	}
+	scale := maxNorm / totalNorm
+	for _, vg := range vgNodes {
+		grad, err := vg.Grad()
+		if err != nil || grad == nil {
+			continue
+		}
+		d, ok := grad.(*tensor.Dense)
+		if !ok {
+			continue
+		}
+		data, ok := d.Data().([]float64)
+		if !ok {
+			continue
+		}
+		for i := range data {
+			data[i] *= scale
+		}
+	}
+}
+
 func (m *transformerModel) ResetGradients() error {
 	m.vm.Reset()
 	return nil
@@ -603,7 +659,6 @@ func (m *transformerModel) Parameters() []float64 {
 		}
 		params = append(params, data...)
 	}
-	// also include embed table
 	embedData := m.embedTable.Data().([]float64)
 	params = append(params, embedData...)
 	return params
@@ -615,7 +670,6 @@ func (m *transformerModel) LoadParameters(params []float64) error {
 		return fmt.Errorf("transformer: param count mismatch: got %d, want %d", len(params), expected)
 	}
 
-	// graph nodes first
 	offset := 0
 	for _, n := range m.allLearnableNodes() {
 		val := n.Value()
@@ -633,7 +687,6 @@ func (m *transformerModel) LoadParameters(params []float64) error {
 		copy(data, params[offset:offset+len(data)])
 		offset += len(data)
 	}
-	// embed table last
 	embedData := m.embedTable.Data().([]float64)
 	copy(embedData, params[offset:offset+len(embedData)])
 	return nil
@@ -671,43 +724,33 @@ func (m *transformerModel) Load(path string) error {
 	return m.LoadParameters(params)
 }
 
-// ParamCount returns the total number of trainable parameters for a given config.
 func ParamCount(cfg Config) int {
 	d := cfg.EmbedDim
+	ml := cfg.MaxLen
 	count := 0
-	// embedding table
 	count += cfg.VocabSize * d
-	// coord projection
-	count += cfg.CoordDim*d + d
-	// history projection
+	count += cfg.CoordDim*d + ml*d
 	if cfg.HistoryLen > 0 {
 		histDim := cfg.HistoryLen * d
-		count += histDim*d + d
+		count += histDim*d + ml*d
 	}
-	// transformer layers
 	for i := 0; i < cfg.NumLayers; i++ {
-		// self-attention: Q, K, V, O (no biases, weight matrices only)
 		count += 4 * d * d
-		// FFN
-		count += d*cfg.FFNDim + cfg.FFNDim + cfg.FFNDim*d + d
-		// layer norm (2 per layer)
-		count += 2 * (d + d)
+		count += d*cfg.FFNDim + ml*cfg.FFNDim + cfg.FFNDim*d + ml*d
+		count += 2 * (ml*d + ml*d)
 	}
-	// output head
 	count += d*cfg.OutputDim + cfg.OutputDim
 	return count
 }
 
-// DebugInfo contains diagnostic information from a forward pass.
 type DebugInfo struct {
-	Logits       []float64 `json:"logits"`        // raw output logits
-	ToolProbs    []float64 `json:"tool_probs"`    // softmax over tool logits
-	EmbedNorm    float64   `json:"embed_norm"`    // L2 norm of input embedding
-	OutputNorm   float64   `json:"output_norm"`   // L2 norm of output logits
-	ParamCount   int       `json:"param_count"`   // total trainable parameters
+	Logits     []float64 `json:"logits"`
+	ToolProbs  []float64 `json:"tool_probs"`
+	EmbedNorm  float64   `json:"embed_norm"`
+	OutputNorm float64   `json:"output_norm"`
+	ParamCount int       `json:"param_count"`
 }
 
-// DebugForward runs a forward pass and returns diagnostic info.
 func DebugForward(m Model, tokens []int, coords []float64) (*DebugInfo, error) {
 	logits, err := m.Forward([][]int{tokens}, [][]float64{coords}, nil)
 	if err != nil {
@@ -720,7 +763,6 @@ func DebugForward(m Model, tokens []int, coords []float64) (*DebugInfo, error) {
 	out := logits[0]
 	toolProbs := Softmax(out)
 
-	// compute norms
 	var embedNorm, outNorm float64
 	for _, v := range coords {
 		embedNorm += v * v
@@ -729,7 +771,7 @@ func DebugForward(m Model, tokens []int, coords []float64) (*DebugInfo, error) {
 		outNorm += v * v
 	}
 
-	cfg := Config{} // can't extract from interface, but that's ok
+	cfg := Config{}
 	return &DebugInfo{
 		Logits:     out,
 		ToolProbs:  toolProbs,
