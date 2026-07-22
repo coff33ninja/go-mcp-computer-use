@@ -36,9 +36,7 @@ func main() {
 
 	srv := server.New(Version)
 
-	if actions.ActiveConfig != nil && actions.ActiveConfig.DashboardEnabled {
-		dashboard.Start()
-	}
+	dashboard.Start()
 
 	slog.Info("starting on stdio")
 	go func() {

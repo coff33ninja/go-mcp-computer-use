@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/coff33ninja/go-mcp-computer-use/internal/config"
 	_ "modernc.org/sqlite"
 )
 
@@ -31,13 +32,20 @@ func dataDirPath() string {
 }
 
 func Start() {
+	cfg, err := config.Load()
+	if err != nil {
+		cfg = config.Default()
+	}
+	if !cfg.DashboardEnabled {
+		return
+	}
+
 	dataDir = dataDirPath()
 	if dataDir == "" {
 		slog.Warn("dashboard: APPDATA not set, skipping")
 		return
 	}
 
-	var err error
 	datalogDB, err = sql.Open("sqlite", filepath.Join(dataDir, "datalog", "datalog.db")+"?_journal_mode=WAL&mode=ro")
 	if err != nil {
 		slog.Warn("dashboard: cannot open datalog", "error", err)
@@ -66,7 +74,8 @@ func Start() {
 	listenAddr = listener.Addr().String()
 
 	go func() {
-		slog.Info("dashboard started", "url", fmt.Sprintf("http://%s", listenAddr))
+		fmt.Fprintf(os.Stderr, "=== dashboard: http://%s ===\n", listenAddr)
+		slog.Info("dashboard", "url", fmt.Sprintf("http://%s", listenAddr), "msg", "dashboard started")
 		if err := http.Serve(listener, mux); err != nil {
 			slog.Debug("dashboard server stopped", "error", err)
 		}
