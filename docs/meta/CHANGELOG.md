@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [0.2.53] - 2026-07-22
+
+### Fixed
+
+- Dashboard URL now prints to stderr on startup so AI can read it.
+- Dashboard config check moved inside `Start()` — reads config directly instead of relying on `ActiveConfig` timing.
+
+## [0.2.52] - 2026-07-22
+
 ### Added
 
 - **Web dashboard** — live monitoring dashboard on random port (auto-picks free port, prints URL on startup). Shows tool usage stats, recent commands, chain history, OCR sequences, training samples, model status. Auto-refreshes every 5 seconds. Configurable via `dashboard_enabled` in config. Dark theme, responsive layout.
