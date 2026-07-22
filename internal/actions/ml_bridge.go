@@ -78,6 +78,42 @@ func detectScreenConfig() spatial.ScreenConfig {
 	if cfg.ScreenHeight <= 0 {
 		cfg.ScreenHeight = 1080
 	}
+
+	// Enumerate all monitors with per-monitor DPI
+	displays, _ := ListDisplays()
+	monDPIs, _ := ListMonitorDPIs()
+	if len(displays) > 0 {
+		// Build a map from device name to DPI
+		dpiMap := make(map[string]float64)
+		for _, md := range monDPIs {
+			dpiMap[md.Name] = float64(md.DPI) / 96.0
+		}
+		monitors := make([]spatial.MonitorInfo, 0, len(displays))
+		for _, d := range displays {
+			monDPI := dpiMap[d.Name]
+			if monDPI == 0 {
+				monDPI = scale // fallback to desktop-wide DPI
+			}
+			monitors = append(monitors, spatial.MonitorInfo{
+				X:       int(d.PositionX),
+				Y:       int(d.PositionY),
+				Width:   int(d.Width),
+				Height:  int(d.Height),
+				DPIScale: monDPI,
+				Primary: d.Primary,
+			})
+		}
+		cfg.Monitors = monitors
+		slog.Debug("ml: detected monitors", "count", len(monitors))
+		for i, m := range monitors {
+			slog.Debug("ml: monitor",
+				"index", i,
+				"rect", fmt.Sprintf("%dx%d@(%d,%d)", m.Width, m.Height, m.X, m.Y),
+				"dpi_scale", fmt.Sprintf("%.2f", m.DPIScale),
+				"primary", m.Primary)
+		}
+	}
+
 	slog.Debug("ml: detected screen config",
 		"width", cfg.ScreenWidth, "height", cfg.ScreenHeight,
 		"dpi_scale", fmt.Sprintf("%.2f", cfg.DPIScale))

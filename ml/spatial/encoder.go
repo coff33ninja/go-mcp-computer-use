@@ -2,6 +2,17 @@ package spatial
 
 import "math"
 
+// MonitorInfo describes one physical display: its rect in virtual-desktop
+// pixel coordinates (origins can be negative/offset on multi-monitor setups)
+// and its own DPI scale. Monitors can run at different DPI from each other,
+// so a single screen-wide DPIScale is not enough once more than one is in play.
+type MonitorInfo struct {
+	X, Y          int
+	Width, Height int
+	DPIScale      float64 // 1.0 = 100%, 1.5 = 150%, etc.
+	Primary       bool
+}
+
 // Encoder transforms raw pixel coordinates into DPI-aware normalized
 // features suitable for transformer input.
 type Encoder struct {
@@ -12,6 +23,7 @@ type Encoder struct {
 	windowY    float64
 	windowW    float64
 	windowH    float64
+	monitors   []MonitorInfo
 	featureDim int
 }
 
@@ -19,11 +31,12 @@ type Encoder struct {
 type ScreenConfig struct {
 	ScreenWidth  int
 	ScreenHeight int
-	DPIScale     float64 // 1.0 = 100%, 1.5 = 150%, etc.
+	DPIScale     float64 // fallback DPI; used when Monitors is empty or a point falls outside all of them
 	WindowX      int     // window origin X on screen
 	WindowY      int     // window origin Y on screen
 	WindowWidth  int
 	WindowHeight int
+	Monitors     []MonitorInfo // optional per-monitor rects+DPI; enables correct DPI and monitor-relative features on multi-monitor setups
 }
 
 // NewEncoder creates a spatial encoder from the current display configuration.
@@ -45,26 +58,54 @@ func NewEncoder(cfg ScreenConfig) *Encoder {
 		windowY:    float64(cfg.WindowY),
 		windowW:    float64(cfg.WindowWidth),
 		windowH:    float64(cfg.WindowHeight),
+		monitors:   cfg.Monitors,
 		featureDim: FeatureDim,
 	}
 }
 
+// monitorAt returns the monitor containing (x, y). If no monitor list was
+// configured, or none contains the point, it falls back to a synthetic
+// monitor spanning the whole configured screen with the encoder's single
+// DPIScale — this reproduces the old single-screen behavior exactly.
+func (e *Encoder) monitorAt(x, y int) MonitorInfo {
+	for _, m := range e.monitors {
+		if x >= m.X && x < m.X+m.Width && y >= m.Y && y < m.Y+m.Height {
+			return m
+		}
+	}
+	return MonitorInfo{X: 0, Y: 0, Width: int(e.screenW), Height: int(e.screenH), DPIScale: e.dpiScale}
+}
+
 // FeatureDim is the number of output features per coordinate.
-// [normX, normY, dpiAdjX, dpiAdjY, relX, relY, isValid, distFromCenter, isCenter, isEdge, windowAspect, isDialog]
-const FeatureDim = 12
+// [normX, normY, dpiAdjX, dpiAdjY, relX, relY, monRelX, monRelY, isValid, distFromCenter, isCenter, isEdge, windowAspect, isDialog]
+const FeatureDim = 14
 
 // Encode converts a raw pixel coordinate into a normalized feature vector.
-// Returns [normX, normY, dpiAdjX, dpiAdjY, relX, relY, isValid, distFromCenter, isCenter, isEdge, windowAspect, isDialog].
+// Returns [normX, normY, dpiAdjX, dpiAdjY, relX, relY, monRelX, monRelY, isValid, distFromCenter, isCenter, isEdge, windowAspect, isDialog].
+//
+// Four distinct positional encodings feed the model: normX/Y (position on
+// the whole virtual desktop), dpiAdjX/Y (DPI-scaled position, using the
+// specific monitor the point falls on rather than one desktop-wide DPI),
+// relX/Y (position within the target window), and monRelX/Y (position
+// within the specific monitor the point falls on, distinct from the window).
 func (e *Encoder) Encode(x, y int) []float64 {
 	nx := float64(x) / e.screenW
 	ny := float64(y) / e.screenH
-	dax := nx * e.dpiScale
-	day := ny * e.dpiScale
+
+	mon := e.monitorAt(x, y)
+	dax := nx * mon.DPIScale
+	day := ny * mon.DPIScale
 
 	var rx, ry float64
 	if e.windowW > 0 && e.windowH > 0 {
 		rx = (float64(x) - e.windowX) / e.windowW
 		ry = (float64(y) - e.windowY) / e.windowH
+	}
+
+	var monRelX, monRelY float64
+	if mon.Width > 0 && mon.Height > 0 {
+		monRelX = (float64(x) - float64(mon.X)) / float64(mon.Width)
+		monRelY = (float64(y) - float64(mon.Y)) / float64(mon.Height)
 	}
 
 	isValid := 0.0
@@ -111,7 +152,7 @@ func (e *Encoder) Encode(x, y int) []float64 {
 		}
 	}
 
-	return []float64{nx, ny, dax, day, rx, ry, isValid, distFromCenter, isCenter, isEdge, windowAspect, isDialog}
+	return []float64{nx, ny, dax, day, rx, ry, monRelX, monRelY, isValid, distFromCenter, isCenter, isEdge, windowAspect, isDialog}
 }
 
 // Decode reverses the encoding to recover approximate pixel coordinates.
@@ -135,6 +176,7 @@ func (e *Encoder) ScreenConfig() ScreenConfig {
 		WindowY:      int(e.windowY),
 		WindowWidth:  int(e.windowW),
 		WindowHeight: int(e.windowH),
+		Monitors:     e.monitors,
 	}
 }
 

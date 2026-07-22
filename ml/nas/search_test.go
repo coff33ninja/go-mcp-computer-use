@@ -23,9 +23,9 @@ func TestParamCount(t *testing.T) {
 		{transformer.Config{VocabSize: 2000, MaxLen: 128, EmbedDim: 128, NumHeads: 4, NumLayers: 4, FFNDim: 256, OutputDim: 50, ArgDim: 10}},
 	}
 	for _, tt := range tests {
-		pc := paramCount(tt.cfg)
+		pc := transformer.ParamCount(tt.cfg)
 		if pc <= 0 {
-			t.Errorf("paramCount returned %d for EmbedDim=%d", pc, tt.cfg.EmbedDim)
+			t.Errorf("transformer.ParamCount returned %d for EmbedDim=%d", pc, tt.cfg.EmbedDim)
 		}
 	}
 }

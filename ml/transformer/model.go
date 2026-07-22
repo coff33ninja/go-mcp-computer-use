@@ -112,13 +112,13 @@ type layerDef struct {
 	qW, kW, vW *gorgonia.Node
 	oW         *gorgonia.Node
 	ff1W       *gorgonia.Node
-	ff1B       *gorgonia.Node // [MaxLen, FFNDim]
+	ff1B       *gorgonia.Node // [FFNDim] - broadcast across MaxLen
 	ff2W       *gorgonia.Node
-	ff2B       *gorgonia.Node // [MaxLen, d]
-	ln1W       *gorgonia.Node // [MaxLen, d]
-	ln1B       *gorgonia.Node // [MaxLen, d]
-	ln2W       *gorgonia.Node // [MaxLen, d]
-	ln2B       *gorgonia.Node // [MaxLen, d]
+	ff2B       *gorgonia.Node // [d] - broadcast across MaxLen
+	ln1W       *gorgonia.Node // [d] - per-element scale, broadcast across MaxLen
+	ln1B       *gorgonia.Node // [d] - per-element shift, broadcast across MaxLen
+	ln2W       *gorgonia.Node // [d] - per-element scale, broadcast across MaxLen
+	ln2B       *gorgonia.Node // [d] - per-element shift, broadcast across MaxLen
 }
 
 type transformerModel struct {
@@ -136,6 +136,7 @@ type transformerModel struct {
 	cost   *gorgonia.Node
 
 	embedTable *tensor.Dense
+	posEnc     *gorgonia.Node // [MaxLen, d] sinusoidal positional encoding (constant)
 
 	coordProjW   *gorgonia.Node
 	coordProjB   *gorgonia.Node
@@ -162,6 +163,19 @@ func newRealModel(cfg Config) (*transformerModel, error) {
 		m.embedTable.Data().([]float64)[i] = (rand.Float64()*2 - 1) * limit
 	}
 
+	// Sinusoidal positional encoding: fixed, not learned.
+	// PE(pos, 2i)   = sin(pos / 10000^(2i/d))
+	// PE(pos, 2i+1) = cos(pos / 10000^(2i/d))
+	posEnc := make([]float64, ml*d)
+	for pos := 0; pos < ml; pos++ {
+		for i := 0; i < d/2; i++ {
+			angle := float64(pos) / math.Pow(10000.0, float64(2*i)/float64(d))
+			posEnc[pos*d+2*i] = math.Sin(angle)
+			posEnc[pos*d+2*i+1] = math.Cos(angle)
+		}
+	}
+	m.posEnc = gorgonia.NewConstant(tensor.New(tensor.WithShape(ml, d), tensor.WithBacking(posEnc)))
+
 	m.embInput = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(ml, d), gorgonia.WithName("embInput"))
 	m.coordIn = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(ml, cfg.CoordDim), gorgonia.WithName("coordIn"))
 	m.targetIn = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(1, cfg.OutputDim), gorgonia.WithName("targetIn"))
@@ -171,24 +185,30 @@ func newRealModel(cfg Config) (*transformerModel, error) {
 		m.historyIn = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(ml, histDim), gorgonia.WithName("historyIn"))
 		m.historyProjW = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(histDim, d),
 			gorgonia.WithName("historyProjW"), gorgonia.WithInit(gorgonia.GlorotU(1.0)))
-		m.historyProjB = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(ml, d),
+		m.historyProjB = gorgonia.NewVector(g, tensor.Float64, gorgonia.WithShape(d),
 			gorgonia.WithName("historyProjB"), gorgonia.WithInit(gorgonia.Zeroes()))
 	}
 
 	m.coordProjW = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(cfg.CoordDim, d),
 		gorgonia.WithName("coordProjW"), gorgonia.WithInit(gorgonia.GlorotU(1.0)))
-	m.coordProjB = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(ml, d),
+	m.coordProjB = gorgonia.NewVector(g, tensor.Float64, gorgonia.WithShape(d),
 		gorgonia.WithName("coordProjB"), gorgonia.WithInit(gorgonia.Zeroes()))
 
 	coordProj, err := gorgonia.Mul(m.coordIn, m.coordProjW)
 	if err != nil {
 		return nil, err
 	}
-	coordProj, err = gorgonia.Add(coordProj, m.coordProjB)
+	// BroadcastAdd: [ml, d] + [d] -> [ml, d], rightPattern={0} broadcasts b along axis 0 of a
+	coordProj, err = gorgonia.BroadcastAdd(coordProj, m.coordProjB, []byte{}, []byte{0})
 	if err != nil {
 		return nil, err
 	}
-	x, err := gorgonia.Add(m.embInput, coordProj)
+	// Add sinusoidal positional encoding to token embeddings
+	x, err := gorgonia.Add(m.embInput, m.posEnc)
+	if err != nil {
+		return nil, err
+	}
+	x, err = gorgonia.Add(x, coordProj)
 	if err != nil {
 		return nil, err
 	}
@@ -198,7 +218,7 @@ func newRealModel(cfg Config) (*transformerModel, error) {
 		if err != nil {
 			return nil, err
 		}
-		histProj, err = gorgonia.Add(histProj, m.historyProjB)
+		histProj, err = gorgonia.BroadcastAdd(histProj, m.historyProjB, []byte{}, []byte{0})
 		if err != nil {
 			return nil, err
 		}
@@ -259,20 +279,13 @@ func newRealModel(cfg Config) (*transformerModel, error) {
 		if err != nil {
 			return nil, fmt.Errorf("layer %d rowSum: %w", i, err)
 		}
+		// rowSums is [ml] vector, reshape to [ml, 1] for broadcasting
 		rowSums2d, err := gorgonia.Reshape(rowSums, tensor.Shape{ml, 1})
 		if err != nil {
 			return nil, fmt.Errorf("layer %d rowSum reshape: %w", i, err)
 		}
-		onesData := make([]float64, ml)
-		for idx := range onesData {
-			onesData[idx] = 1.0
-		}
-		ones := gorgonia.NewConstant(tensor.New(tensor.WithShape(1, ml), tensor.WithBacking(onesData)))
-		outer, err := gorgonia.Mul(rowSums2d, ones)
-		if err != nil {
-			return nil, fmt.Errorf("layer %d outer: %w", i, err)
-		}
-		attnWeights, err := gorgonia.HadamardDiv(expScores, outer)
+		// BroadcastHadamardDiv: [ml, ml] / [ml, 1] -> [ml, ml], rightPattern={1} broadcasts b along axis 1 of a
+		attnWeights, err := gorgonia.BroadcastHadamardDiv(expScores, rowSums2d, []byte{}, []byte{1})
 		if err != nil {
 			return nil, fmt.Errorf("layer %d softmax div: %w", i, err)
 		}
@@ -292,28 +305,30 @@ func newRealModel(cfg Config) (*transformerModel, error) {
 			return nil, fmt.Errorf("layer %d residual: %w", i, err)
 		}
 
-		ld.ln1W = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(ml, d),
+		ld.ln1W = gorgonia.NewVector(g, tensor.Float64, gorgonia.WithShape(d),
 			gorgonia.WithName(p+"_ln1W"), gorgonia.WithInit(gorgonia.Ones()))
-		ld.ln1B = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(ml, d),
+		ld.ln1B = gorgonia.NewVector(g, tensor.Float64, gorgonia.WithShape(d),
 			gorgonia.WithName(p+"_ln1B"), gorgonia.WithInit(gorgonia.Zeroes()))
-		xScaled, err := gorgonia.HadamardProd(x, ld.ln1W)
+		// BroadcastHadamardProd: [ml, d] * [d] -> [ml, d], rightPattern={0} broadcasts b along axis 0 of a
+		xScaled, err := gorgonia.BroadcastHadamardProd(x, ld.ln1W, []byte{}, []byte{0})
 		if err != nil {
 			xScaled = x
 		}
-		x, err = gorgonia.Add(xScaled, ld.ln1B)
+		// BroadcastAdd: [ml, d] + [d] -> [ml, d], rightPattern={0} broadcasts b along axis 0 of a
+		x, err = gorgonia.BroadcastAdd(xScaled, ld.ln1B, []byte{}, []byte{0})
 		if err != nil {
 			return nil, fmt.Errorf("layer %d layernorm1: %w", i, err)
 		}
 
 		ld.ff1W = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(d, cfg.FFNDim),
 			gorgonia.WithName(p+"_ff1W"), gorgonia.WithInit(gorgonia.GlorotU(1.0)))
-		ld.ff1B = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(ml, cfg.FFNDim),
+		ld.ff1B = gorgonia.NewVector(g, tensor.Float64, gorgonia.WithShape(cfg.FFNDim),
 			gorgonia.WithName(p+"_ff1B"), gorgonia.WithInit(gorgonia.Zeroes()))
 		ff1, err := gorgonia.Mul(x, ld.ff1W)
 		if err != nil {
 			return nil, err
 		}
-		ff1, err = gorgonia.Add(ff1, ld.ff1B)
+		ff1, err = gorgonia.BroadcastAdd(ff1, ld.ff1B, []byte{}, []byte{0})
 		if err != nil {
 			return nil, err
 		}
@@ -324,13 +339,13 @@ func newRealModel(cfg Config) (*transformerModel, error) {
 
 		ld.ff2W = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(cfg.FFNDim, d),
 			gorgonia.WithName(p+"_ff2W"), gorgonia.WithInit(gorgonia.GlorotU(1.0)))
-		ld.ff2B = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(ml, d),
+		ld.ff2B = gorgonia.NewVector(g, tensor.Float64, gorgonia.WithShape(d),
 			gorgonia.WithName(p+"_ff2B"), gorgonia.WithInit(gorgonia.Zeroes()))
 		ff2, err := gorgonia.Mul(ff1, ld.ff2W)
 		if err != nil {
 			return nil, err
 		}
-		ff2, err = gorgonia.Add(ff2, ld.ff2B)
+		ff2, err = gorgonia.BroadcastAdd(ff2, ld.ff2B, []byte{}, []byte{0})
 		if err != nil {
 			return nil, err
 		}
@@ -339,15 +354,17 @@ func newRealModel(cfg Config) (*transformerModel, error) {
 			return nil, err
 		}
 
-		ld.ln2W = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(ml, d),
+		ld.ln2W = gorgonia.NewVector(g, tensor.Float64, gorgonia.WithShape(d),
 			gorgonia.WithName(p+"_ln2W"), gorgonia.WithInit(gorgonia.Ones()))
-		ld.ln2B = gorgonia.NewMatrix(g, tensor.Float64, gorgonia.WithShape(ml, d),
+		ld.ln2B = gorgonia.NewVector(g, tensor.Float64, gorgonia.WithShape(d),
 			gorgonia.WithName(p+"_ln2B"), gorgonia.WithInit(gorgonia.Zeroes()))
-		xScaled2, err := gorgonia.HadamardProd(x, ld.ln2W)
+		// BroadcastHadamardProd: [ml, d] * [d] -> [ml, d], rightPattern={0} broadcasts b along axis 0 of a
+		xScaled2, err := gorgonia.BroadcastHadamardProd(x, ld.ln2W, []byte{}, []byte{0})
 		if err != nil {
 			xScaled2 = x
 		}
-		x, err = gorgonia.Add(xScaled2, ld.ln2B)
+		// BroadcastAdd: [ml, d] + [d] -> [ml, d], rightPattern={0} broadcasts b along axis 0 of a
+		x, err = gorgonia.BroadcastAdd(xScaled2, ld.ln2B, []byte{}, []byte{0})
 		if err != nil {
 			return nil, fmt.Errorf("layer %d layernorm2: %w", i, err)
 		}
@@ -726,20 +743,20 @@ func (m *transformerModel) Load(path string) error {
 
 func ParamCount(cfg Config) int {
 	d := cfg.EmbedDim
-	ml := cfg.MaxLen
 	count := 0
 	count += cfg.VocabSize * d
-	count += cfg.CoordDim*d + ml*d
+	count += cfg.CoordDim*d + d // coordProj: [coordDim, d] + [d]
 	if cfg.HistoryLen > 0 {
 		histDim := cfg.HistoryLen * d
-		count += histDim*d + ml*d
+		count += histDim*d + d // historyProj: [histDim, d] + [d]
 	}
 	for i := 0; i < cfg.NumLayers; i++ {
-		count += 4 * d * d
-		count += d*cfg.FFNDim + ml*cfg.FFNDim + cfg.FFNDim*d + ml*d
-		count += 2 * (ml*d + ml*d)
+		count += 4 * d * d // Q, K, V, O projections
+		count += d*cfg.FFNDim + cfg.FFNDim // ff1: [d, FFNDim] + [FFNDim]
+		count += cfg.FFNDim*d + d          // ff2: [FFNDim, d] + [d]
+		count += 2 * (d + d)               // ln1, ln2: [d] + [d] each
 	}
-	count += d*cfg.OutputDim + cfg.OutputDim
+	count += d*cfg.OutputDim + cfg.OutputDim // head: [d, OutputDim] + [OutputDim]
 	return count
 }
 

@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+## [0.2.55] - 2026-07-22
+
+### Fixed
+
+- **Transformer broadcasting** — biases (`coordProjB`, `historyProjB`, `ff1B`, `ff2B`) and layer norm params (`ln1W`, `ln1B`, `ln2W`, `ln2B`) changed from `[MaxLen, d]` matrices to `[d]` vectors, added via `BroadcastAdd`/`BroadcastHadamardProd` instead of same-shape `Add`/`HadamardProd`. Softmax normalization replaced ones-matrix outer-product hack with `BroadcastHadamardDiv`. **Reason**: the old `[MaxLen, d]` shapes meant every sequence position learned independent bias/norm parameters — not standard transformer behavior, inflates param count ~24%, breaks generalization across positions, and NAS param-count estimator disagreed with actual model size.
+
+- **Multi-monitor wiring** — `detectScreenConfig()` now enumerates all monitors via `EnumDisplayMonitors` + `GetDpiForMonitor` and populates the spatial encoder's `Monitors` slice. Previously the slice was always `nil` — `MonitorInfo` struct and `monitorAt()` existed but were never wired up, so multi-monitor DPI was silently ignored. Added 7 tests covering L-shape, vertical stack with negative Y, fallback outside all monitors, and negative-coordinate virtual desktops.
+
+### Added
+
+- **Sinusoidal positional encoding** — fixed (non-learned) sin/cos positional encoding added to token embeddings before attention. `PE(pos, 2i) = sin(pos / 10000^(2i/d))`, `PE(pos, 2i+1) = cos(pos / 10000^(2i/d))`. **Reason**: the transformer had zero positional encoding — it was permutation-equivariant over the sequence axis, meaning "click then type" was indistinguishable from "type then click". Without position information, the model cannot learn temporal ordering of actions.
+
+- **Spatial encoder: per-monitor DPI** — `MonitorInfo` struct with per-monitor rect + DPI scale, `monitorAt()` lookup, 4th positional pair `monRelX/Y` (position within the specific monitor). `FeatureDim` 12→14. **Reason**: the old encoder sampled DPI at a fixed point `(0,0)` and applied it globally — on dual-monitor setups with mismatched DPI scales, coordinates on the second monitor got wrong DPI baked in silently.
+
+### Changed
+
+- **NAS paramCount unified** — deleted hand-rolled `paramCount()` in `ml/nas/search.go`, now calls `transformer.ParamCount(cfg)` directly. **Reason**: the old formula had a phantom `MaxLen*d` "positional encoding" term (no such params exist) and used `3*d*d` for Q/K/V instead of the real model's `4*d*d` (Q/K/V/O), so NAS parameter-budget search was scoring against wrong model size.
+
 ## [0.2.54] - 2026-07-22
 
 ### Changed

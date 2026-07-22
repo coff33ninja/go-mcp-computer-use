@@ -90,7 +90,7 @@ func Search(
 					}
 
 					loss := evalConfig(cfg, tools, samples, loader, screenCfg, epochs)
-					pc := paramCount(cfg)
+					pc := transformer.ParamCount(cfg)
 
 					results = append(results, SearchResult{
 						Config:     cfg,
@@ -175,19 +175,6 @@ func evalConfig(
 		}
 	}
 	return lastLoss
-}
-
-// paramCount returns the approximate number of trainable parameters.
-func paramCount(cfg transformer.Config) int {
-	d := cfg.EmbedDim
-	// embedding: VocabSize * EmbedDim + pos encoding (MaxLen * EmbedDim)
-	emb := cfg.VocabSize*d + cfg.MaxLen*d
-	// per layer: QKV + output projections + FFN
-	perLayer := 3*d*d + d + d*cfg.FFNDim + cfg.FFNDim + cfg.FFNDim*d + d
-	layers := perLayer * cfg.NumLayers
-	// output head
-	out := d*cfg.OutputDim + cfg.OutputDim
-	return emb + layers + out
 }
 
 // BestConfig returns the best config from search results under a parameter budget.
