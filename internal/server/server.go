@@ -1897,6 +1897,7 @@ type SetConfigArgs struct {
 	LogFileEnabled       *bool    `json:"log_file_enabled,omitempty"`
 	LogFileMaxSizeMB     *int     `json:"log_file_max_size_mb,omitempty"`
 	LogFileRetention     *int     `json:"log_file_retention,omitempty"`
+	DashboardEnabled     *bool    `json:"dashboard_enabled,omitempty"`
 }
 
 type GetLogsArgs struct {
@@ -2376,6 +2377,13 @@ func setConfigHandler(ctx context.Context, req *mcp.CallToolRequest, args SetCon
 			changed = true
 		}
 	}
+	if args.DashboardEnabled != nil {
+		val := *args.DashboardEnabled
+		if cfg.DashboardEnabled != val {
+			cfg.DashboardEnabled = val
+			changed = true
+		}
+	}
 
 	if changed {
 		slog.Info("config updated", "training_enabled", cfg.TrainingEnabled,
@@ -2406,6 +2414,7 @@ func setConfigHandler(ctx context.Context, req *mcp.CallToolRequest, args SetCon
 		"log_file_enabled":        cfg.LogFileEnabled,
 		"log_file_max_size_mb":    cfg.LogFileMaxSizeMB,
 		"log_file_retention":      cfg.LogFileRetention,
+		"dashboard_enabled":       cfg.DashboardEnabled,
 		"saved":                   changed,
 	}, nil
 }
@@ -3463,7 +3472,7 @@ func New(version string) *mcp.Server {
 
 	addToolClean(server, &mcp.Tool{
 		Name:        "set_config",
-		Description: "Update runtime configuration. Accepts any subset of: training_enabled (stop/start background screenshot saving), prior_adjustment (enable/disable ML prior confidence tuning), verify_bounds (toggle coordinate bounds checking), log_level (debug/info/warn/error), watcher_enabled (start/stop the background screenshot watcher), watcher_interval_seconds (change polling frequency while running), tool_denylist (list of tool names to disable, e.g. [\"shutdown\",\"restart\"]), retention_days (auto-prune training samples older than N days, 0=disabled), chain_abort_enabled (enable/disable global hotkey abort), chain_abort_keys (hotkey combo like \"Ctrl+Shift+Escape\"), chain_abort_poll_ms (polling interval), window_lock_enabled (enable/disable screen tool locking), window_lock_auto_focus (auto re-focus locked window), log_file_enabled (enable/disable file-based logging), log_file_max_size_mb (max MB per log file before rotation), log_file_retention (number of rotated log files to keep). Changes persist to disk.",
+		Description: "Update runtime configuration. Accepts any subset of: training_enabled (stop/start background screenshot saving), prior_adjustment (enable/disable ML prior confidence tuning), verify_bounds (toggle coordinate bounds checking), log_level (debug/info/warn/error), watcher_enabled (start/stop the background screenshot watcher), watcher_interval_seconds (change polling frequency while running), tool_denylist (list of tool names to disable, e.g. [\"shutdown\",\"restart\"]), retention_days (auto-prune training samples older than N days, 0=disabled), chain_abort_enabled (enable/disable global hotkey abort), chain_abort_keys (hotkey combo like \"Ctrl+Shift+Escape\"), chain_abort_poll_ms (polling interval), window_lock_enabled (enable/disable screen tool locking), window_lock_auto_focus (auto re-focus locked window), log_file_enabled (enable/disable file-based logging), log_file_max_size_mb (max MB per log file before rotation), log_file_retention (number of rotated log files to keep), dashboard_enabled (enable/disable web dashboard on random port). Changes persist to disk.",
 	}, setConfigHandler)
 
 	addToolClean(server, &mcp.Tool{

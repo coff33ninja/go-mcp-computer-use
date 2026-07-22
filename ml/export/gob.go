@@ -16,15 +16,24 @@ func NewGobSerializer() *GobSerializer {
 }
 
 func (s *GobSerializer) SaveModel(model transformer.Model, meta ModelMeta, path string) error {
-	f, err := os.Create(path)
+	tmp := path + ".tmp"
+	f, err := os.Create(tmp)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	return gob.NewEncoder(f).Encode(struct {
+	if err := gob.NewEncoder(f).Encode(struct {
 		Meta   ModelMeta
 		Params []float64
-	}{Meta: meta, Params: model.Parameters()})
+	}{Meta: meta, Params: model.Parameters()}); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
 func (s *GobSerializer) LoadModel(model transformer.Model, path string) (*ModelMeta, error) {

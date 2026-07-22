@@ -11,6 +11,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/coff33ninja/go-mcp-computer-use/internal/actions"
+	"github.com/coff33ninja/go-mcp-computer-use/internal/dashboard"
 	"github.com/coff33ninja/go-mcp-computer-use/internal/server"
 )
 
@@ -34,6 +35,10 @@ func main() {
 	defer stop()
 
 	srv := server.New(Version)
+
+	if actions.ActiveConfig != nil && actions.ActiveConfig.DashboardEnabled {
+		dashboard.Start()
+	}
 
 	slog.Info("starting on stdio")
 	go func() {

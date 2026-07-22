@@ -745,6 +745,7 @@
 - `onnx_watch_start` / `onnx_watch_stop` / `onnx_watch_status` / `onnx_watch_cache` — background ONNX watcher
 - `introspection_analyze` / `task_begin` / `task_end` — post-task mining
 - Go-native transformer engine (`ml/` module) — 14K-param transformer via Gorgonia, self-improving action prediction from OCR context, persists to `model.gob`
+- Web dashboard — live monitoring on random port (tool usage, commands, chains, sequences, training samples, model status). Configurable via `dashboard_enabled`. Auto-refreshes every 5s.
 
 ### NEXT
 | Tool | Why |
@@ -768,7 +769,8 @@
 ## 29. TRANSPORT & SERVER — Connectivity
 
 ### HAVE (0 tools — current transport state)
-- stdio transport only (not an MCP tool, just the current capability)
+- stdio transport (not an MCP tool, just the current capability)
+- HTTP dashboard on random port (monitoring only, not MCP transport)
 
 ### NEXT
 | Feature | Why |

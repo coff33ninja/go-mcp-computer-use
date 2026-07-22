@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Web dashboard** — live monitoring dashboard on random port (auto-picks free port, prints URL on startup). Shows tool usage stats, recent commands, chain history, OCR sequences, training samples, model status. Auto-refreshes every 5 seconds. Configurable via `dashboard_enabled` in config. Dark theme, responsive layout.
+
+### Fixed
+
+- **Model save race condition** — `model.Save()` and `GobSerializer.SaveModel()` now use atomic write (write to `.tmp`, then `os.Rename`). Prevents corruption when multiple MCP instances train simultaneously.
+
 ## [0.2.51] - 2026-07-21
 
 ### Fixed

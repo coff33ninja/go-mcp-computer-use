@@ -179,16 +179,16 @@ func (m *MLEngine) Train() error {
 
 	enc := spatial.NewEncoder(m.screenCfg)
 
-	tr := trainer.NewTrainer(trainer.TrainerConfig{
-		Model:        mdl,
-		ModelConfig:  cfg,
-		Tokenizer:    tok,
-		Encoder:      enc,
-		Tools:        m.tools,
-		LearningRate: 0.001,
-	})
+		tr := trainer.NewTrainer(trainer.TrainerConfig{
+			Model:        mdl,
+			ModelConfig:  cfg,
+			Tokenizer:    tok,
+			Encoder:      enc,
+			Tools:        m.tools,
+			LearningRate: 0.001,
+		})
 
-	result, err := tr.TrainEpoch(loader)
+		result, err := tr.TrainEpoch(loader)
 	if err != nil {
 		return fmt.Errorf("ml: train epoch: %w", err)
 	}

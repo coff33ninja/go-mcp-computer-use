@@ -641,12 +641,21 @@ func (m *transformerModel) LoadParameters(params []float64) error {
 
 func (m *transformerModel) Save(path string) error {
 	params := m.Parameters()
-	f, err := os.Create(path)
+	tmp := path + ".tmp"
+	f, err := os.Create(tmp)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	return gob.NewEncoder(f).Encode(params)
+	if err := gob.NewEncoder(f).Encode(params); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
 func (m *transformerModel) Load(path string) error {
