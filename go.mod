@@ -13,7 +13,7 @@ require (
 	github.com/xuri/excelize/v2 v2.11.0
 	github.com/yalue/onnxruntime_go v1.13.0
 	golang.org/x/sys v0.46.0
-	modernc.org/sqlite v1.54.0
+	modernc.org/sqlite v1.55.0
 )
 
 replace github.com/coff33ninja/go-mcp-computer-use/ml v0.0.0 => ./ml
