@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [0.2.56] - 2026-08-09
+
+### Changed
+
+- **Dependency security update** — bumped `google.golang.org/protobuf` v1.28.0 → v1.36.11 and `golang.org/x/net` v0.46 → v0.56 in both the main and `ml/` modules. Fixes the protojson infinite-loop denial-of-service advisory (CVSS 7.5) in both modules.
+- **Merged Dependabot dependency bumps**:
+  - `github.com/modelcontextprotocol/go-sdk` v1.6.1 → v1.7.0
+  - `golang.org/x/sys` v0.46.0 → v0.47.0
+  - `modernc.org/sqlite` v1.54.0 → v1.56.0
+  - `github.com/pdfcpu/pdfcpu` v0.13.0 → v0.14.0 (main + `ml/`)
+- Closed stale weekly dependency PRs (#8, #22, #44, #48) superseded by the individual bumps above.
+
 ## [0.2.55] - 2026-07-22
 
 ### Fixed
