@@ -47,8 +47,8 @@ type BITMAPINFO struct {
 }
 
 func CaptureScreen() (string, error) {
-	w, h := ScreenSize()
-	return CaptureRegion(0, 0, w, h)
+	bounds := VirtualScreenBounds()
+	return CaptureRegion(bounds.X, bounds.Y, bounds.W, bounds.H)
 }
 
 func CaptureRegion(x, y, w, h int32) (string, error) {

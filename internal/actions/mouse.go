@@ -11,15 +11,16 @@ import (
 const (
 	inputMouse = 0
 
-	mouseEventMove      = 0x0001
-	mouseEventLeftDown  = 0x0002
-	mouseEventLeftUp    = 0x0004
+	mouseEventMove        = 0x0001
+	mouseEventLeftDown    = 0x0002
+	mouseEventLeftUp      = 0x0004
 	mouseEventRightDown   = 0x0008
 	mouseEventRightUp     = 0x0010
 	mouseEventMiddleDown  = 0x0020
 	mouseEventMiddleUp    = 0x0040
 	mouseEventWheel       = 0x0800
 	mouseEventHWheel      = 0x1000
+	mouseEventVirtualDesk = 0x4000
 	mouseEventAbsolute    = 0x8000
 )
 
@@ -85,7 +86,7 @@ func Click(args ClickInput) (err error) {
 	in := func(flags uint32) {
 		i := input{
 			inputType: inputMouse,
-			mi: mouseInput{dwFlags: flags},
+			mi:        mouseInput{dwFlags: flags},
 		}
 		sendInput.Call(1, uintptr(unsafe.Pointer(&i)), unsafe.Sizeof(i))
 	}
@@ -123,6 +124,14 @@ func GetCursorPosition() (int32, int32, error) {
 		return 0, 0, syscall.GetLastError()
 	}
 	return pt.X, pt.Y, nil
+}
+
+func normalizeVirtualDesktopPoint(x, y int32, bounds Rect) (int32, int32) {
+	if bounds.W <= 1 || bounds.H <= 1 {
+		return 0, 0
+	}
+	return int32((int64(x-bounds.X) * 65535) / int64(bounds.W-1)),
+		int32((int64(y-bounds.Y) * 65535) / int64(bounds.H-1))
 }
 
 func Scroll(clicks int32, horizontal bool) (err error) {
@@ -163,20 +172,16 @@ func Drag(fromX, fromY, toX, toY int32) (err error) {
 		return err
 	}
 
-	sw, sh := ScreenSize()
-	norm := func(x, y int32) (int32, int32) {
-		return int32((int(x) * 65535) / int(sw-1)), int32((int(y) * 65535) / int(sh-1))
-	}
-
-	fx, fy := norm(fromX, fromY)
-	tx, ty := norm(toX, toY)
+	bounds := VirtualScreenBounds()
+	fx, fy := normalizeVirtualDesktopPoint(fromX, fromY, bounds)
+	tx, ty := normalizeVirtualDesktopPoint(toX, toY, bounds)
 
 	down := input{
 		inputType: inputMouse,
 		mi: mouseInput{
 			dx:      fx,
 			dy:      fy,
-			dwFlags: mouseEventLeftDown | mouseEventAbsolute | mouseEventMove,
+			dwFlags: mouseEventLeftDown | mouseEventAbsolute | mouseEventVirtualDesk | mouseEventMove,
 		},
 	}
 	sendInput.Call(1, uintptr(unsafe.Pointer(&down)), unsafe.Sizeof(down))
@@ -200,7 +205,7 @@ func Drag(fromX, fromY, toX, toY int32) (err error) {
 			mi: mouseInput{
 				dx:      px,
 				dy:      py,
-				dwFlags: mouseEventMove | mouseEventAbsolute,
+				dwFlags: mouseEventMove | mouseEventAbsolute | mouseEventVirtualDesk,
 			},
 		}
 		sendInput.Call(1, uintptr(unsafe.Pointer(&move)), unsafe.Sizeof(move))
@@ -212,7 +217,7 @@ func Drag(fromX, fromY, toX, toY int32) (err error) {
 		mi: mouseInput{
 			dx:      tx,
 			dy:      ty,
-			dwFlags: mouseEventLeftUp | mouseEventAbsolute | mouseEventMove,
+			dwFlags: mouseEventLeftUp | mouseEventAbsolute | mouseEventVirtualDesk | mouseEventMove,
 		},
 	}
 	sendInput.Call(1, uintptr(unsafe.Pointer(&up)), unsafe.Sizeof(up))

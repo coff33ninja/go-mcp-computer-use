@@ -111,7 +111,7 @@ Screenshot taken
 - **Feedback loop** — every action is verified by perception before continuing
 - **Stable planner/executor interface** — high-level skills decoupled from tool layer so vision models, LLMs, or backends can be swapped
 
-## Current State: v0.2.39 — Verified Window Focus + DPI Awareness
+## Current State: v0.2.56 — Verified Window Focus + DPI Awareness
 
 All tools registered in `internal/server/server.go`, auto-documented in [`docs/reference/tools.md`](../reference/tools.md). Adaptive engine now includes timing stats, success rates, coordinate prediction, and full OCR-bridge training pair coverage across all 11 action tools.
 

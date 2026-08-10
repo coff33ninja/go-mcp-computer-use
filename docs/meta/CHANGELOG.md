@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+## [0.2.57] - 2026-08-10
+
+### Fixed
+
+- **Chain timeout now cancels pending steps** — `chainState.ctx` is wired to the chain's cancellation context, and `execSteps` checks `ctx.Done()` before dispatching each step. Previously a chain that exceeded its timeout returned failure to the caller while its goroutine kept executing later desktop actions in the background. Added `TestExecuteChainTimeoutStopsLaterSteps` proving steps after a timeout never run.
+- **Verified chain steps reuse captured OCR** — `execVerify` now calls `verifyOCRResults(before, after, cfg)` with the OCR snapshots it already took instead of calling `VerifyAction`, which re-captured full-screen OCR twice more. This eliminates redundant full-screen OCR on every verified step (the cause of a 15s chain timeout during live testing).
+- **Drag uses virtual-desktop coordinates** — `Drag` now normalizes absolute mouse input against the virtual screen bounds (via `VirtualScreenBounds()` using `SM_XVIRTUALSCREEN`/`SM_YVIRTUALSCREEN`/`SM_CXVIRTUALSCREEN`/`SM_CYVIRTUALSCREEN`) and sets `MOUSEEVENTF_VIRTUALDESK`. Previously it mapped against the primary screen origin `(0,0)`, which broke coordinates on multi-monitor layouts with a negative origin (monitors above or left of the primary). Added `TestNormalizeVirtualDesktopPointUsesVirtualOrigin`.
+- **Virtual-desktop-aware bounds checks** — coordinate/region validation (`ValidateClickCoord`, `ValidateRegion`), OCR window clamping, and `SmartRegionAround` now use the virtual screen bounds instead of assuming origin `(0,0)`, so tools correctly handle negative-origin multi-monitor desktops.
+
+### Changed
+
+- `CaptureScreen` now captures the full virtual desktop (all monitors) rather than the primary display only.
+- `VerifyAction` refactored to accept an already-captured `BeforeOCR`; new `verifyOCRResults` helper shared with the chain verification path.
+
 ## [0.2.56] - 2026-08-09
 
 ### Changed

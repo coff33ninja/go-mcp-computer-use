@@ -19,11 +19,11 @@ type ExpConfig struct {
 }
 
 type VerifyConfig struct {
-	BeforeOCR                    *OCRResult
-	AfterWaitMs                  int
+	BeforeOCR                   *OCRResult
+	AfterWaitMs                 int
 	ExpectedText, NotText, Lang string
-	RegionX, RegionY             *int32
-	RegionW, RegionH             *int32
+	RegionX, RegionY            *int32
+	RegionW, RegionH            *int32
 }
 
 type VerifyResult struct {
@@ -38,25 +38,20 @@ type VerifyResult struct {
 }
 
 type TextDiff struct {
-	LinesAdded      []string `json:"lines_added,omitempty"`
-	LinesRemoved    []string `json:"lines_removed,omitempty"`
-	LinesChanged    int      `json:"lines_changed"`
-	TotalChangeRatio float64 `json:"total_change_ratio"`
+	LinesAdded       []string `json:"lines_added,omitempty"`
+	LinesRemoved     []string `json:"lines_removed,omitempty"`
+	LinesChanged     int      `json:"lines_changed"`
+	TotalChangeRatio float64  `json:"total_change_ratio"`
 }
 
 func VerifyAction(cfg *VerifyConfig) *VerifyResult {
-	r := &VerifyResult{}
-
-	oc, err := captureOCR(cfg.RegionX, cfg.RegionY, cfg.RegionW, cfg.RegionH, cfg.Lang)
-	if err != nil {
-		r.Reason = fmt.Sprintf("before OCR failed: %v", err)
-		r.Method = "error"
-		return r
-	}
-	if cfg.BeforeOCR != nil {
-		r.BeforeOCR = cfg.BeforeOCR
-	} else {
-		r.BeforeOCR = oc
+	before := cfg.BeforeOCR
+	if before == nil {
+		var err error
+		before, err = captureOCR(cfg.RegionX, cfg.RegionY, cfg.RegionW, cfg.RegionH, cfg.Lang)
+		if err != nil {
+			return &VerifyResult{Method: "error", Reason: fmt.Sprintf("before OCR failed: %v", err)}
+		}
 	}
 
 	waitMs := cfg.AfterWaitMs
@@ -67,12 +62,14 @@ func VerifyAction(cfg *VerifyConfig) *VerifyResult {
 
 	after, err := captureOCR(cfg.RegionX, cfg.RegionY, cfg.RegionW, cfg.RegionH, cfg.Lang)
 	if err != nil {
-		r.Reason = fmt.Sprintf("after OCR failed: %v", err)
-		r.Method = "error"
-		return r
+		return &VerifyResult{BeforeOCR: before, Method: "error", Reason: fmt.Sprintf("after OCR failed: %v", err)}
 	}
-	r.AfterOCR = after
-	r.Diff = computeTextDiff(r.BeforeOCR.Text, after.Text)
+	return verifyOCRResults(before, after, cfg)
+}
+
+func verifyOCRResults(before, after *OCRResult, cfg *VerifyConfig) *VerifyResult {
+	r := &VerifyResult{BeforeOCR: before, AfterOCR: after}
+	r.Diff = computeTextDiff(before.Text, after.Text)
 
 	if cfg.ExpectedText != "" {
 		r.Method = "expected_text"
@@ -202,22 +199,22 @@ func SmartRegionAround(x, y, size int32) (int32, int32, int32, int32) {
 		size = 400
 	}
 	half := size / 2
-	sw, sh := ScreenSize()
+	bounds := VirtualScreenBounds()
 	rx := x - half
 	ry := y - half
-	if rx < 0 {
-		rx = 0
+	if rx < bounds.X {
+		rx = bounds.X
 	}
-	if ry < 0 {
-		ry = 0
+	if ry < bounds.Y {
+		ry = bounds.Y
 	}
 	rw := size
 	rh := size
-	if rx+rw > sw {
-		rw = sw - rx
+	if rx+rw > bounds.X+bounds.W {
+		rw = bounds.X + bounds.W - rx
 	}
-	if ry+rh > sh {
-		rh = sh - ry
+	if ry+rh > bounds.Y+bounds.H {
+		rh = bounds.Y + bounds.H - ry
 	}
 	return rx, ry, rw, rh
 }

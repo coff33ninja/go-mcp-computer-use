@@ -43,8 +43,8 @@ type LoopConfig struct {
 }
 
 type VerifyUIConfig struct {
-	ElementName string `json:"element_name,omitempty"`
-	ControlType string `json:"control_type,omitempty"`
+	ElementName string  `json:"element_name,omitempty"`
+	ControlType string  `json:"control_type,omitempty"`
 	Handle      uintptr `json:"handle,omitempty"`
 	TimeoutMs   int     `json:"timeout_ms,omitempty"`
 	NotExists   bool    `json:"not_exists,omitempty"`
@@ -61,10 +61,10 @@ type IfUIAConfig struct {
 // ── Data structures ──
 
 type ChainRequest struct {
-	Steps          []ChainStep `json:"steps"`
-	TimeoutMs      int         `json:"timeout_ms,omitempty"`
-	OnError        string      `json:"on_error,omitempty"`
-	AutoVerifyFocus bool       `json:"auto_verify_focus,omitempty"`
+	Steps           []ChainStep `json:"steps"`
+	TimeoutMs       int         `json:"timeout_ms,omitempty"`
+	OnError         string      `json:"on_error,omitempty"`
+	AutoVerifyFocus bool        `json:"auto_verify_focus,omitempty"`
 }
 
 type ChainStep struct {
@@ -90,10 +90,10 @@ type VerifyStepConfig struct {
 }
 
 type ChainResult struct {
-	Success   bool                   `json:"success"`
-	StepCount int                    `json:"step_count"`
-	Results   []StepResult           `json:"results"`
-	Variables map[string]any         `json:"variables,omitempty"`
+	Success   bool           `json:"success"`
+	StepCount int            `json:"step_count"`
+	Results   []StepResult   `json:"results"`
+	Variables map[string]any `json:"variables,omitempty"`
 }
 
 type StepResult struct {
@@ -217,28 +217,28 @@ func init() {
 		"launch_and_wait":     chainLaunchAndWait,
 		"find_window":         chainFindWindow,
 		// UIA tools
-		"ocr_window":            chainOCRWindow,
-		"ocr_active_window":     chainOCRActiveWindow,
+		"ocr_window":        chainOCRWindow,
+		"ocr_active_window": chainOCRActiveWindow,
 		// UIA tools
-		"uia_find":                chainUIAFind,
+		"uia_find":                 chainUIAFind,
 		"uia_get_element_at_point": chainUIAGetElementAtPoint,
-		"uia_get_all_elements":   chainUIAGetAllElements,
-		"uia_set_text":           chainUIASetText,
-		"wait_for_ui_element":    chainWaitForUIElement,
+		"uia_get_all_elements":     chainUIAGetAllElements,
+		"uia_set_text":             chainUIASetText,
+		"wait_for_ui_element":      chainWaitForUIElement,
 		// File tools
-		"list_directory":          chainListDirectory,
-		"read_file":               chainReadFile,
-		"write_file":              chainWriteFile,
-		"find_files":              chainFindFilesTool,
-		"copy_file":               chainCopyFile,
-		"move_file":               chainMoveFile,
-		"delete_file":             chainDeleteFile,
-		"create_directory":        chainCreateDirectory,
-		"get_file_info":           chainGetFileInfo,
-		"set_working_directory":   chainSetWorkingDirectory,
-		"get_working_directory":   chainGetWorkingDirectory,
-		"get_dpi_for_point":      chainGetDPIPoint,
-		"image_diff":             chainImageDiff,
+		"list_directory":        chainListDirectory,
+		"read_file":             chainReadFile,
+		"write_file":            chainWriteFile,
+		"find_files":            chainFindFilesTool,
+		"copy_file":             chainCopyFile,
+		"move_file":             chainMoveFile,
+		"delete_file":           chainDeleteFile,
+		"create_directory":      chainCreateDirectory,
+		"get_file_info":         chainGetFileInfo,
+		"set_working_directory": chainSetWorkingDirectory,
+		"get_working_directory": chainGetWorkingDirectory,
+		"get_dpi_for_point":     chainGetDPIPoint,
+		"image_diff":            chainImageDiff,
 	}
 }
 
@@ -266,6 +266,7 @@ func ExecuteChain(req ChainRequest) (*ChainResult, error) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	state.ctx = ctx
 
 	done := make(chan bool, 1)
 	go func() {
@@ -312,6 +313,14 @@ func execSteps(steps []ChainStep, state *chainState) ([]StepResult, int) {
 	var results []StepResult
 	var stepCount int
 	for i, step := range steps {
+		if state.ctx != nil {
+			select {
+			case <-state.ctx.Done():
+				results = append(results, StepResult{Index: i, Success: false, Error: "chain timed out"})
+				return results, stepCount + 1
+			default:
+			}
+		}
 		// Check abort between steps
 		if state.abort != nil {
 			select {
@@ -334,7 +343,7 @@ func execSteps(steps []ChainStep, state *chainState) ([]StepResult, int) {
 		stepArgs := substituteVars(step.Args, state.variables)
 		var stepResult StepResult
 
-			// Auto-focus window before step if specified
+		// Auto-focus window before step if specified
 		if step.FocusHandle != 0 {
 			if err := FocusWindow(step.FocusHandle); err != nil {
 				stepResult = StepResult{
@@ -433,6 +442,7 @@ type chainState struct {
 	autoVerifyFocus bool
 	lastFocusHandle uintptr
 	abort           <-chan struct{}
+	ctx             context.Context
 }
 
 func defaultTimeout(ms int) time.Duration {
@@ -494,8 +504,8 @@ func captureUIAElementAtPoint(name string, args map[string]any) any {
 // ── Tool step ──
 
 var trainingTools = map[string]struct {
-	Category    string
-	MakePrompt  func(map[string]any) string
+	Category   string
+	MakePrompt func(map[string]any) string
 }{
 	"click":               {TrainingCatClick, func(a map[string]any) string { return fmt.Sprintf("click at (%v,%v)", a["x"], a["y"]) }},
 	"type":                {TrainingCatType, func(a map[string]any) string { return "type text" }},
@@ -505,7 +515,9 @@ var trainingTools = map[string]struct {
 	"key_down":            {TrainingCatGeneral, func(a map[string]any) string { return fmt.Sprintf("key down: %s", a["key"]) }},
 	"key_up":              {TrainingCatGeneral, func(a map[string]any) string { return fmt.Sprintf("key up: %s", a["key"]) }},
 	"scroll":              {TrainingCatGeneral, func(a map[string]any) string { return "scroll" }},
-	"drag":                {TrainingCatGeneral, func(a map[string]any) string { return fmt.Sprintf("drag from (%v,%v) to (%v,%v)", a["from_x"], a["from_y"], a["to_x"], a["to_y"]) }},
+	"drag": {TrainingCatGeneral, func(a map[string]any) string {
+		return fmt.Sprintf("drag from (%v,%v) to (%v,%v)", a["from_x"], a["from_y"], a["to_x"], a["to_y"])
+	}},
 	"hover":               {TrainingCatGeneral, func(a map[string]any) string { return fmt.Sprintf("hover at (%v,%v)", a["x"], a["y"]) }},
 	"find_text_and_click": {TrainingCatClick, func(a map[string]any) string { return fmt.Sprintf("find and click: %s", a["text"]) }},
 	"open_url":            {TrainingCatNavigate, func(a map[string]any) string { return fmt.Sprintf("navigate to %s", a["url"]) }},
@@ -543,7 +555,7 @@ func execTool(step ChainStep, args map[string]any, _ *chainState) StepResult {
 	var enriched any
 	if uiaEl != nil {
 		enriched = map[string]any{
-			"tool_result":   output,
+			"tool_result":      output,
 			"element_at_point": uiaEl,
 		}
 	} else {
@@ -609,9 +621,7 @@ func execVerify(step ChainStep, args map[string]any, _ *chainState) StepResult {
 			vc.AfterWaitMs = cfg.Expected.WaitMs
 		}
 
-		vr := VerifyAction(vc)
-		vr.BeforeOCR = before
-		vr.AfterOCR = after
+		vr := verifyOCRResults(before, after, vc)
 
 		if vr.Passed || try >= maxAttempts-1 {
 			errStr := ""
@@ -1416,9 +1426,15 @@ func chainWaitForText(args map[string]any) (any, error) {
 	lang, _ := getString(args, "language")
 	var maxScrolls, scrollClicks int32
 	var scrollDown bool
-	if ms, ok := getInt(args, "max_scrolls"); ok { maxScrolls = int32(ms) }
-	if sc, ok := getInt(args, "scroll_clicks"); ok { scrollClicks = int32(sc) }
-	if sd, ok := getBool(args, "scroll_down"); ok { scrollDown = sd }
+	if ms, ok := getInt(args, "max_scrolls"); ok {
+		maxScrolls = int32(ms)
+	}
+	if sc, ok := getInt(args, "scroll_clicks"); ok {
+		scrollClicks = int32(sc)
+	}
+	if sd, ok := getBool(args, "scroll_down"); ok {
+		scrollDown = sd
+	}
 	return WaitForTextScroll(text, int32(timeoutMs), lang, maxScrolls, scrollClicks, scrollDown)
 }
 
@@ -1687,5 +1703,3 @@ func ChainFromJSON(jsonStr string) (*ChainResult, error) {
 	}
 	return ExecuteChain(req)
 }
-
-

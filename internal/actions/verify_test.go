@@ -16,8 +16,8 @@ func TestSmartRegionAround(t *testing.T) {
 }
 
 func TestSmartRegionAroundCenter(t *testing.T) {
-	screenW, screenH := ScreenSize()
-	cx, cy := screenW/2, screenH/2
+	bounds := VirtualScreenBounds()
+	cx, cy := bounds.X+bounds.W/2, bounds.Y+bounds.H/2
 	rx, ry, rw, rh := SmartRegionAround(cx, cy, 400)
 	expectedCX := rx + rw/2
 	expectedCY := ry + rh/2
@@ -28,9 +28,10 @@ func TestSmartRegionAroundCenter(t *testing.T) {
 }
 
 func TestSmartRegionAroundEdge(t *testing.T) {
-	rx, ry, rw, rh := SmartRegionAround(0, 0, 400)
-	if rx != 0 || ry != 0 {
-		t.Errorf("edge region should start at (0,0), got (%d,%d)", rx, ry)
+	bounds := VirtualScreenBounds()
+	rx, ry, rw, rh := SmartRegionAround(bounds.X, bounds.Y, 400)
+	if rx != bounds.X || ry != bounds.Y {
+		t.Errorf("edge region should start at (%d,%d), got (%d,%d)", bounds.X, bounds.Y, rx, ry)
 	}
 	if rw <= 0 || rh <= 0 {
 		t.Errorf("edge region should be positive, got %dx%d", rw, rh)

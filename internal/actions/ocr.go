@@ -151,11 +151,11 @@ func OCRWindow(hwnd uintptr, language string) (*OCRResult, error) {
 	if rect.Width <= 0 || rect.Height <= 0 {
 		return nil, fmt.Errorf("window has zero size")
 	}
-	sw, sh := ScreenSize()
-	x := clamp32(rect.Left, 0, sw-1)
-	y := clamp32(rect.Top, 0, sh-1)
-	w := clamp32(rect.Width, 1, sw-x)
-	h := clamp32(rect.Height, 1, sh-y)
+	bounds := VirtualScreenBounds()
+	x := clamp32(rect.Left, bounds.X, bounds.X+bounds.W-1)
+	y := clamp32(rect.Top, bounds.Y, bounds.Y+bounds.H-1)
+	w := clamp32(rect.Width, 1, bounds.X+bounds.W-x)
+	h := clamp32(rect.Height, 1, bounds.Y+bounds.H-y)
 	b64, err := CaptureRegion(x, y, w, h)
 	if err != nil {
 		return nil, fmt.Errorf("ocr window capture: %w", err)
