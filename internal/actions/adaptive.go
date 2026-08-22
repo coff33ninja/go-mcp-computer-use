@@ -123,13 +123,13 @@ type coordSample struct {
 }
 
 type PredictedAction struct {
-	Command     string           `json:"command"`
-	Confidence  float64          `json:"confidence"`
-	SampleSize  int              `json:"sample_size"`
-	SuccessRate float64          `json:"success_rate"`
-	Coord       *PredictedCoord  `json:"coord,omitempty"`
-	FromCoord   *PredictedCoord  `json:"from_coord,omitempty"` // for drag operations
-	Args        *PredictedArgs   `json:"args,omitempty"`
+	Command     string          `json:"command"`
+	Confidence  float64         `json:"confidence"`
+	SampleSize  int             `json:"sample_size"`
+	SuccessRate float64         `json:"success_rate"`
+	Coord       *PredictedCoord `json:"coord,omitempty"`
+	FromCoord   *PredictedCoord `json:"from_coord,omitempty"` // for drag operations
+	Args        *PredictedArgs  `json:"args,omitempty"`
 }
 
 type PredictedArgs struct {
@@ -138,12 +138,12 @@ type PredictedArgs struct {
 }
 
 type EngineAnalysis struct {
-	TimingStats     map[string]*TimingStat     `json:"timing_stats"`
-	SuccessRates    map[string]float64         `json:"success_rates"`
-	TopSequences    []SequenceExample          `json:"top_sequences"`
-	TotalCommands   int                        `json:"total_commands"`
-	TotalSequences  int                        `json:"total_sequences"`
-	LastTrained     string                     `json:"last_trained"`
+	TimingStats    map[string]*TimingStat `json:"timing_stats"`
+	SuccessRates   map[string]float64     `json:"success_rates"`
+	TopSequences   []SequenceExample      `json:"top_sequences"`
+	TotalCommands  int                    `json:"total_commands"`
+	TotalSequences int                    `json:"total_sequences"`
+	LastTrained    string                 `json:"last_trained"`
 }
 
 // PersistedStat is the durable per-tool aggregate stored in the
@@ -521,8 +521,8 @@ func (e *AdaptiveEngine) rebuildSequences() {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	type aggKey struct {
-		ocr   string
-		cmd   string
+		ocr string
+		cmd string
 	}
 	agg := make(map[aggKey]*SequenceExample)
 	for word, cmds := range e.wordToCmds {
@@ -539,15 +539,15 @@ func (e *AdaptiveEngine) rebuildSequences() {
 			} else {
 				total := cf.success + cf.fail
 				freq := float64(cf.success) / float64(total)
-			agg[key] = &SequenceExample{
-				OCRBefore:    word,
-				Command:      cmd,
-				Success:      cf.success > cf.fail,
-				Count:        total,
-				Freq:         freq,
-				SuccessCount: cf.success,
-				FailCount:    cf.fail,
-			}
+				agg[key] = &SequenceExample{
+					OCRBefore:    word,
+					Command:      cmd,
+					Success:      cf.success > cf.fail,
+					Count:        total,
+					Freq:         freq,
+					SuccessCount: cf.success,
+					FailCount:    cf.fail,
+				}
 			}
 		}
 	}
@@ -911,10 +911,14 @@ func EnsureAdaptive() {
 		go func() {
 			Adaptive.HydratePersisted()
 			if err := Adaptive.TrainFromDatalog(); err != nil {
-				return
+				slog.Warn("adaptive: train from datalog failed", "err", err)
 			}
-			// try loading existing ML model first, train if not found
+			// try loading existing ML model first, train if not found.
+			// never skip ML init because of an adaptive-stats failure —
+			// a transient datalog lock at startup must not leave
+			// chain_predict dead for the whole server lifetime.
 			if err := Adaptive.mlEngine.LoadModel(); err != nil {
+				time.Sleep(2 * time.Second)
 				if err := Adaptive.mlEngine.Train(); err != nil {
 					slog.Debug("ml: training failed", "err", err)
 				}

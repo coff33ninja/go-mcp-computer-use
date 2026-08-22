@@ -82,7 +82,12 @@ func (t *Trainer) TrainEpoch(loader *dataloader.SQLiteLoader) (*EpochResult, err
 	if err != nil {
 		return nil, fmt.Errorf("trainer: load: %w", err)
 	}
+	return t.TrainSamples(samples)
+}
 
+// TrainSamples runs one training pass over an in-memory sample set,
+// letting callers pre-filter or augment samples before training.
+func (t *Trainer) TrainSamples(samples []dataloader.Sample) (*EpochResult, error) {
 	result := &EpochResult{SamplesProcessed: len(samples)}
 	if len(samples) == 0 {
 		return result, nil
@@ -231,7 +236,7 @@ func (t *Trainer) makeTarget(action string, argsJSON string) []float64 {
 // actions is a slice of (action, argsJSON) pairs for the next N actions.
 // The sequence section starts at primaryDim and each slot has slotDim dims.
 func (t *Trainer) makeSequenceTargets(target []float64, actions []struct {
-	Action  string
+	Action   string
 	ArgsJSON string
 }) {
 	if t.sequenceLen <= 0 || t.primaryDim >= len(target) {
@@ -345,6 +350,59 @@ func (t *Trainer) SaveModel(path string) error {
 
 func (t *Trainer) LoadModel(path string) error {
 	return t.model.Load(path)
+}
+
+// Evaluate returns mean MSE loss over the given samples without updating weights.
+func (t *Trainer) Evaluate(samples []dataloader.Sample) float64 {
+	if len(samples) == 0 {
+		return 0
+	}
+	tokens, coords, targets := t.prepareBatch(samples)
+	var sum float64
+	for i := range samples {
+		logits, err := t.model.Forward(tokens[i:i+1], coords[i:i+1], nil)
+		if err != nil {
+			continue
+		}
+		sum += mseLoss(logits[0], targets[i])
+	}
+	return sum / float64(len(samples))
+}
+
+// Accuracy returns the fraction of samples where the argmax tool prediction
+// matches the target tool. Used for checkpoint versioning and rollback.
+func (t *Trainer) Accuracy(samples []dataloader.Sample) float64 {
+	if len(samples) == 0 {
+		return 0
+	}
+	correct := 0
+	evaluated := 0
+	for _, s := range samples {
+		tokens, coords, targets := t.prepareBatch([]dataloader.Sample{s})
+		logits, err := t.model.Forward(tokens, coords, nil)
+		if err != nil {
+			continue
+		}
+		evaluated++
+		gold := argmax(targets[0][:t.toolStart])
+		if targets[0][gold] > 0.5 && argmax(logits[0][:t.toolStart]) == gold {
+			correct++
+		}
+	}
+	if evaluated == 0 {
+		return 0
+	}
+	return float64(correct) / float64(evaluated)
+}
+
+func argmax(v []float64) int {
+	best := 0
+	for i := 1; i < len(v); i++ {
+		if v[i] > v[best] {
+			best = i
+		}
+	}
+	return best
 }
 
 func mseLoss(pred, target []float64) float64 {

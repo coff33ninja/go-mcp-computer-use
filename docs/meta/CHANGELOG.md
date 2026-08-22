@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+## [0.2.58] - 2026-08-23
+
+### Fixed
+
+- **ML init no longer skipped when adaptive stats training fails** — `EnsureAdaptive()` returned early from its startup goroutine when `TrainFromDatalog()` errored (e.g. transient SQLite lock when many server instances start concurrently), which meant `mlEngine.LoadModel()`/`Train()` never ran and `chain_predict` stayed dead for the entire server lifetime (`sync.Once` prevents retry). It now logs a warning and continues, with a 2s backoff before the `Train()` fallback.
+- **Augmentation actually reaches training** — `Train()` called `AugmentAll(samples, 2)` but only used the result to fit the tokenizer vocabulary; `TrainEpoch` re-loaded raw samples from SQLite, so augmented pairs never participated in gradient updates. New `Trainer.TrainSamples` trains a caller-provided sample set directly.
+- **Checkpoint accuracy was hardcoded 0.0** — `SaveCheckpoint` always received accuracy 0, permanently disabling `ModelVersion.CheckAndRollback` (it requires `best.Accuracy > 0`). Checkpoints now record real holdout accuracy.
+
+### Added
+
+- **Holdout evaluation for transformer training** — `Trainer.Evaluate` (mean MSE over a sample set, no weight updates) and `Trainer.Accuracy` (argmax tool-match against target tool). `Train()` holds out 10% of datalog pairs *before* augmentation so the eval set stays honest.
+
+### Changed
+
+- **Transformer trains multiple epochs on the augmented set** — previously one pass over raw samples (loss moved 0.0434 → 0.0436, i.e. not at all). Now 5 epochs over ~3x augmented data with per-epoch eval. Live run on existing datalog (674 pairs): loss_eval 0.0433, **accuracy 16.18%** (previously unmeasured), saved as checkpoint v3.
+
 ## [0.2.57] - 2026-08-10
 
 ### Fixed

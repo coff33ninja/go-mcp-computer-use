@@ -11,6 +11,7 @@ go.work.sum
 
 # Build artifacts
 mcp-server.exe
+*.exe.old
 /bin/
 /build/
 

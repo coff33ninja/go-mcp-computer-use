@@ -40,19 +40,19 @@ var mlDefaultTools = []string{
 // and provides transformer-based predictions as a primary source, with the
 // statistical engine as fallback.
 type MLEngine struct {
-	model      transformer.Model
-	predictor  *predict.Engine
-	tok        *tokenizer.SimpleTokenizer
-	encoder    *spatial.Encoder
-	modelPath  string
-	dbPath     string
-	screenCfg  spatial.ScreenConfig
-	tools      []string
-	replayBuf  *online.ReplayBuffer
-	versioner  *versioning.ModelVersion
-	trainDone  chan struct{}
-	mu         sync.RWMutex
-	ready      bool
+	model     transformer.Model
+	predictor *predict.Engine
+	tok       *tokenizer.SimpleTokenizer
+	encoder   *spatial.Encoder
+	modelPath string
+	dbPath    string
+	screenCfg spatial.ScreenConfig
+	tools     []string
+	replayBuf *online.ReplayBuffer
+	versioner *versioning.ModelVersion
+	trainDone chan struct{}
+	mu        sync.RWMutex
+	ready     bool
 	// app-specific models for transfer learning
 	appModels map[string]*predict.Engine // keyed by normalized app name
 	appDir    string                     // directory for app model checkpoints
@@ -95,12 +95,12 @@ func detectScreenConfig() spatial.ScreenConfig {
 				monDPI = scale // fallback to desktop-wide DPI
 			}
 			monitors = append(monitors, spatial.MonitorInfo{
-				X:       int(d.PositionX),
-				Y:       int(d.PositionY),
-				Width:   int(d.Width),
-				Height:  int(d.Height),
+				X:        int(d.PositionX),
+				Y:        int(d.PositionY),
+				Width:    int(d.Width),
+				Height:   int(d.Height),
 				DPIScale: monDPI,
-				Primary: d.Primary,
+				Primary:  d.Primary,
 			})
 		}
 		cfg.Monitors = monitors
@@ -163,17 +163,17 @@ func (m *MLEngine) Train() error {
 	}
 
 	cfg := transformer.Config{
-		VocabSize:  2000,
-		MaxLen:     128,
-		EmbedDim:   64,
-		NumHeads:   2,
-		NumLayers:  2,
-		FFNDim:     128,
-		CoordDim:   spatial.FeatureDim,
-		OutputDim:  len(m.tools) + 4 + 10 + 6, // tool + from_xy(2) + to_xy(2) + arg(10) + window(6)
+		VocabSize:    2000,
+		MaxLen:       128,
+		EmbedDim:     64,
+		NumHeads:     2,
+		NumLayers:    2,
+		FFNDim:       128,
+		CoordDim:     spatial.FeatureDim,
+		OutputDim:    len(m.tools) + 4 + 10 + 6, // tool + from_xy(2) + to_xy(2) + arg(10) + window(6)
 		FromCoordDim: 2,
-		WindowDim:  6,
-		HistoryLen: 5,
+		WindowDim:    6,
+		HistoryLen:   5,
 	}
 
 	// try loading existing model, create new if not found
@@ -203,37 +203,58 @@ func (m *MLEngine) Train() error {
 		return fmt.Errorf("ml: load samples: %w", err)
 	}
 
+	// hold out 10% for evaluation before augmenting so eval stays honest
+	nTest := len(samples) / 10
+	if nTest == 0 {
+		nTest = 1
+	}
+	testSamples := samples[:nTest]
+	trainSamples := samples[nTest:]
+
 	aug := dataloader.NewAugmentor()
-	samples = aug.AugmentAll(samples, 2) // 2 augmented per original
+	augmented := aug.AugmentAll(trainSamples, 2) // 2 augmented per original
 
 	tok := tokenizer.NewSimpleTokenizer()
-	corpus := make([]string, len(samples))
-	for i, s := range samples {
-		corpus[i] = s.Context
+	corpus := make([]string, 0, len(augmented)+len(testSamples))
+	for _, s := range augmented {
+		corpus = append(corpus, s.Context)
+	}
+	for _, s := range testSamples {
+		corpus = append(corpus, s.Context)
 	}
 	tok.Fit(corpus)
 
 	enc := spatial.NewEncoder(m.screenCfg)
 
-		tr := trainer.NewTrainer(trainer.TrainerConfig{
-			Model:        mdl,
-			ModelConfig:  cfg,
-			Tokenizer:    tok,
-			Encoder:      enc,
-			Tools:        m.tools,
-			LearningRate: 0.001,
-		})
+	tr := trainer.NewTrainer(trainer.TrainerConfig{
+		Model:        mdl,
+		ModelConfig:  cfg,
+		Tokenizer:    tok,
+		Encoder:      enc,
+		Tools:        m.tools,
+		LearningRate: 0.001,
+	})
 
-		result, err := tr.TrainEpoch(loader)
-	if err != nil {
-		return fmt.Errorf("ml: train epoch: %w", err)
+	// multiple passes — a single epoch barely moves the loss
+	const epochs = 5
+	var result *trainer.EpochResult
+	for e := 1; e <= epochs; e++ {
+		result, err = tr.TrainSamples(augmented)
+		if err != nil {
+			return fmt.Errorf("ml: train epoch %d: %w", e, err)
+		}
 	}
 
+	evalLoss := tr.Evaluate(testSamples)
+	accuracy := tr.Accuracy(testSamples)
 	if result.SamplesProcessed > 0 {
 		slog.Info("ml: training complete",
-			"loss_start", fmt.Sprintf("%.4f", result.InitialLoss),
-			"loss_end", fmt.Sprintf("%.4f", result.FinalLoss),
-			"samples", result.SamplesProcessed,
+			"epochs", epochs,
+			"loss_train_final", fmt.Sprintf("%.4f", result.FinalLoss),
+			"loss_eval", fmt.Sprintf("%.4f", evalLoss),
+			"accuracy", fmt.Sprintf("%.2f%%", accuracy*100),
+			"samples_train", result.SamplesProcessed,
+			"samples_eval", len(testSamples),
 		)
 	}
 
@@ -241,8 +262,8 @@ func (m *MLEngine) Train() error {
 		return fmt.Errorf("ml: save model: %w", err)
 	}
 
-	// save initial versioned checkpoint
-	if _, err := m.versioner.SaveCheckpoint(mdl, result.FinalLoss, 0.0, result.SamplesProcessed); err != nil {
+	// save versioned checkpoint with real eval numbers so rollback logic works
+	if _, err := m.versioner.SaveCheckpoint(mdl, evalLoss, accuracy, result.SamplesProcessed); err != nil {
 		slog.Debug("ml: failed to save initial checkpoint", "err", err)
 	}
 
@@ -265,17 +286,17 @@ func (m *MLEngine) Train() error {
 // LoadModel loads a previously trained model from disk.
 func (m *MLEngine) LoadModel() error {
 	cfg := transformer.Config{
-		VocabSize:  2000,
-		MaxLen:     128,
-		EmbedDim:   64,
-		NumHeads:   2,
-		NumLayers:  2,
-		FFNDim:     128,
-		CoordDim:   spatial.FeatureDim,
-		OutputDim:  len(m.tools) + 4 + 10 + 6, // tool + from_xy(2) + to_xy(2) + arg(10) + window(6)
+		VocabSize:    2000,
+		MaxLen:       128,
+		EmbedDim:     64,
+		NumHeads:     2,
+		NumLayers:    2,
+		FFNDim:       128,
+		CoordDim:     spatial.FeatureDim,
+		OutputDim:    len(m.tools) + 4 + 10 + 6, // tool + from_xy(2) + to_xy(2) + arg(10) + window(6)
 		FromCoordDim: 2,
-		WindowDim:  6,
-		HistoryLen: 5,
+		WindowDim:    6,
+		HistoryLen:   5,
 	}
 
 	mdl, err := transformer.New(cfg)
@@ -544,9 +565,9 @@ func mlPredictedAction(p predict.Prediction) PredictedAction {
 		Command:    p.Tool,
 		Confidence: math.Round(p.Score*100) / 100,
 		SampleSize: 1,
-		Coord: predictedCoordFromPrediction(p.CoordX, p.CoordY, p.Score),
-		FromCoord: predictedCoordFromPrediction(p.FromCoordX, p.FromCoordY, p.Score),
-		Args: predictedArgsFromPrediction(p.Args),
+		Coord:      predictedCoordFromPrediction(p.CoordX, p.CoordY, p.Score),
+		FromCoord:  predictedCoordFromPrediction(p.FromCoordX, p.FromCoordY, p.Score),
+		Args:       predictedArgsFromPrediction(p.Args),
 	}
 }
 
@@ -585,11 +606,11 @@ func (m *MLEngine) Reset() {
 // RecordExperience stores a completed action for online learning.
 func (m *MLEngine) RecordExperience(ctx, action string, success bool, x, y int) {
 	m.replayBuf.Store(online.Experience{
-		Context:  ctx,
-		Action:   action,
-		Success:  success,
-		CoordX:   x,
-		CoordY:   y,
+		Context: ctx,
+		Action:  action,
+		Success: success,
+		CoordX:  x,
+		CoordY:  y,
 	})
 }
 
@@ -666,17 +687,17 @@ func (m *MLEngine) trainFromBuffer() {
 	tok.Fit(corpus)
 
 	cfg := transformer.Config{
-		VocabSize:  2000,
-		MaxLen:     128,
-		EmbedDim:   64,
-		NumHeads:   2,
-		NumLayers:  2,
-		FFNDim:     128,
-		CoordDim:   spatial.FeatureDim,
-		OutputDim:  len(m.tools) + 4 + 10 + 6, // tool + from_xy(2) + to_xy(2) + arg(10) + window(6)
+		VocabSize:    2000,
+		MaxLen:       128,
+		EmbedDim:     64,
+		NumHeads:     2,
+		NumLayers:    2,
+		FFNDim:       128,
+		CoordDim:     spatial.FeatureDim,
+		OutputDim:    len(m.tools) + 4 + 10 + 6, // tool + from_xy(2) + to_xy(2) + arg(10) + window(6)
 		FromCoordDim: 2,
-		WindowDim:  6,
-		HistoryLen: 5,
+		WindowDim:    6,
+		HistoryLen:   5,
 	}
 
 	loader := dataloader.NewSQLiteLoader(m.dbPath)
