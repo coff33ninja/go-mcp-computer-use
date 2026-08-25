@@ -60,6 +60,9 @@ var vkModRev map[uint32]string
 // Built from charToVK in keyboard.go. Uppercase is handled via Shift modifier.
 var vkToChar map[uint32]rune
 
+// vkToShiftedChar maps VK codes to their shifted variants (e.g. 0x31 → '!', 0xBD → '_').
+var vkToShiftedChar map[uint32]rune
+
 func init() {
 	vkSpecialRev = make(map[uint32]string, len(vkSpecialMap))
 	for name, vk := range vkSpecialMap {
@@ -76,8 +79,11 @@ func init() {
 
 	// Build VK→char reverse map (prefer lowercase, no-shift variants)
 	vkToChar = make(map[uint32]rune, 80)
+	vkToShiftedChar = make(map[uint32]rune, 40)
 	for r, cv := range charToVK {
-		if !cv.shift {
+		if cv.shift {
+			vkToShiftedChar[uint32(cv.vk)] = r
+		} else {
 			vkToChar[uint32(cv.vk)] = r
 		}
 	}

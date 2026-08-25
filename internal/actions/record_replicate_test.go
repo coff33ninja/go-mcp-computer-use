@@ -732,22 +732,21 @@ func TestEventsToSmartSteps_LongPress(t *testing.T) {
 		{Kind: "long_press", Button: "left", X: 100, Y: 200, ElapsedMs: 800},
 	}
 	steps := eventsToSmartSteps(events)
-	// Should have: click (smart) + wait (hold duration) = at least 2
-	if len(steps) < 2 {
-		t.Fatalf("expected at least 2 steps for long_press, got %d", len(steps))
+	// Should have: move_mouse + mouse_down + wait + mouse_up = 4 steps
+	if len(steps) != 4 {
+		t.Fatalf("expected 4 steps for long_press, got %d", len(steps))
 	}
-	if steps[0].Tool != "click" {
-		t.Errorf("step 0: expected click, got %v", steps[0].Tool)
+	if steps[0].Tool != "move_mouse" {
+		t.Errorf("step 0: expected move_mouse, got %v", steps[0].Tool)
 	}
-	waitStep := -1
-	for i, s := range steps {
-		if s.Tool == "wait" {
-			waitStep = i
-			break
-		}
+	if steps[1].Tool != "mouse_down" {
+		t.Errorf("step 1: expected mouse_down, got %v", steps[1].Tool)
 	}
-	if waitStep == -1 {
-		t.Fatal("expected a wait step after long_press click")
+	if steps[2].Tool != "wait" {
+		t.Errorf("step 2: expected wait, got %v", steps[2].Tool)
+	}
+	if steps[3].Tool != "mouse_up" {
+		t.Errorf("step 3: expected mouse_up, got %v", steps[3].Tool)
 	}
 }
 

@@ -30,6 +30,9 @@ type menuCacheKey struct {
 var (
 	menuCache   = map[menuCacheKey][]menuCacheEntry{}
 	menuCacheMu sync.RWMutex
+
+	// windowsAtRecordStart holds the window snapshot captured at Record() start.
+	windowsAtRecordStart []WindowStateInfo
 )
 
 // cacheMenuItems stores observed menu items for a right-click context.
@@ -138,6 +141,16 @@ func Record(durationSecs int) (*RecordSession, error) {
 		return nil, fmt.Errorf("failed to start recording: %w", err)
 	}
 
+	// Capture window state at recording start for accurate restoration later
+	windowsAtRecordStart = nil
+	if wins, err := ListWindows(); err == nil {
+		for _, w := range wins {
+			if state, err := GetWindowState(w.Handle); err == nil {
+				windowsAtRecordStart = append(windowsAtRecordStart, *state)
+			}
+		}
+	}
+
 	if durationSecs <= 0 {
 		slog.Info("record: started (manual stop required)")
 		return nil, nil
@@ -151,15 +164,9 @@ func Record(durationSecs int) (*RecordSession, error) {
 // RecordStop stops an active recording and returns the enriched session.
 // Use this after Record(0) or keylogger_start when ready to stop.
 func RecordStop() (*RecordSession, error) {
-	// Snapshot full window state before stopping
-	var windowsAtStart []WindowStateInfo
-	if wins, err := ListWindows(); err == nil {
-		for _, w := range wins {
-			if state, err := GetWindowState(w.Handle); err == nil {
-				windowsAtStart = append(windowsAtStart, *state)
-			}
-		}
-	}
+	// Use the window snapshot captured at Record() start
+	windowsAtStart := windowsAtRecordStart
+	windowsAtRecordStart = nil
 
 	rawSteps, meta, err := StopKeylogger()
 	if err != nil {
@@ -263,14 +270,20 @@ func enrichEvents(rawSteps []map[string]any, meta map[string]any) []EnrichedEven
 			// Try to resolve VK code to printable character
 			vk, vkOK := resolveVK(ku)
 			if vkOK {
-				if ch, ok := vkToChar[vk]; ok {
-					// Apply Shift for uppercase
-					if modifiers["SHIFT"] && ch >= 'a' && ch <= 'z' {
-						ch = ch - 'a' + 'A'
+				if modifiers["SHIFT"] {
+					// Shift held: prefer shifted variant (e.g. !, @, _, +), fall back to uppercase letter
+					if shifted, ok := vkToShiftedChar[vk]; ok {
+						textBuf = append(textBuf, shifted)
+					} else if ch, ok := vkToChar[vk]; ok {
+						if ch >= 'a' && ch <= 'z' {
+							ch = ch - 'a' + 'A'
+						}
+						textBuf = append(textBuf, ch)
 					}
+				} else if ch, ok := vkToChar[vk]; ok {
 					textBuf = append(textBuf, ch)
-					continue
 				}
+				continue
 			}
 
 			// Non-printable key (Enter, Tab, Backspace, F-keys, arrows, etc.)
@@ -546,10 +559,6 @@ func resolveVK(ku string) (uint32, bool) {
 
 // enrichClick captures OCR text and UIA element at the click coordinates.
 func enrichClick(ev *EnrichedEvent) {
-	if ev.X == 0 && ev.Y == 0 {
-		return
-	}
-
 	// Capture OCR text near click point
 	if ocrResult, err := OCRScreen(""); err == nil {
 		ev.OCRText = nearbyOCRText(ocrResult.Words, float64(ev.X), float64(ev.Y), 100, 5)
@@ -793,24 +802,50 @@ func eventsToSmartSteps(events []EnrichedEvent) []ChainStep {
 			}
 
 		case "double_click":
-			// Double-click: smart click + second click at same position
+			// Double-click: smart click with clicks:2, or UIA invoke (single step is enough)
 			baseSteps := smartClickSteps(ev)
-			steps = append(steps, baseSteps...)
-			steps = append(steps, ChainStep{
-				Tool: "click",
-				Args: map[string]any{"x": ev.X, "y": ev.Y, "clicks": 2},
-			})
+			if len(baseSteps) == 1 && baseSteps[0].Tool == "uia_invoke" {
+				steps = append(steps, baseSteps...)
+			} else if len(baseSteps) == 1 && baseSteps[0].Tool == "click" {
+				if baseSteps[0].Args == nil {
+					baseSteps[0].Args = map[string]any{}
+				}
+				baseSteps[0].Args["clicks"] = 2
+				steps = append(steps, baseSteps...)
+			} else {
+				// find_text_and_click or multi-step: emit steps + raw double-click
+				steps = append(steps, baseSteps...)
+				steps = append(steps, ChainStep{
+					Tool: "click",
+					Args: map[string]any{"x": ev.X, "y": ev.Y, "clicks": 2},
+				})
+			}
 
 		case "long_press":
-			// Long-press: click + hold for duration + release
+			// Long-press: move → mouse_down → wait → mouse_up (actual hold)
 			holdMs := ev.ElapsedMs
 			if holdMs < 500 {
 				holdMs = 500
 			}
-			steps = append(steps, smartClickSteps(ev)...)
+			button := ev.Button
+			if button == "" {
+				button = "left"
+			}
+			steps = append(steps, ChainStep{
+				Tool: "move_mouse",
+				Args: map[string]any{"x": ev.X, "y": ev.Y},
+			})
+			steps = append(steps, ChainStep{
+				Tool: "mouse_down",
+				Args: map[string]any{"x": ev.X, "y": ev.Y, "button": button},
+			})
 			steps = append(steps, ChainStep{
 				Tool: "wait",
 				Args: map[string]any{"ms": holdMs},
+			})
+			steps = append(steps, ChainStep{
+				Tool: "mouse_up",
+				Args: map[string]any{"x": ev.X, "y": ev.Y, "button": button},
 			})
 
 		case "drag":

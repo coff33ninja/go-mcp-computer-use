@@ -152,6 +152,8 @@ var inputTools = map[string]bool{
 	"scroll":              true,
 	"drag":                true,
 	"hover":               true,
+	"mouse_down":          true,
+	"mouse_up":            true,
 	"find_text_and_click": true,
 	"uia_invoke":          true,
 }
@@ -174,6 +176,8 @@ func init() {
 		"get_cursor_position": chainGetCursorPos,
 		"scroll":              chainScroll,
 		"drag":                chainDrag,
+		"mouse_down":          chainMouseDown,
+		"mouse_up":            chainMouseUp,
 		"type":                chainType,
 		"key_press":           chainKeyPress,
 		"key_down":            chainKeyDown,
@@ -575,6 +579,8 @@ var trainingTools = map[string]struct {
 		return fmt.Sprintf("drag from (%v,%v) to (%v,%v)", a["from_x"], a["from_y"], a["to_x"], a["to_y"])
 	}},
 	"hover":               {TrainingCatGeneral, func(a map[string]any) string { return fmt.Sprintf("hover at (%v,%v)", a["x"], a["y"]) }},
+	"mouse_down":          {TrainingCatGeneral, func(a map[string]any) string { return fmt.Sprintf("mouse down at (%v,%v)", a["x"], a["y"]) }},
+	"mouse_up":            {TrainingCatGeneral, func(a map[string]any) string { return fmt.Sprintf("mouse up at (%v,%v)", a["x"], a["y"]) }},
 	"find_text_and_click": {TrainingCatClick, func(a map[string]any) string { return fmt.Sprintf("find and click: %s", a["text"]) }},
 	"open_url":            {TrainingCatNavigate, func(a map[string]any) string { return fmt.Sprintf("navigate to %s", a["url"]) }},
 }
@@ -593,9 +599,9 @@ func execTool(step ChainStep, args map[string]any, _ *chainState) StepResult {
 	output, err := fn(args)
 	elapsed := time.Since(startTime).Milliseconds()
 	argsJSON, _ := json.Marshal(args)
-	// Use LogToolCall instead of LogCommand — this captures OCR context and
-	// feeds the learning pipeline (OCR→command pairs for ML training).
-	go LogToolCall(step.Tool, string(argsJSON), err)
+	// Log synchronously — OCR→command bridge state is shared and must be
+	// associated in execution order to prevent corrupted learning pairs.
+	LogToolCall(step.Tool, string(argsJSON), err)
 	if err != nil {
 		return StepResult{
 			Tool:    step.Tool,
@@ -1122,6 +1128,26 @@ func chainClick(args map[string]any) (any, error) {
 	}
 	err := Click(ClickInput{X: int32(x), Y: int32(y), Button: button, Clicks: clicks})
 	return nil, err
+}
+
+func chainMouseDown(args map[string]any) (any, error) {
+	x, _ := getInt(args, "x")
+	y, _ := getInt(args, "y")
+	button, _ := getString(args, "button")
+	if button == "" {
+		button = "left"
+	}
+	return nil, MouseButtonDown(int32(x), int32(y), button)
+}
+
+func chainMouseUp(args map[string]any) (any, error) {
+	x, _ := getInt(args, "x")
+	y, _ := getInt(args, "y")
+	button, _ := getString(args, "button")
+	if button == "" {
+		button = "left"
+	}
+	return nil, MouseButtonUp(int32(x), int32(y), button)
 }
 
 func chainMoveMouse(args map[string]any) (any, error) {
@@ -1716,6 +1742,9 @@ func chainUIAInvoke(args map[string]any) (any, error) {
 	ok, err := UIAInvoke(name, aid)
 	if err != nil {
 		return nil, err
+	}
+	if !ok {
+		return nil, fmt.Errorf("uia_invoke: invocation failed")
 	}
 	return map[string]any{"invoked": ok}, nil
 }

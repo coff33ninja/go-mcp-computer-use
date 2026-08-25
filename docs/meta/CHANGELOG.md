@@ -18,6 +18,7 @@
 - **Menu position memory** — global cache: `menuCacheKey{Window, BucketX, BucketY}` → `[]menuCacheEntry{ItemText, RelativeX, RelativeY, HitCount}`. 50px grid bucketing for fuzzy position matching. Hit count increments on repeated observations. Chain tools: `cache_menu_items`, `lookup_menu_items`. Thread-safe via `sync.RWMutex`.
 - **ML integration for enrichment patterns** — `double_click`, `long_press`, `context_menu` registered as distinct ML tools in `coordIndex`. `LogEnrichPattern()` captures OCR context at event coordinates and feeds `LearnFromCommandWithContext` + `RecordResult`. `LogEnrichPatternsFromSession()` batch-logs all enrichment events from a recording session. `detectAndLogEnrichPatterns()` pre-scans chain steps for enrichment patterns before execution. Wired into both `RecordAndReplicate` (after chain execution) and `ExecuteChain` (before chain execution for standalone replicate).
 - **`uia_invoke` chain step** — chain engine can now execute UIA automation via the `uia_invoke` tool in step sequences.
+- **`mouse_down` / `mouse_up` chain steps** — new chain tools for holding and releasing mouse buttons independently. Used by long-press replay (`move→down→wait→up`) and available for custom chains.
 - **`record` MCP tool** — starts recording; if `duration_secs > 0` auto-stops after that duration, otherwise starts manual mode (use `record_stop` to finish).
 - **`replicate` MCP tool** — takes a recorded session JSON and replays it as a smart chain with configurable `slowdown` and `loop`.
 - **`record_stop` MCP tool** — stops an active recording and returns the enriched session with OCR, UIA, and window context at each event.
@@ -27,6 +28,14 @@
 - No arbitrary duration limit — AI/user decides when to stop recording. `duration_secs=0` enables manual stop mode.
 - All 5 existing recording gaps fixed: typed text, window snapshot, learning loop, smart chain generation, context menus.
 - All 5 enhancements complete: double-click, long-press, context menu chain, menu position memory, ML enrichment integration.
+- Double-click replay fixed — smart click step now carries `clicks: 2` instead of emitting a redundant extra click (was producing 3 clicks instead of 2). UIA invoke path uses single step.
+- Long-press replay fixed — uses `mouse_down→wait→mouse_up` sequence for actual button hold instead of `click→wait` which only performed a normal click.
+- Window snapshot now captured at `Record()` start (not `RecordStop()`), so replay restores the layout the user started with.
+- `chainUIAInvoke` returns error when `UIAInvoke` returns `invoked: false`, enabling proper fallback/error reporting.
+- Shift handling extended — `vkToShiftedChar` map covers digits (`1→!`, `2→@`...), OEM keys (`-→_`, `=→+`, `[→{`...), and punctuation. Previously only converted lowercase→uppercase letters.
+- `LogToolCall` now executes synchronously (removed goroutine) to prevent OCR→command bridge state corruption from out-of-order logging.
+- `enrichClick` no longer uses `(0,0)` as invalid-coordinate sentinel — coordinates are always available from click/drag args.
+- `vkToShiftedChar` reverse map built from `charToVK` shift entries in keylogger init.
 - 178 tests all passing (up from 46+ at start of v0.3.0 development).
 
 ### Key Functions
@@ -34,7 +43,8 @@
 | Function | File:Line | Purpose |
 |----------|-----------|---------|
 | `vkToChar` | keylogger.go:60 | VK→char reverse map |
-| `isModifierVK` | keylogger.go:86 | Check if VK is modifier |
+| `vkToShiftedChar` | keylogger.go:65 | VK→shifted char map (!, @, _, +, etc.) |
+| `isModifierVK` | keylogger.go:93 | Check if VK is modifier |
 | `resolveVK` | record_replicate.go:298 | Key name→VK code |
 | `enrichEvents` | record_replicate.go:191 | Raw steps→enriched events + post-processing |
 | `mergeDoubleClicks` | record_replicate.go:420 | Merge 2 rapid clicks → double_click |
@@ -53,6 +63,10 @@
 | `LogEnrichPattern` | record_replicate.go:467 | Capture enrichment event → ML + datalog |
 | `LogEnrichPatternsFromSession` | record_replicate.go:507 | Batch-log session enrichment events |
 | `detectAndLogEnrichPatterns` | chain.go:253 | Pre-scan chain steps → ML enrichment logging |
+| `MouseButtonDown` | mouse.go:103 | Send mouse button-down event (for long-press) |
+| `MouseButtonUp` | mouse.go:125 | Send mouse button-up event (for long-press) |
+| `chainMouseDown` | chain.go:1131 | Chain step: mouse_down handler |
+| `chainMouseUp` | chain.go:1143 | Chain step: mouse_up handler |
 
 ## [0.2.61] - 2026-08-25
 

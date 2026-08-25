@@ -99,6 +99,48 @@ func Click(args ClickInput) (err error) {
 	return nil
 }
 
+// MouseButtonDown sends a mouse button-down event at the given coordinates without releasing.
+func MouseButtonDown(x, y int32, button string) (err error) {
+	if err = ValidateClickCoord(x, y); err != nil {
+		return
+	}
+	setCursorPos.Call(uintptr(x), uintptr(y))
+
+	var downFlag uint32
+	switch button {
+	case "right":
+		downFlag = mouseEventRightDown
+	case "middle":
+		downFlag = mouseEventMiddleDown
+	default:
+		downFlag = mouseEventLeftDown
+	}
+	i := input{inputType: inputMouse, mi: mouseInput{dwFlags: downFlag}}
+	sendInput.Call(1, uintptr(unsafe.Pointer(&i)), unsafe.Sizeof(i))
+	return nil
+}
+
+// MouseButtonUp sends a mouse button-up event at the given coordinates.
+func MouseButtonUp(x, y int32, button string) (err error) {
+	if err = ValidateClickCoord(x, y); err != nil {
+		return
+	}
+	setCursorPos.Call(uintptr(x), uintptr(y))
+
+	var upFlag uint32
+	switch button {
+	case "right":
+		upFlag = mouseEventRightUp
+	case "middle":
+		upFlag = mouseEventMiddleUp
+	default:
+		upFlag = mouseEventLeftUp
+	}
+	i := input{inputType: inputMouse, mi: mouseInput{dwFlags: upFlag}}
+	sendInput.Call(1, uintptr(unsafe.Pointer(&i)), unsafe.Sizeof(i))
+	return nil
+}
+
 func MoveMouse(x, y int32) (err error) {
 	start := time.Now()
 	defer func() {
