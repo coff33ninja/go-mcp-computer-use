@@ -2319,7 +2319,7 @@ func setConfigHandler(ctx context.Context, req *mcp.CallToolRequest, args SetCon
 			cfg.ChainAbortEnabled = val
 			changed = true
 			if val {
-				actions.StartAbortPoller(actions.ParseHotkeyString(cfg.ChainAbortKeys), cfg.ChainAbortPollMs)
+				actions.InitAbortFromConfig(cfg.ChainAbortEnabled, cfg.ChainAbortKeys, cfg.ChainAbortPollMs)
 			} else {
 				actions.StopAbortPoller()
 			}
@@ -2330,8 +2330,7 @@ func setConfigHandler(ctx context.Context, req *mcp.CallToolRequest, args SetCon
 			cfg.ChainAbortKeys = args.ChainAbortKeys
 			changed = true
 			if cfg.ChainAbortEnabled {
-				actions.StopAbortPoller()
-				actions.StartAbortPoller(actions.ParseHotkeyString(cfg.ChainAbortKeys), cfg.ChainAbortPollMs)
+				actions.InitAbortFromConfig(cfg.ChainAbortEnabled, cfg.ChainAbortKeys, cfg.ChainAbortPollMs)
 			}
 		}
 	}
@@ -2344,8 +2343,7 @@ func setConfigHandler(ctx context.Context, req *mcp.CallToolRequest, args SetCon
 			cfg.ChainAbortPollMs = val
 			changed = true
 			if cfg.ChainAbortEnabled {
-				actions.StopAbortPoller()
-				actions.StartAbortPoller(actions.ParseHotkeyString(cfg.ChainAbortKeys), cfg.ChainAbortPollMs)
+				actions.InitAbortFromConfig(cfg.ChainAbortEnabled, cfg.ChainAbortKeys, cfg.ChainAbortPollMs)
 			}
 		}
 	}
@@ -2793,7 +2791,7 @@ func New(version string) *mcp.Server {
 		if pollMs < 10 {
 			pollMs = 50
 		}
-		actions.StartAbortPoller(actions.ParseHotkeyString(cfg.ChainAbortKeys), pollMs)
+		actions.InitAbortFromConfig(cfg.ChainAbortEnabled, cfg.ChainAbortKeys, pollMs)
 		slog.Info("chain abort hotkey enabled", "keys", cfg.ChainAbortKeys, "poll_ms", pollMs)
 	}
 

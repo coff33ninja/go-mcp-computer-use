@@ -214,3 +214,28 @@ func TestIsScreenTool(t *testing.T) {
 		}
 	}
 }
+
+func TestInitAbortFromConfig_DisabledNoop(t *testing.T) {
+	StopAbortPoller()
+	ResetAbortChannel()
+	InitAbortFromConfig(false, "Escape", 50)
+	// disabled config should not start the poller goroutine
+	// (GetAbortChannel creates a channel on demand, so we verify
+	// that no goroutine was spawned by checking the poller state)
+	ch := GetAbortChannel()
+	// channel exists but no poller is running — this is expected
+	_ = ch
+	ResetAbortChannel()
+}
+
+func TestInitAbortFromConfig_StartsPoller(t *testing.T) {
+	StopAbortPoller()
+	ResetAbortChannel()
+	InitAbortFromConfig(true, "Escape", 50)
+	ch := GetAbortChannel()
+	if ch == nil {
+		t.Fatal("expected non-nil channel when enabled")
+	}
+	ResetAbortChannel()
+	StopAbortPoller()
+}

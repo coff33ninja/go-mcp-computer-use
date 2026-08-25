@@ -94,7 +94,7 @@ func (t *Trainer) TrainSamples(samples []dataloader.Sample) (*EpochResult, error
 	}
 
 	// compute initial loss
-	tokens, coords, targets := t.prepareBatch(samples[:1])
+	tokens, coords, targets := t.prepareBatch(samples, 0)
 	logits, err := t.model.Forward(tokens, coords, nil)
 	if err != nil {
 		return nil, fmt.Errorf("trainer: initial forward: %w", err)
@@ -114,8 +114,8 @@ func (t *Trainer) TrainSamples(samples []dataloader.Sample) (*EpochResult, error
 		batch := samples[i:end]
 
 		// accumulate gradients over mini-batch
-		for j, s := range batch {
-			tokens, coords, targets := t.prepareBatch([]dataloader.Sample{s})
+		for j := range batch {
+			tokens, coords, targets := t.prepareBatch(samples, i+j)
 			_, err := t.model.Forward(tokens, coords, nil)
 			if err != nil {
 				return nil, fmt.Errorf("trainer: forward %d: %w", i+j, err)
@@ -131,7 +131,7 @@ func (t *Trainer) TrainSamples(samples []dataloader.Sample) (*EpochResult, error
 	}
 
 	// compute final loss
-	tokens, coords, targets = t.prepareBatch(samples[:1])
+	tokens, coords, targets = t.prepareBatch(samples, 0)
 	logits, err = t.model.Forward(tokens, coords, nil)
 	if err != nil {
 		return nil, fmt.Errorf("trainer: final forward: %w", err)
@@ -150,15 +150,15 @@ func (t *Trainer) FinetuneEpoch(samples []dataloader.Sample, lr float64) (*Epoch
 	}
 
 	// initial loss
-	tokens, coords, targets := t.prepareBatch(samples[:1])
+	tokens, coords, targets := t.prepareBatch(samples, 0)
 	logits, err := t.model.Forward(tokens, coords, nil)
 	if err != nil {
 		return nil, fmt.Errorf("finetune: initial forward: %w", err)
 	}
 	result.InitialLoss = mseLoss(logits[0], targets[0])
 
-	for i, s := range samples {
-		tokens, coords, targets := t.prepareBatch([]dataloader.Sample{s})
+	for i := range samples {
+		tokens, coords, targets := t.prepareBatch(samples, i)
 		_, err := t.model.Forward(tokens, coords, nil)
 		if err != nil {
 			return nil, fmt.Errorf("finetune: forward %d: %w", i, err)
@@ -168,7 +168,7 @@ func (t *Trainer) FinetuneEpoch(samples []dataloader.Sample, lr float64) (*Epoch
 		}
 	}
 
-	tokens, coords, targets = t.prepareBatch(samples[:1])
+	tokens, coords, targets = t.prepareBatch(samples, 0)
 	logits, err = t.model.Forward(tokens, coords, nil)
 	if err != nil {
 		return nil, fmt.Errorf("finetune: final forward: %w", err)
@@ -177,17 +177,26 @@ func (t *Trainer) FinetuneEpoch(samples []dataloader.Sample, lr float64) (*Epoch
 	return result, nil
 }
 
-func (t *Trainer) prepareBatch(samples []dataloader.Sample) ([][]int, [][]float64, [][]float64) {
-	tokens := make([][]int, len(samples))
-	coords := make([][]float64, len(samples))
-	targets := make([][]float64, len(samples))
+func (t *Trainer) prepareBatch(samples []dataloader.Sample, idx int) ([][]int, [][]float64, [][]float64) {
+	s := samples[idx]
+	tokens := [][]int{t.tokenizer.Encode(s.Context, t.maxLen)}
+	coords := [][]float64{t.encoder.Encode(0, 0)}
+	target := t.makeTarget(s.Action, s.ArgsJSON)
 
-	for i, s := range samples {
-		tokens[i] = t.tokenizer.Encode(s.Context, t.maxLen)
-		coords[i] = t.encoder.Encode(0, 0)
-		targets[i] = t.makeTarget(s.Action, s.ArgsJSON)
+	// fill sequence section if sequence training is enabled
+	if t.sequenceLen > 0 && idx+t.sequenceLen <= len(samples) {
+		future := make([]struct {
+			Action   string
+			ArgsJSON string
+		}, t.sequenceLen)
+		for k := 0; k < t.sequenceLen; k++ {
+			future[k].Action = samples[idx+k].Action
+			future[k].ArgsJSON = samples[idx+k].ArgsJSON
+		}
+		t.makeSequenceTargets(target, future)
 	}
-	return tokens, coords, targets
+
+	return tokens, coords, [][]float64{target}
 }
 
 func (t *Trainer) makeTarget(action string, argsJSON string) []float64 {
@@ -357,14 +366,14 @@ func (t *Trainer) Evaluate(samples []dataloader.Sample) float64 {
 	if len(samples) == 0 {
 		return 0
 	}
-	tokens, coords, targets := t.prepareBatch(samples)
 	var sum float64
 	for i := range samples {
-		logits, err := t.model.Forward(tokens[i:i+1], coords[i:i+1], nil)
+		tokens, coords, targets := t.prepareBatch(samples, i)
+		logits, err := t.model.Forward(tokens, coords, nil)
 		if err != nil {
 			continue
 		}
-		sum += mseLoss(logits[0], targets[i])
+		sum += mseLoss(logits[0], targets[0])
 	}
 	return sum / float64(len(samples))
 }
@@ -377,8 +386,8 @@ func (t *Trainer) Accuracy(samples []dataloader.Sample) float64 {
 	}
 	correct := 0
 	evaluated := 0
-	for _, s := range samples {
-		tokens, coords, targets := t.prepareBatch([]dataloader.Sample{s})
+	for i := range samples {
+		tokens, coords, targets := t.prepareBatch(samples, i)
 		logits, err := t.model.Forward(tokens, coords, nil)
 		if err != nil {
 			continue

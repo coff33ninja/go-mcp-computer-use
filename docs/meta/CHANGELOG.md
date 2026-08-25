@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [0.2.60] - 2026-08-25
+
+### Fixed
+
+- **`InitAbortFromConfig` wired into config handlers** — the convenience wrapper for `ParseHotkeyString` + `StartAbortPoller` was never called; `set_config` and startup both inlined the same logic. Now uses `InitAbortFromConfig` in all 4 call sites, eliminating duplication.
+- **`makeSequenceTargets` wired into training pipeline** — the multi-step sequence target builder had zero callers; the trainer only built single-action targets. `prepareBatch` now fills the sequence section of the target vector when `sequenceLen > 0`, enabling the transformer to learn temporal action ordering.
+
+### Added
+
+- Sequence-aware training in `prepareBatch` — looks ahead `sequenceLen` consecutive samples and fills target slots via `makeSequenceTargets`.
+- 6 new tests: `TestInitAbortFromConfig_DisabledNoop`, `TestInitAbortFromConfig_StartsPoller`, `TestMakeSequenceTargets_FillsSlots`, `TestMakeSequenceTargets_ZeroLenSkips`, `TestPrepareBatch_FillsSequenceTargets`, `TestPrepareBatch_NoSequenceWhenDisabled`.
+
 ## [0.2.59] - 2026-08-24
 
 ### Added

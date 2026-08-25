@@ -166,8 +166,9 @@ func abortPollLoop() {
 	}
 }
 
-// initAbortFromConfig starts the abort poller based on config values.
-func initAbortFromConfig(enabled bool, keys string, pollMs int) {
+// InitAbortFromConfig starts the abort poller based on config values.
+// It is a convenience wrapper that parses the hotkey string and starts the poller.
+func InitAbortFromConfig(enabled bool, keys string, pollMs int) {
 	if !enabled {
 		return
 	}

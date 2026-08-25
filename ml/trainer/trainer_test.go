@@ -399,3 +399,143 @@ func TestClassifyKey_Comprehensive(t *testing.T) {
 		}
 	}
 }
+
+func TestMakeSequenceTargets_FillsSlots(t *testing.T) {
+	cfg := testCfg()
+	cfg.SequenceLen = 2
+	cfg.OutputDim = cfg.PrimaryDim(5) + 2*cfg.SeqSlotDim(5)
+	model, _ := transformer.New(cfg)
+	tok := tokenizer.NewSimpleTokenizer()
+	tok.Fit([]string{"click button Submit hover Cancel type text scroll"})
+	enc := spatial.NewEncoder(spatial.ScreenConfig{ScreenWidth: 1920, ScreenHeight: 1080})
+	tools := []string{"click", "hover", "type_text", "scroll", "key_press"}
+
+	tr := NewTrainer(TrainerConfig{
+		Model:        model,
+		ModelConfig:  cfg,
+		Tokenizer:    tok,
+		Encoder:      enc,
+		Tools:        tools,
+		LearningRate: 0.01,
+	})
+
+	target := make([]float64, cfg.OutputDim)
+	actions := []struct {
+		Action   string
+		ArgsJSON string
+	}{
+		{Action: "hover", ArgsJSON: `{"x":50,"y":50}`},
+		{Action: "click", ArgsJSON: `{"x":100,"y":200}`},
+	}
+	tr.makeSequenceTargets(target, actions)
+
+	// slot 0: hover → tool index 1 = 1.0
+	slotDim := len(tools) + 2 + cfg.ArgDim
+	if target[tr.primaryDim+1] != 1.0 {
+		t.Errorf("seq slot 0 hover tool: got %.1f, want 1.0", target[tr.primaryDim+1])
+	}
+	// slot 1: click → tool index 0 = 1.0
+	if target[tr.primaryDim+slotDim+0] != 1.0 {
+		t.Errorf("seq slot 1 click tool: got %.1f, want 1.0", target[tr.primaryDim+slotDim+0])
+	}
+}
+
+func TestMakeSequenceTargets_ZeroLenSkips(t *testing.T) {
+	cfg := testCfg()
+	cfg.SequenceLen = 0
+	model, _ := transformer.New(cfg)
+	tok := tokenizer.NewSimpleTokenizer()
+	enc := spatial.NewEncoder(spatial.ScreenConfig{})
+	tools := []string{"click", "hover"}
+
+	tr := NewTrainer(TrainerConfig{
+		Model:        model,
+		ModelConfig:  cfg,
+		Tokenizer:    tok,
+		Encoder:      enc,
+		Tools:        tools,
+		LearningRate: 0.01,
+	})
+
+	target := make([]float64, cfg.OutputDim)
+	tr.makeSequenceTargets(target, []struct {
+		Action   string
+		ArgsJSON string
+	}{
+		{Action: "click", ArgsJSON: `{"x":10,"y":20}`},
+	})
+	// should remain all zeros
+	for i, v := range target {
+		if v != 0.0 {
+			t.Errorf("target[%d] = %f, want 0 (sequenceLen=0)", i, v)
+		}
+	}
+}
+
+func TestPrepareBatch_FillsSequenceTargets(t *testing.T) {
+	cfg := testCfg()
+	cfg.SequenceLen = 2
+	cfg.OutputDim = cfg.PrimaryDim(5) + 2*cfg.SeqSlotDim(5)
+	model, _ := transformer.New(cfg)
+	tok := tokenizer.NewSimpleTokenizer()
+	tok.Fit([]string{"click button Submit hover Cancel type text scroll"})
+	enc := spatial.NewEncoder(spatial.ScreenConfig{ScreenWidth: 1920, ScreenHeight: 1080})
+	tools := []string{"click", "hover", "type_text", "scroll", "key_press"}
+
+	tr := NewTrainer(TrainerConfig{
+		Model:        model,
+		ModelConfig:  cfg,
+		Tokenizer:    tok,
+		Encoder:      enc,
+		Tools:        tools,
+		LearningRate: 0.01,
+	})
+
+	samples := []dataloader.Sample{
+		{Action: "click", ArgsJSON: `{"x":100,"y":200}`},
+		{Action: "hover", ArgsJSON: `{"x":50,"y":50}`},
+		{Action: "type_text", ArgsJSON: `{"text":"hello"}`},
+	}
+
+	// pass full samples slice so sequence look-ahead works
+	_, _, targets := tr.prepareBatch(samples, 0)
+	// sequence section should be filled from samples[0..1]
+	slotDim := len(tools) + 2 + cfg.ArgDim
+	// slot 0: samples[0].Action = "click" → tool index 0
+	if targets[0][tr.primaryDim+0] != 1.0 {
+		t.Errorf("seq slot 0 click tool: got %.1f, want 1.0", targets[0][tr.primaryDim+0])
+	}
+	// slot 1: samples[1].Action = "hover" → tool index 1
+	if targets[0][tr.primaryDim+slotDim+1] != 1.0 {
+		t.Errorf("seq slot 1 hover tool: got %.1f, want 1.0", targets[0][tr.primaryDim+slotDim+1])
+	}
+}
+
+func TestPrepareBatch_NoSequenceWhenDisabled(t *testing.T) {
+	cfg := testCfg()
+	cfg.SequenceLen = 0
+	model, _ := transformer.New(cfg)
+	tok := tokenizer.NewSimpleTokenizer()
+	tok.Fit([]string{"click hover"})
+	enc := spatial.NewEncoder(spatial.ScreenConfig{})
+	tools := []string{"click", "hover"}
+
+	tr := NewTrainer(TrainerConfig{
+		Model:        model,
+		ModelConfig:  cfg,
+		Tokenizer:    tok,
+		Encoder:      enc,
+		Tools:        tools,
+		LearningRate: 0.01,
+	})
+
+	samples := []dataloader.Sample{
+		{Action: "click", ArgsJSON: `{"x":10,"y":20}`},
+	}
+
+	_, _, targets := tr.prepareBatch(samples, 0)
+	// target should only have primary dims, no sequence section
+	if len(targets[0]) != cfg.OutputDim {
+		t.Errorf("target dim: got %d, want %d", len(targets[0]), cfg.OutputDim)
+	}
+}
