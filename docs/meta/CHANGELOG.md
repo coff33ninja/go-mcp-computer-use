@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+## [0.2.59] - 2026-08-24
+
+### Added
+
+- **`system_find_stats` MCP tool** — returns last-used timestamp and total call count for the system-find feature, enabling AI agents to observe system-find usage patterns.
+- **`task_is_active` MCP tool** — returns whether a task session is currently active (between `task_begin` and `task_end`), allowing agents to check session state without calling `task_end`.
+- **Text location pruning in retention cycle** — `PruneTextLocations` now runs alongside `PruneOldSamples` in the 6-hour retention pruner, cleaning stale entries from the `text_locations` SQLite table.
+
+### Fixed
+
+- **Retention pruner goroutine leak on shutdown** — `StopRetentionPruner()` is now called during server shutdown, closing the background goroutine channel and preventing a goroutine leak on exit.
+
+### Tests
+
+- Added 16 tests across 3 new test files: `text_location_test.go` (6), `system_find_test.go` (3), `introspection_test.go` (3), plus 4 new retention-pruner tests in `training_test.go`.
+
 ## [0.2.58] - 2026-08-23
 
 ### Fixed

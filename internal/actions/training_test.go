@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"sync"
 	"testing"
 )
 
@@ -46,4 +47,58 @@ func TestJoinWhere(t *testing.T) {
 			t.Errorf("joinWhere(%v) = %q, want %q", tc.input, got, tc.want)
 		}
 	}
+}
+
+func TestStopRetentionPruner_NoopWhenNotStarted(t *testing.T) {
+	retentionStop = nil
+	retentionOnce = sync.Once{}
+
+	StopRetentionPruner()
+
+	if retentionStop != nil {
+		t.Error("retentionStop should remain nil when no pruner is running")
+	}
+}
+
+func TestStopRetentionPruner_StopsGoroutine(t *testing.T) {
+	retentionStop = nil
+	retentionOnce = sync.Once{}
+
+	StartRetentionPruner(30)
+
+	if retentionStop == nil {
+		t.Fatal("retentionStop should be set after StartRetentionPruner")
+	}
+
+	StopRetentionPruner()
+
+	if retentionStop != nil {
+		t.Error("retentionStop should be nil after StopRetentionPruner")
+	}
+}
+
+func TestStartRetentionPruner_NoopWhenZeroDays(t *testing.T) {
+	retentionStop = nil
+	retentionOnce = sync.Once{}
+
+	StartRetentionPruner(0)
+
+	// Should not have started the goroutine
+	if retentionStop != nil {
+		t.Error("StartRetentionPruner(0) should not start pruner")
+	}
+}
+
+func TestStartRetentionPruner_SkipsWhenDisabled(t *testing.T) {
+	retentionStop = nil
+	retentionOnce = sync.Once{}
+	ActiveConfig = nil
+
+	StartRetentionPruner(7)
+
+	if retentionStop == nil {
+		t.Error("StartRetentionPruner should start goroutine regardless of ActiveConfig")
+	}
+
+	StopRetentionPruner()
 }

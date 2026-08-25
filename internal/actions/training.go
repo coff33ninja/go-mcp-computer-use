@@ -517,6 +517,9 @@ func StartRetentionPruner(retentionDays int) {
 						if _, err := PruneOldSamples(ActiveConfig.RetentionDays); err != nil {
 							slog.Warn("retention pruner failed", "error", err)
 						}
+						if n := PruneTextLocations(ActiveConfig.RetentionDays); n > 0 {
+							slog.Info("text location pruner cleaned", "deleted", n)
+						}
 					}
 				case <-retentionStop:
 					return

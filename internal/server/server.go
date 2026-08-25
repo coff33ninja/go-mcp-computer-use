@@ -2203,6 +2203,19 @@ func introspectionAnalyzeHandler(_ context.Context, _ *mcp.CallToolRequest, _ an
 	}, map[string]any{"tasks": tasks, "count": len(tasks)}, nil
 }
 
+func systemFindStatsHandler(_ context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
+	lastUsed, count := actions.SystemFindStats()
+	return &mcp.CallToolResult{}, map[string]any{
+		"last_used": lastUsed,
+		"count":     count,
+	}, nil
+}
+
+func taskIsActiveHandler(_ context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
+	active := actions.TaskIsActive()
+	return &mcp.CallToolResult{}, map[string]any{"active": active}, nil
+}
+
 func bridgeDebugHandler(_ context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
 	info := actions.BridgeDebugInfo()
 	return &mcp.CallToolResult{}, info, nil
@@ -3459,6 +3472,16 @@ func New(version string) *mcp.Server {
 		Name:        "introspection_analyze",
 		Description: "View task history with mined insights from past task_begin/task_end sessions.",
 	}, introspectionAnalyzeHandler)
+
+	addToolClean(server, &mcp.Tool{
+		Name:        "system_find_stats",
+		Description: "Get system-find usage statistics: last used timestamp and total call count.",
+	}, systemFindStatsHandler)
+
+	addToolClean(server, &mcp.Tool{
+		Name:        "task_is_active",
+		Description: "Check if a task session is currently active (between task_begin and task_end).",
+	}, taskIsActiveHandler)
 
 	addToolClean(server, &mcp.Tool{
 		Name:        "bridge_debug",

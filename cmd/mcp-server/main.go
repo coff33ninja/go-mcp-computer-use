@@ -56,6 +56,7 @@ func main() {
 
 	<-ctx.Done()
 	slog.Info("shutting down")
+	actions.StopRetentionPruner()
 	actions.CloseWinRT()
 	os.Exit(0)
 }
