@@ -2,6 +2,58 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-25
+
+### Added
+
+- **Recording plugin** — `record_and_replicate`, `record`, `record_stop`, and `replicate` MCP tools with intelligent chain generation. Recording captures enriched context at each click: OCR text near the click point, UIA element identity (name, automation_id, control_type), ML-predicted coordinates, window title, mouse movements, drags, scroll, and key events.
+- **Typed text capture** — keylogger reconstructs typed text from VK code sequences via `vkToChar` reverse map. Consecutive printable characters accumulate into `type` steps. Modifier combos (Ctrl+C, Ctrl+V) become `key_press` steps. Shift+key produces uppercase. Text flushes on focus change, mouse event, or non-char key.
+- **Window snapshot at recording start** — `RecordStop()` calls `ListWindows()` + `GetWindowState()` for every visible window. `WindowsAtStart []WindowStateInfo` stored in `RecordSession`. Replication generates `find_window` → `move_window` / `restore_window` / `maximize_window` + `focus_window` using `${var}` chain variables to avoid stale handles.
+- **Learning loop** — `execTool` in chain.go calls `LogToolCall` (not `LogCommand`) so every chain step feeds OCR→command pairs back to the ML engine via `LearnFromCommandWithContext`. `elapsed_ms` tracked per step for AI pacing analysis.
+- **Smart chain generation** — `eventsToSmartSteps` handles all event types: type, key_combo (with modifiers), click (all 5 buttons), double_click, long_press, drag, scroll, move_mouse, focus, key_down, key_up. Smart click priority: UIA invoke > OCR find_text_and_click > ML predicted coordinates > raw coordinates.
+- **Context menu detection** — right-click generates: click(right) → wait(350ms) → `uia_find(control_type=MenuItem)` → `find_text_and_click(OCRText)` with `skip_system_find: true`. Menu position cache checked first — if cached item found, skips UIA/OCR and clicks cached item directly.
+- **All mouse buttons** — keylogger captures all 5 buttons (left, right, middle, X1, X2). Middle-click → `click(button=middle)`. X1 → `key_press ["Alt","Left"]` (browser back). X2 → `key_press ["Alt","Right"]` (browser forward). ElapsedMs tracked per click/drag for hold duration.
+- **Double-click detection** — `mergeDoubleClicks()` post-process merges 2 rapid left-clicks within 400ms at same position (8px tolerance) into `EnrichedEvent.Kind="double_click"`. Chain generation emits smart click + `click` with `clicks: 2`.
+- **Long-press detection** — `detectLongPress()` post-process converts clicks with `elapsedMs > 500` into `EnrichedEvent.Kind="long_press"`. Chain generation emits smart click + `wait(hold duration in ms)`.
+- **Menu position memory** — global cache: `menuCacheKey{Window, BucketX, BucketY}` → `[]menuCacheEntry{ItemText, RelativeX, RelativeY, HitCount}`. 50px grid bucketing for fuzzy position matching. Hit count increments on repeated observations. Chain tools: `cache_menu_items`, `lookup_menu_items`. Thread-safe via `sync.RWMutex`.
+- **ML integration for enrichment patterns** — `double_click`, `long_press`, `context_menu` registered as distinct ML tools in `coordIndex`. `LogEnrichPattern()` captures OCR context at event coordinates and feeds `LearnFromCommandWithContext` + `RecordResult`. `LogEnrichPatternsFromSession()` batch-logs all enrichment events from a recording session. `detectAndLogEnrichPatterns()` pre-scans chain steps for enrichment patterns before execution. Wired into both `RecordAndReplicate` (after chain execution) and `ExecuteChain` (before chain execution for standalone replicate).
+- **`uia_invoke` chain step** — chain engine can now execute UIA automation via the `uia_invoke` tool in step sequences.
+- **`record` MCP tool** — starts recording; if `duration_secs > 0` auto-stops after that duration, otherwise starts manual mode (use `record_stop` to finish).
+- **`replicate` MCP tool** — takes a recorded session JSON and replays it as a smart chain with configurable `slowdown` and `loop`.
+- **`record_stop` MCP tool** — stops an active recording and returns the enriched session with OCR, UIA, and window context at each event.
+
+### Changed
+
+- No arbitrary duration limit — AI/user decides when to stop recording. `duration_secs=0` enables manual stop mode.
+- All 5 existing recording gaps fixed: typed text, window snapshot, learning loop, smart chain generation, context menus.
+- All 5 enhancements complete: double-click, long-press, context menu chain, menu position memory, ML enrichment integration.
+- 178 tests all passing (up from 46+ at start of v0.3.0 development).
+
+### Key Functions
+
+| Function | File:Line | Purpose |
+|----------|-----------|---------|
+| `vkToChar` | keylogger.go:60 | VK→char reverse map |
+| `isModifierVK` | keylogger.go:86 | Check if VK is modifier |
+| `resolveVK` | record_replicate.go:298 | Key name→VK code |
+| `enrichEvents` | record_replicate.go:191 | Raw steps→enriched events + post-processing |
+| `mergeDoubleClicks` | record_replicate.go:420 | Merge 2 rapid clicks → double_click |
+| `detectLongPress` | record_replicate.go:444 | Convert slow clicks → long_press |
+| `cacheMenuItems` | record_replicate.go:33 | Store menu items in position cache |
+| `lookupMenuItems` | record_replicate.go:84 | Retrieve cached menu items |
+| `activeModifiers` | record_replicate.go:135 | Collect held modifier names |
+| `eventsToSmartSteps` | record_replicate.go:569 | Events→chain steps (all types) |
+| `smartClickSteps` | record_replicate.go:558 | Smart click: UIA>OCR>ML>raw |
+| `Record` | record_replicate.go:58 | Start recording |
+| `RecordStop` | record_replicate.go:76 | Stop + enrich + window snapshot |
+| `Replicate` | record_replicate.go:393 | Generate chain with window restoration |
+| `LogToolCall` | datalog.go:208 | OCR→command bridge + ML learning |
+| `execTool` | chain.go:530 | Chain step execution (calls LogToolCall) |
+| `toolDispatch` | chain.go:171 | 53+ chain tools |
+| `LogEnrichPattern` | record_replicate.go:467 | Capture enrichment event → ML + datalog |
+| `LogEnrichPatternsFromSession` | record_replicate.go:507 | Batch-log session enrichment events |
+| `detectAndLogEnrichPatterns` | chain.go:253 | Pre-scan chain steps → ML enrichment logging |
+
 ## [0.2.61] - 2026-08-25
 
 ### Added

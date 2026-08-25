@@ -153,6 +153,7 @@ var inputTools = map[string]bool{
 	"drag":                true,
 	"hover":               true,
 	"find_text_and_click": true,
+	"uia_invoke":          true,
 }
 
 func isInputTool(toolName string) bool {
@@ -223,6 +224,7 @@ func init() {
 		"uia_find":                 chainUIAFind,
 		"uia_get_element_at_point": chainUIAGetElementAtPoint,
 		"uia_get_all_elements":     chainUIAGetAllElements,
+		"uia_invoke":               chainUIAInvoke,
 		"uia_set_text":             chainUIASetText,
 		"wait_for_ui_element":      chainWaitForUIElement,
 		// File tools
@@ -241,10 +243,57 @@ func init() {
 		"image_diff":            chainImageDiff,
 		// Record & replicate
 		"record_and_replicate": chainRecordAndReplicate,
+		// Menu position memory
+		"cache_menu_items":  chainCacheMenuItems,
+		"lookup_menu_items": chainLookupMenuItems,
 	}
 }
 
 // ── Chain execution ──
+
+// detectAndLogEnrichPatterns scans chain steps for enrichment-level patterns
+// (double_click, long_press, context_menu) and logs them to the ML engine.
+// This runs BEFORE chain execution so the AI learns the semantic units.
+func detectAndLogEnrichPatterns(steps []ChainStep) {
+	for i, step := range steps {
+		if step.Tool != "click" {
+			continue
+		}
+		x := toInt32(step.Args["x"])
+		y := toInt32(step.Args["y"])
+		button, _ := step.Args["button"].(string)
+		clicks := 1
+		if c, ok := step.Args["clicks"].(int); ok {
+			clicks = c
+		}
+
+		// Double-click: clicks > 1
+		if clicks > 1 {
+			LogEnrichPattern("double_click", x, y, 0, "", true)
+			continue
+		}
+
+		// Context-menu: right-click followed by wait + menu interaction
+		if button == "right" && i+2 < len(steps) {
+			next1 := steps[i+1]
+			next2 := steps[i+2]
+			if next1.Tool == "wait" &&
+				(next2.Tool == "uia_find" || next2.Tool == "find_text_and_click") {
+				LogEnrichPattern("context_menu", x, y, 0, "", true)
+				continue
+			}
+		}
+
+		// Long-press: click followed by a wait > 500ms
+		if button == "" || button == "left" {
+			if i+1 < len(steps) && steps[i+1].Tool == "wait" {
+				if waitMs, ok := steps[i+1].Args["ms"].(int); ok && waitMs > 500 {
+					LogEnrichPattern("long_press", x, y, int64(waitMs), "", true)
+				}
+			}
+		}
+	}
+}
 
 func ExecuteChain(req ChainRequest) (*ChainResult, error) {
 	state := &chainState{
@@ -265,6 +314,11 @@ func ExecuteChain(req ChainRequest) (*ChainResult, error) {
 	}
 
 	startTime := time.Now()
+
+	// Pre-scan chain steps for enrichment-level patterns (double_click, long_press,
+	// context_menu) and log them to the ML engine BEFORE execution so the AI learns
+	// these as semantic units even though they decompose into individual chain steps.
+	detectAndLogEnrichPatterns(req.Steps)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -538,17 +592,17 @@ func execTool(step ChainStep, args map[string]any, _ *chainState) StepResult {
 	startTime := time.Now()
 	output, err := fn(args)
 	elapsed := time.Since(startTime).Milliseconds()
+	argsJSON, _ := json.Marshal(args)
+	// Use LogToolCall instead of LogCommand — this captures OCR context and
+	// feeds the learning pipeline (OCR→command pairs for ML training).
+	go LogToolCall(step.Tool, string(argsJSON), err)
 	if err != nil {
-		argsJSON, _ := json.Marshal(args)
-		go LogCommand(step.Tool, string(argsJSON), false, err.Error(), "", elapsed)
 		return StepResult{
 			Tool:    step.Tool,
 			Success: false,
 			Error:   err.Error(),
 		}
 	}
-	argsJSON, _ := json.Marshal(args)
-	go LogCommand(step.Tool, string(argsJSON), true, "", "", elapsed)
 	if t, ok := trainingTools[toolName]; ok {
 		SaveSnapshotAfterAction(TrainingSourceRaw, t.Category, t.MakePrompt(args))
 	}
@@ -559,6 +613,7 @@ func execTool(step ChainStep, args map[string]any, _ *chainState) StepResult {
 		enriched = map[string]any{
 			"tool_result":      output,
 			"element_at_point": uiaEl,
+			"elapsed_ms":       elapsed,
 		}
 	} else {
 		enriched = output
@@ -1652,6 +1707,19 @@ func chainUIAGetAllElements(args map[string]any) (any, error) {
 	return map[string]any{"elements": els, "count": len(els)}, nil
 }
 
+func chainUIAInvoke(args map[string]any) (any, error) {
+	name, _ := getString(args, "name")
+	aid, _ := getString(args, "automation_id")
+	if name == "" && aid == "" {
+		return nil, fmt.Errorf("uia_invoke: name or automation_id required")
+	}
+	ok, err := UIAInvoke(name, aid)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"invoked": ok}, nil
+}
+
 func chainUIASetText(args map[string]any) (any, error) {
 	name, _ := getString(args, "name")
 	aid, _ := getString(args, "automation_id")
@@ -1714,6 +1782,39 @@ func chainRecordAndReplicate(args map[string]any) (any, error) {
 		loop = v
 	}
 	return RecordAndReplicate(duration, delay, slowdown, loop)
+}
+
+func chainCacheMenuItems(args map[string]any) (any, error) {
+	window, _ := args["window"].(string)
+	clickX := toInt32(args["click_x"])
+	clickY := toInt32(args["click_y"])
+	var items []string
+	if raw, ok := args["items"].([]any); ok {
+		for _, r := range raw {
+			if s, ok := r.(string); ok {
+				items = append(items, s)
+			}
+		}
+	} else if raw, ok := args["items"].([]string); ok {
+		items = raw
+	}
+	if len(items) == 0 {
+		return map[string]any{"cached": 0}, nil
+	}
+	cacheMenuItems(window, clickX, clickY, items)
+	slog.Info("chain: cached menu items", "window", window, "items", len(items))
+	return map[string]any{"cached": len(items)}, nil
+}
+
+func chainLookupMenuItems(args map[string]any) (any, error) {
+	window, _ := args["window"].(string)
+	clickX := toInt32(args["click_x"])
+	clickY := toInt32(args["click_y"])
+	entries := lookupMenuItems(window, clickX, clickY)
+	if entries == nil {
+		return map[string]any{"found": false}, nil
+	}
+	return map[string]any{"found": true, "items": entries}, nil
 }
 
 // ── ChainFromJSON ──

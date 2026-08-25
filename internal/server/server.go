@@ -186,6 +186,16 @@ type RecordReplicateArgs struct {
 	Loop         int `json:"loop,omitempty"`
 }
 
+type RecordArgs struct {
+	DurationSecs int `json:"duration_secs"`
+}
+
+type ReplicateArgs struct {
+	Session  any `json:"session"`
+	Slowdown int `json:"slowdown,omitempty"`
+	Loop     int `json:"loop,omitempty"`
+}
+
 type TypeArgs struct {
 	Text string `json:"text"`
 	VerifyArgs
@@ -749,6 +759,14 @@ func keyloggerStopHandler(ctx context.Context, req *mcp.CallToolRequest, args Ke
 	}, nil, nil
 }
 
+func recordStopHandler(ctx context.Context, req *mcp.CallToolRequest, args KeyloggerStartArgs) (*mcp.CallToolResult, any, error) {
+	session, err := actions.RecordStop()
+	if err != nil {
+		return nil, nil, fmt.Errorf("record_stop: %w", err)
+	}
+	return &mcp.CallToolResult{}, session, nil
+}
+
 func keyloggerStatusHandler(ctx context.Context, req *mcp.CallToolRequest, args KeyloggerStatusArgs) (*mcp.CallToolResult, any, error) {
 	active, count, dur := actions.KeyloggerStatus()
 	status := "inactive"
@@ -764,6 +782,31 @@ func recordReplicateHandler(ctx context.Context, req *mcp.CallToolRequest, args 
 	result, err := actions.RecordAndReplicate(args.DurationSecs, args.DelayMs, args.Slowdown, args.Loop)
 	if err != nil {
 		return nil, nil, fmt.Errorf("record_and_replicate: %w", err)
+	}
+	return &mcp.CallToolResult{}, result, nil
+}
+
+func recordHandler(ctx context.Context, req *mcp.CallToolRequest, args RecordArgs) (*mcp.CallToolResult, any, error) {
+	session, err := actions.Record(args.DurationSecs)
+	if err != nil {
+		return nil, nil, fmt.Errorf("record: %w", err)
+	}
+	return &mcp.CallToolResult{}, session, nil
+}
+
+func replicateHandler(ctx context.Context, req *mcp.CallToolRequest, args ReplicateArgs) (*mcp.CallToolResult, any, error) {
+	// Deserialize session from JSON
+	sessionJSON, err := json.Marshal(args.Session)
+	if err != nil {
+		return nil, nil, fmt.Errorf("replicate: invalid session: %w", err)
+	}
+	var session actions.RecordSession
+	if err := json.Unmarshal(sessionJSON, &session); err != nil {
+		return nil, nil, fmt.Errorf("replicate: invalid session JSON: %w", err)
+	}
+	result, err := actions.Replicate(&session, args.Slowdown, args.Loop)
+	if err != nil {
+		return nil, nil, fmt.Errorf("replicate: %w", err)
 	}
 	return &mcp.CallToolResult{}, result, nil
 }
@@ -2894,6 +2937,11 @@ func New(version string) *mcp.Server {
 	}, keyloggerStopHandler)
 
 	addToolClean(server, &mcp.Tool{
+		Name:        "record_stop",
+		Description: "Stop an active recording and return enriched session with OCR, UIA, and window context at each event.",
+	}, recordStopHandler)
+
+	addToolClean(server, &mcp.Tool{
 		Name:        "keylogger_status",
 		Description: "Check if keylogger is active and event count",
 	}, keyloggerStatusHandler)
@@ -2902,6 +2950,16 @@ func New(version string) *mcp.Server {
 		Name:        "record_and_replicate",
 		Description: "Record mouse and keyboard events for N seconds, then automatically replay them as a chain. Supports slowdown factor and loop count for repeated execution.",
 	}, recordReplicateHandler)
+
+	addToolClean(server, &mcp.Tool{
+		Name:        "record",
+		Description: "Record mouse movements, clicks, keyboard, and scroll events for N seconds. Captures OCR text and UIA elements at click points for intelligent replication.",
+	}, recordHandler)
+
+	addToolClean(server, &mcp.Tool{
+		Name:        "replicate",
+		Description: "Replicate a previously recorded session as a chain. Generates smart steps: UIA invoke > OCR find_text_and_click > ML predicted coords > raw coords.",
+	}, replicateHandler)
 
 	addToolClean(server, &mcp.Tool{
 		Name:        "type",

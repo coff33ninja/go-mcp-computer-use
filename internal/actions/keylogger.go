@@ -30,6 +30,7 @@ type recordedEvent struct {
 	down             bool
 	clicks           int
 	scrollDelta      int32
+	elapsedMs        int64
 	timestamp        time.Time
 }
 
@@ -55,6 +56,10 @@ var (
 var vkSpecialRev map[uint32]string
 var vkModRev map[uint32]string
 
+// vkToChar maps VK codes back to printable characters (lowercase by default).
+// Built from charToVK in keyboard.go. Uppercase is handled via Shift modifier.
+var vkToChar map[uint32]rune
+
 func init() {
 	vkSpecialRev = make(map[uint32]string, len(vkSpecialMap))
 	for name, vk := range vkSpecialMap {
@@ -68,6 +73,19 @@ func init() {
 			vkModRev[uint32(vk)] = name
 		}
 	}
+
+	// Build VK→char reverse map (prefer lowercase, no-shift variants)
+	vkToChar = make(map[uint32]rune, 80)
+	for r, cv := range charToVK {
+		if !cv.shift {
+			vkToChar[uint32(cv.vk)] = r
+		}
+	}
+}
+
+// isModifierVK returns true if the VK code is a modifier key (Ctrl, Alt, Shift, Win).
+func isModifierVK(vk uint32) bool {
+	return vk == 0x10 || vk == 0x11 || vk == 0x12 || vk == 0x5B || vk == 0x5C
 }
 
 func vkDecode(vk uint32) (string, bool) {
@@ -276,12 +294,15 @@ func klPollMouse(prevX, prevY *int32, startTime *time.Time, startX, startY *int3
 			if i == 0 || i == 1 {
 				if dist > 100 || elapsed > 300*time.Millisecond {
 					klRecord(recordedEvent{kind: "drag", button: buttonNames[i],
-						startX: *startX, startY: *startY, x: x, y: y})
+						startX: *startX, startY: *startY, x: x, y: y,
+						elapsedMs: elapsed.Milliseconds()})
 				} else {
-					klRecord(recordedEvent{kind: "click", button: buttonNames[i], x: x, y: y, clicks: 1})
+					klRecord(recordedEvent{kind: "click", button: buttonNames[i], x: x, y: y, clicks: 1,
+						elapsedMs: elapsed.Milliseconds()})
 				}
 			} else {
-				klRecord(recordedEvent{kind: "click", button: buttonNames[i], x: x, y: y, clicks: 1})
+				klRecord(recordedEvent{kind: "click", button: buttonNames[i], x: x, y: y, clicks: 1,
+					elapsedMs: elapsed.Milliseconds()})
 			}
 		}
 	}
@@ -368,20 +389,30 @@ func klEventsToSteps(events []recordedEvent) []map[string]any {
 			}
 		case "click":
 			args := map[string]any{"x": ev.x, "y": ev.y}
-			if ev.button == "right" {
-				args["button"] = "right"
+			if ev.button != "" && ev.button != "left" {
+				args["button"] = ev.button
 			}
 			if ev.clicks > 1 {
 				args["clicks"] = ev.clicks
+			}
+			if ev.elapsedMs > 0 {
+				args["elapsed_ms"] = ev.elapsedMs
 			}
 			steps = append(steps, map[string]any{
 				"tool": "click",
 				"args": args,
 			})
 		case "drag":
+			dragArgs := map[string]any{"from_x": ev.startX, "from_y": ev.startY, "to_x": ev.x, "to_y": ev.y}
+			if ev.button != "" && ev.button != "left" {
+				dragArgs["button"] = ev.button
+			}
+			if ev.elapsedMs > 0 {
+				dragArgs["elapsed_ms"] = ev.elapsedMs
+			}
 			steps = append(steps, map[string]any{
 				"tool": "drag",
-				"args": map[string]any{"from_x": ev.startX, "from_y": ev.startY, "to_x": ev.x, "to_y": ev.y},
+				"args": dragArgs,
 			})
 		case "mouse_move":
 			steps = append(steps, map[string]any{
