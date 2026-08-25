@@ -239,6 +239,8 @@ func init() {
 		"get_working_directory": chainGetWorkingDirectory,
 		"get_dpi_for_point":     chainGetDPIPoint,
 		"image_diff":            chainImageDiff,
+		// Record & replicate
+		"record_and_replicate": chainRecordAndReplicate,
 	}
 }
 
@@ -1692,6 +1694,26 @@ func chainImageDiff(args map[string]any) (any, error) {
 		opts.GenerateImage = gi
 	}
 	return ImageDiff(before, after, opts)
+}
+
+func chainRecordAndReplicate(args map[string]any) (any, error) {
+	duration := 5
+	if v, ok := getInt(args, "duration_secs"); ok {
+		duration = v
+	}
+	delay := 1000
+	if v, ok := getInt(args, "delay_ms"); ok {
+		delay = v
+	}
+	slowdown := 1
+	if v, ok := getInt(args, "slowdown"); ok {
+		slowdown = v
+	}
+	loop := 1
+	if v, ok := getInt(args, "loop"); ok {
+		loop = v
+	}
+	return RecordAndReplicate(duration, delay, slowdown, loop)
 }
 
 // ── ChainFromJSON ──

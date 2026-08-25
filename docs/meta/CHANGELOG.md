@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.2.61] - 2026-08-25
+
+### Added
+
+- **`record_and_replicate` MCP tool** — records mouse and keyboard events for a user-specified duration (1-60 seconds), then automatically replays them as a chain. Supports `slowdown` factor (1=real-time, 2=2x slower, etc.), `loop` count (repeat the same recording N times), and `delay_ms` (pause before replay). Eliminates the manual keylogger_start → wait → keylogger_stop → chain round-trip.
+
 ## [0.2.60] - 2026-08-25
 
 ### Fixed

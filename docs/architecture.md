@@ -53,7 +53,7 @@ ml/                             — Go-native ML transformer module
   ├── online/learner.go        — experience replay buffer (circular, 10K samples)
   └── export/serializer.go     — gob weight serialization
 
-internal/server/server.go      — MCP tool registrations (149 tools)
+internal/server/server.go      — MCP tool registrations (150 tools)
 internal/config/config.go      — JSON config file (~/.config/go-mcp-computer-use/config.json)
 
 internal/actions/              — 47 files, organized by capability:

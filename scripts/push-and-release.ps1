@@ -89,7 +89,7 @@ git pull --ff-only
 if ($LASTEXITCODE) {
     Write-Host "  fast-forward failed, trying rebase..." -ForegroundColor Yellow
     git pull --rebase
-    if ($LASTEXITCODE) { throw "git pull failed — resolve conflicts manually" }
+    if ($LASTEXITCODE) { throw "git pull failed - resolve conflicts manually" }
 }
 
 # ---- Step 7: Download release asset ----

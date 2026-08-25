@@ -179,6 +179,13 @@ type KeyloggerStartArgs struct{}
 
 type KeyloggerStatusArgs struct{}
 
+type RecordReplicateArgs struct {
+	DurationSecs int `json:"duration_secs"`
+	DelayMs      int `json:"delay_ms,omitempty"`
+	Slowdown     int `json:"slowdown,omitempty"`
+	Loop         int `json:"loop,omitempty"`
+}
+
 type TypeArgs struct {
 	Text string `json:"text"`
 	VerifyArgs
@@ -751,6 +758,14 @@ func keyloggerStatusHandler(ctx context.Context, req *mcp.CallToolRequest, args 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: status}},
 	}, nil, nil
+}
+
+func recordReplicateHandler(ctx context.Context, req *mcp.CallToolRequest, args RecordReplicateArgs) (*mcp.CallToolResult, any, error) {
+	result, err := actions.RecordAndReplicate(args.DurationSecs, args.DelayMs, args.Slowdown, args.Loop)
+	if err != nil {
+		return nil, nil, fmt.Errorf("record_and_replicate: %w", err)
+	}
+	return &mcp.CallToolResult{}, result, nil
 }
 
 func typeHandler(ctx context.Context, req *mcp.CallToolRequest, args TypeArgs) (*mcp.CallToolResult, any, error) {
@@ -2882,6 +2897,11 @@ func New(version string) *mcp.Server {
 		Name:        "keylogger_status",
 		Description: "Check if keylogger is active and event count",
 	}, keyloggerStatusHandler)
+
+	addToolClean(server, &mcp.Tool{
+		Name:        "record_and_replicate",
+		Description: "Record mouse and keyboard events for N seconds, then automatically replay them as a chain. Supports slowdown factor and loop count for repeated execution.",
+	}, recordReplicateHandler)
 
 	addToolClean(server, &mcp.Tool{
 		Name:        "type",
