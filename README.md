@@ -47,7 +47,7 @@ MCP server for Windows desktop computer use. Exposes mouse, keyboard, screenshot
 - **Memory-backed UI element cache** — ONNX detections auto-stored as memory facts (`ui:{window}:{class}`) with TTL. AI reuses cached coordinates across sessions.
 - **`find_ui_element` tool** — cascading lookup: memory → ONNX → OCR. Self-learning: saves findings to memory + training store.
 - **Go-native ML transformer** — 14K-param transformer engine (64-dim, 2 layers, 2 heads) trained in-process via Gorgonia. Predicts optimal actions from OCR context. Self-improving: learns from each session, persists to `model.gob`. No Python, no ONNX for training.
-- **150 MCP tools** — see [`docs/reference/tools.md`](docs/reference/tools.md) for the full listing
+- **153 MCP tools** — see [`docs/reference/tools.md`](docs/reference/tools.md) for the full listing
 
 ## Tools
 

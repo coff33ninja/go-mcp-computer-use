@@ -60,7 +60,7 @@ The **Model Context Protocol (MCP)** is an open standard (Anthropic, 2024) that 
 
 ### The go-mcp-computer-use Server
 
-The `mcp-server.exe` from [coff33ninja/go-mcp-computer-use](https://github.com/coff33ninja/go-mcp-computer-use) exposes **150 tools** that mirror every human peripheral capability on Windows:
+The `mcp-server.exe` from [coff33ninja/go-mcp-computer-use](https://github.com/coff33ninja/go-mcp-computer-use) exposes **153 tools** that mirror every human peripheral capability on Windows:
 
 #### Vision (Human: eyes → screen)
 - `screenshot` — capture what's on screen (like human looking)

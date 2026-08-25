@@ -21,7 +21,7 @@ type Tool struct {
 // categoryForTool returns the category label for a given tool name.
 // Keep this map sorted by category name, then tool name.
 var categoryForTool = map[string]string{
-	// Screenshot & Vision (11)
+	// Screenshot & Vision (13)
 	"screenshot":        "Screenshot & Vision",
 	"get_screen_size":   "Screenshot & Vision",
 	"get_pixel_color":   "Screenshot & Vision",
@@ -33,6 +33,9 @@ var categoryForTool = map[string]string{
 	"find_all_images":   "Screenshot & Vision",
 	"image_diff":        "Screenshot & Vision",
 	"record_screen":     "Screenshot & Vision",
+	"ocr_active_window": "Screenshot & Vision",
+	"ocr_window":        "Screenshot & Vision",
+	"get_dpi_for_point": "Screenshot & Vision",
 
 	// Mouse (6)
 	"click":              "Mouse",
@@ -77,14 +80,20 @@ var categoryForTool = map[string]string{
 	"click_menu_item":     "Chained / Composite",
 	"launch_and_wait":     "Chained / Composite",
 
-	// Chain Automation (2)
-	"chain":       "Chain Automation",
-	"chain_abort": "Chain Automation",
+	// Chain Automation (4)
+	"chain":         "Chain Automation",
+	"chain_abort":   "Chain Automation",
+	"chain_predict": "Chain Automation",
+	"dismiss_all_menus": "Chain Automation",
 
-	// UI Automation (3)
-	"uia_find":    "UI Automation",
-	"uia_get_text": "UI Automation",
-	"uia_invoke":  "UI Automation",
+	// UI Automation (7)
+	"uia_find":                  "UI Automation",
+	"uia_get_text":              "UI Automation",
+	"uia_invoke":                "UI Automation",
+	"uia_get_all_elements":      "UI Automation",
+	"uia_get_element_at_point":  "UI Automation",
+	"uia_set_text":              "UI Automation",
+	"wait_for_ui_element":       "UI Automation",
 
 	// Browser Automation (4)
 	"browser_navigate":     "Browser Automation",
@@ -134,6 +143,23 @@ var categoryForTool = map[string]string{
 	"find_ui_element":        "Training Pipeline",
 	"training_cleanup_noise": "Training Pipeline",
 
+	// Recording & Replication (4)
+	"record":                 "Recording & Replication",
+	"record_stop":            "Recording & Replication",
+	"record_and_replicate":   "Recording & Replication",
+	"replicate":              "Recording & Replication",
+
+	// File Operations (9)
+	"copy_file":        "File Operations",
+	"create_directory": "File Operations",
+	"delete_file":      "File Operations",
+	"find_files":       "File Operations",
+	"get_file_info":    "File Operations",
+	"list_directory":   "File Operations",
+	"move_file":        "File Operations",
+	"read_file":        "File Operations",
+	"write_file":       "File Operations",
+
 	// Data Export (1)
 	"export_yolo_dataset": "Data Export",
 
@@ -147,43 +173,48 @@ var categoryForTool = map[string]string{
 	"agent_suggest": "Adaptive Agent",
 	"agent_train":   "Adaptive Agent",
 
-	// Introspection & Debugging (6)
+	// Introspection & Debugging (7)
 	"task_begin":            "Introspection & Debugging",
 	"task_end":              "Introspection & Debugging",
+	"task_is_active":        "Introspection & Debugging",
 	"introspection_analyze": "Introspection & Debugging",
 	"bridge_debug":          "Introspection & Debugging",
 	"get_logs":              "Introspection & Debugging",
 	"report_issue":          "Introspection & Debugging",
 
-	// Runtime Config (1)
-	"set_config": "Runtime Config",
+	// Runtime Config (4)
+	"set_config":            "Runtime Config",
+	"reset_state":           "Runtime Config",
+	"get_working_directory": "Runtime Config",
+	"set_working_directory": "Runtime Config",
 
-	// System (25)
-	"get_volume":         "System",
-	"set_volume":         "System",
-	"set_mute":           "System",
-	"get_clipboard":      "System",
-	"set_clipboard":      "System",
-	"get_brightness":     "System",
-	"set_brightness":     "System",
-	"get_battery":        "System",
-	"get_disk_usage":     "System",
+	// System (26)
+	"get_volume":          "System",
+	"set_volume":          "System",
+	"set_mute":            "System",
+	"get_clipboard":       "System",
+	"set_clipboard":       "System",
+	"get_brightness":      "System",
+	"set_brightness":      "System",
+	"get_battery":         "System",
+	"get_disk_usage":      "System",
 	"get_keyboard_layout": "System",
 	"set_keyboard_layout": "System",
-	"get_network_info":   "System",
-	"ping":               "System",
-	"get_system_info":    "System",
-	"get_uptime":         "System",
-	"get_idle_time":      "System",
-	"list_displays":      "System",
-	"open_url":           "System",
-	"show_notification":  "System",
-	"lock_workstation":   "System",
-	"shutdown":           "System",
-	"restart":            "System",
-	"sleep":              "System",
-	"hibernate":          "System",
-	"wait":               "System",
+	"get_network_info":    "System",
+	"ping":                "System",
+	"get_system_info":     "System",
+	"get_uptime":          "System",
+	"get_idle_time":       "System",
+	"list_displays":       "System",
+	"open_url":            "System",
+	"show_notification":   "System",
+	"lock_workstation":    "System",
+	"shutdown":            "System",
+	"restart":             "System",
+	"sleep":               "System",
+	"hibernate":           "System",
+	"wait":                "System",
+	"system_find_stats":   "System",
 	// Process Management (3) — launch_and_wait is in Chained / Composite
 	"list_processes": "Process Management",
 	"kill_process":   "Process Management",
@@ -200,11 +231,13 @@ var categoryOrder = []string{
 	"UI Automation",
 	"Browser Automation",
 	"File Explorer",
+	"File Operations",
 	"Audio",
 	"Memory & Templates",
 	"ONNX ML",
 	"Priors & Statistics",
 	"Training Pipeline",
+	"Recording & Replication",
 	"Data Export",
 	"Data Logging",
 	"Adaptive Agent",
@@ -305,6 +338,11 @@ var docCountPatches = []struct {
 	re    *regexp.Regexp
 	tmpl  string
 }{
+	{
+		file: filepath.Join("internal", "server", "server.go"),
+		re:   regexp.MustCompile(`(?m)("tools", )\d+(, "tools_doc")`),
+		tmpl: "${1}%d${2}",
+	},
 	{
 		file: filepath.Join("README.md"),
 		re:   regexp.MustCompile(`(?m)- \*\*\d+ MCP tools\*\*`),

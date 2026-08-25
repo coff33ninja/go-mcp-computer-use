@@ -330,10 +330,13 @@ func uniqueTokens(tokens []string) []string {
 }
 
 var coordTools = map[string]bool{
-	"click":      true,
-	"move_mouse": true,
-	"hover":      true,
-	"drag":       true,
+	"click":        true,
+	"move_mouse":   true,
+	"hover":        true,
+	"drag":         true,
+	"double_click": true,
+	"long_press":   true,
+	"context_menu": true,
 }
 
 func extractArgsFromJSON(cmdJSON string) string {
@@ -385,7 +388,7 @@ func extractCoordsFromArgs(tool string, argsJSON string) []coordPoint {
 		return nil
 	}
 	switch tool {
-	case "click", "move_mouse", "hover":
+	case "click", "move_mouse", "hover", "double_click", "long_press", "context_menu":
 		x, xOK := getIntArg(args, "x")
 		y, yOK := getIntArg(args, "y")
 		if xOK && yOK {

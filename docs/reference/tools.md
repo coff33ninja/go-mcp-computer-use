@@ -1,18 +1,21 @@
-# Tools (150)
+# Tools (153)
 
-Auto-generated from `internal/server/server.go`. Total: **150 tools**.
+Auto-generated from `internal/server/server.go`. Total: **153 tools**.
 
-## Screenshot & Vision (11)
+## Screenshot & Vision (14)
 
 - `find_all_images` — Find ALL occurrences of a template image on screen using NCC template matching. Provide template as base64 PNG. Returns array of matches with coordinates and scores.
 - `find_image` — Find a template image on screen using NCC template matching. Provide template as base64 PNG. Returns coordinates of best match.
 - `get_display_modes` — Get all available display modes (resolution, refresh rate, color depth) for a monitor by device name.
+- `get_dpi_for_point` — Get DPI and scale percentage at a specific screen coordinate. Useful for determining which monitor a coordinate is on and its scaling factor, especially in mixed-DPI multi-monitor setups.
 - `get_pixel_color` — Get the hex color at screen coordinates x,y.
 - `get_screen_dpi` — Get per-monitor screen DPI and scale percentage.
 - `get_screen_size` — Get the screen dimensions.
 - `image_diff` — Compare two base64-encoded PNG screenshots pixel by pixel. Returns statistics: changed_pixels, total_pixels, change_ratio (0-1), mean_diff (0-255), max_diff (0-255), same (bool). Optionally generates a diff image with changed pixels highlighted in red. Use threshold (0-255, default 30) to control sensitivity.
 - `ocr` — Extract text from screen using Windows OCR. Supports full screen, specific monitor (screen=N where N is the display index from list_displays, 0-based), or region (x,y,w,h).
+- `ocr_active_window` — Extract text from the currently active/foreground window using Windows OCR.
 - `ocr_languages` — List all available Windows OCR languages. Returns array of language objects with tag, display_name, and native_name.
+- `ocr_window` — Extract text from a specific window by handle using Windows OCR. Captures what is currently visible in the window's region. If the window is minimized, behind other windows, or off-screen, the captured region will show whatever is on top at those screen coordinates. Use get_window_state to check state, then focus_window or restore_window first if needed.
 - `record_screen` — Record screen frames at fixed intervals. Returns base64 images. Duration in ms, interval in ms.
 - `screenshot` — Capture the screen or a region. If w/h omitted, captures full screen.
 
@@ -62,16 +65,22 @@ Auto-generated from `internal/server/server.go`. Total: **150 tools**.
 - `launch_and_wait` — Launch an application and wait for its window to appear.
 - `wait_for_text` — Wait for text to appear on screen. Polls OCR until found or timeout. Supports scrolling with max_scrolls to find text on scrollable pages.
 
-## Chain Automation (2)
+## Chain Automation (4)
 
 - `chain` — Execute a sequence of steps sequentially server-side. Steps can call any tool, wait, capture output, and use {{variable}} substitution. Mouse-based tools (click, move_mouse, hover, drag) auto-capture the UIA element at their target coordinates and include it in step output as 'element_at_point'. New step types: verify_ui (UIA element presence/absence check), if_uia (branch on element existence). New chain-callable tools: uia_find, uia_get_element_at_point, uia_get_all_elements, uia_set_text, wait_for_ui_element.
 - `chain_abort` — Check if the global chain abort hotkey has been pressed since last check. Returns {aborted: true} when the configured hotkey combo is detected. The abort is consumed on read (auto-resets). Call before starting long chains or poll periodically.
+- `chain_predict` — Predict the next action plus future actions from OCR text using the transformer model. Returns the primary prediction (tool, coordinates, args) and optionally a sequence of N future actions. Use the sequence to auto-generate chain steps.
+- `dismiss_all_menus` — Press Escape to dismiss open context menus/dialogs. OCRs before and after to detect which menus were open and whether they closed.
 
-## UI Automation (3)
+## UI Automation (7)
 
 - `uia_find` — Find UI elements within windows by name, automation_id, or control_type using UI Automation. Returns bounding rectangles and properties (type, enabled state, etc.). Use this to locate text boxes, address bars, search menus, title bars, buttons, and other controls by their automation identity. The target window should be foreground (use focus_window first) for reliable results — some UIA providers only respond when the window is active.
+- `uia_get_all_elements` — Get all immediate child UI elements in a window by handle (title bar, menu bar, content panes, toolbars, status bar — one level deep, not recursive DOM tree). Returns name, control_type, automation_id, bounding rect, and enabled state for each. Use this to understand a window's full control surface — text boxes, buttons, search fields, address bars, menus, etc. The window should be foreground (use focus_window first) for reliable results. Use max_results to cap output.
+- `uia_get_element_at_point` — Identify a UI element at screen coordinates (x, y) using UI Automation. Returns the element's name, control_type, automation_id, bounding rect, and whether it is enabled. Use this after clicking or hovering to validate what was under the cursor, or to determine what element exists at a given point before interacting.
 - `uia_get_text` — Get text from a UI element by name or automation_id using UI Automation.
 - `uia_invoke` — Click or invoke a UI element by name or automation_id using UI Automation.
+- `uia_set_text` — Set text in a UI element by name or automation_id using UI Automation.
+- `wait_for_ui_element` — Wait for a UI element to appear in a window, identified by name or control_type. Polls UIA FindFirst on the window's descendants until found or timeout. Use this for content verification after an action (e.g., wait for a dialog to appear after clicking a button). Default timeout is 10 seconds.
 
 ## Browser Automation (4)
 
@@ -86,6 +95,18 @@ Auto-generated from `internal/server/server.go`. Total: **150 tools**.
 - `explorer_open_path` — Open a File Explorer window at the specified path. Reuses existing window when possible.
 - `open_file_explorer` — Open File Explorer to a specified path (default: C:\).
 - `open_file_location` — Open File Explorer with a specific file selected.
+
+## File Operations (9)
+
+- `copy_file` — Copy a file or directory (recursively) from source to destination.
+- `create_directory` — Create a directory (recursive, like mkdir -p).
+- `delete_file` — Delete a file or directory to the Recycle Bin (uses SHFileOperationW with FOF_ALLOWUNDO).
+- `find_files` — Recursively search for files matching a glob pattern (e.g. '*.go', '**/*.md').
+- `get_file_info` — Get file or directory metadata: size, mod_time, is_dir, mode.
+- `list_directory` — List directory contents. Returns entries with name, size, is_dir, mod_time, and mode.
+- `move_file` — Move or rename a file or directory.
+- `read_file` — Read a file with automatic type detection. Supports plaintext (txt, json, csv, yaml, etc.), docx, xlsx, pdf, and images (via OCR). Use page and page_size to paginate long content. Default page_size=8000 chars.
+- `write_file` — Write content to a file. Supports plaintext, docx (creates from text, preserves structure on overwrite), xlsx (TSV content becomes cells), and PDF (text creates PDF, JSON fills existing form fields). Requires overwrite=true to replace existing files.
 
 ## Audio (2)
 
@@ -128,6 +149,13 @@ Auto-generated from `internal/server/server.go`. Total: **150 tools**.
 - `training_save_sample` — Capture screenshot and save as a training sample with a task prompt (e.g. 'click the submit button'). The ONNX model learns from these during idle retraining.
 - `training_stats` — Get training data statistics: total samples, unused samples, breakdown by category, disk usage.
 
+## Recording & Replication (4)
+
+- `record` — Record mouse movements, clicks, keyboard, and scroll events for N seconds. Captures OCR text and UIA elements at click points for intelligent replication.
+- `record_and_replicate` — Record mouse and keyboard events for N seconds, then automatically replay them as a chain. Supports slowdown factor and loop count for repeated execution.
+- `record_stop` — Stop an active recording and return enriched session with OCR, UIA, and window context at each event.
+- `replicate` — Replicate a previously recorded session as a chain. Generates smart steps: UIA invoke > OCR find_text_and_click > ML predicted coords > raw coords.
+
 ## Data Export (1)
 
 - `export_yolo_dataset` — Export unused training samples as a YOLO-format dataset (images + labels + dataset.yaml) for external training with Ultralytics or other YOLO frameworks. Outputs to a directory of your choice.
@@ -144,7 +172,7 @@ Auto-generated from `internal/server/server.go`. Total: **150 tools**.
 - `agent_suggest` — Given OCR screen text, predict the best next command based on past successful sequences. Returns ranked predictions with confidence scores and optional coord (x, y, confidence, samples) for click/hover/move_mouse.
 - `agent_train` — Train the adaptive engine from datalog training_pairs. Rebuilds the OCR→command word index and sequence cache. Call after the datalog has accumulated new pairs.
 
-## Introspection & Debugging (6)
+## Introspection & Debugging (7)
 
 - `bridge_debug` — Debug the OCR→command bridge state — shows recent OCR buffer, pending command, and timing info.
 - `get_logs` — Read server log entries from the file-based log. Returns recent log lines with timestamps, levels, and messages. Useful for diagnosing tool failures, crashes, and errors after they occur.
@@ -152,12 +180,16 @@ Auto-generated from `internal/server/server.go`. Total: **150 tools**.
 - `report_issue` — Generate a GitHub issue report with system info, recent error logs, and context. If gh CLI is available, creates the issue automatically. Otherwise returns the markdown body for manual submission.
 - `task_begin` — Mark the start of a task for post-task introspection. Call before the first tool call in a task.
 - `task_end` — Mark the end of a task. Returns mined insights: slow/failed tools, OCR stats, repeat patterns, and improvement suggestions.
+- `task_is_active` — Check if a task session is currently active (between task_begin and task_end).
 
-## Runtime Config (1)
+## Runtime Config (4)
 
+- `get_working_directory` — Get the current working directory used for relative path resolution.
+- `reset_state` — Clear accumulated server state (adaptive engine stats, bridge buffer). Use between heavy batch operations to prevent state accumulation and timeouts.
 - `set_config` — Update runtime configuration. Accepts any subset of: training_enabled (stop/start background screenshot saving), prior_adjustment (enable/disable ML prior confidence tuning), verify_bounds (toggle coordinate bounds checking), log_level (debug/info/warn/error), watcher_enabled (start/stop the background screenshot watcher), watcher_interval_seconds (change polling frequency while running), tool_denylist (list of tool names to disable, e.g. ["shutdown","restart"]), retention_days (auto-prune training samples older than N days, 0=disabled), chain_abort_enabled (enable/disable global hotkey abort), chain_abort_keys (hotkey combo like "Ctrl+Shift+Escape"), chain_abort_poll_ms (polling interval), window_lock_enabled (enable/disable screen tool locking), window_lock_auto_focus (auto re-focus locked window), log_file_enabled (enable/disable file-based logging), log_file_max_size_mb (max MB per log file before rotation), log_file_retention (number of rotated log files to keep), dashboard_enabled (enable/disable web dashboard on random port). Changes persist to disk.
+- `set_working_directory` — Set the working directory for relative path resolution in file tools.
 
-## System (25)
+## System (26)
 
 - `get_battery` — Get battery status (percentage, charging, on battery).
 - `get_brightness` — Get the current display brightness level (0-100).
@@ -183,6 +215,7 @@ Auto-generated from `internal/server/server.go`. Total: **150 tools**.
 - `show_notification` — Show a Windows notification message box.
 - `shutdown` — Shut down the computer.
 - `sleep` — Put the computer to sleep.
+- `system_find_stats` — Get system-find usage statistics: last used timestamp and total call count.
 - `wait` — Wait for N milliseconds before the next action.
 
 ## Process Management (3)
@@ -191,33 +224,6 @@ Auto-generated from `internal/server/server.go`. Total: **150 tools**.
 - `launch_app` — Launch an application by path or shell command.
 - `list_processes` — List all running processes with PID, name, and thread count.
 
-## Uncategorized (24)
-
-- `chain_predict` — Predict the next action plus future actions from OCR text using the transformer model. Returns the primary prediction (tool, coordinates, args) and optionally a sequence of N future actions. Use the sequence to auto-generate chain steps.
-- `copy_file` — Copy a file or directory (recursively) from source to destination.
-- `create_directory` — Create a directory (recursive, like mkdir -p).
-- `delete_file` — Delete a file or directory to the Recycle Bin (uses SHFileOperationW with FOF_ALLOWUNDO).
-- `dismiss_all_menus` — Press Escape to dismiss open context menus/dialogs. OCRs before and after to detect which menus were open and whether they closed.
-- `find_files` — Recursively search for files matching a glob pattern (e.g. '*.go', '**/*.md').
-- `get_dpi_for_point` — Get DPI and scale percentage at a specific screen coordinate. Useful for determining which monitor a coordinate is on and its scaling factor, especially in mixed-DPI multi-monitor setups.
-- `get_file_info` — Get file or directory metadata: size, mod_time, is_dir, mode.
-- `get_working_directory` — Get the current working directory used for relative path resolution.
-- `list_directory` — List directory contents. Returns entries with name, size, is_dir, mod_time, and mode.
-- `move_file` — Move or rename a file or directory.
-- `ocr_active_window` — Extract text from the currently active/foreground window using Windows OCR.
-- `ocr_window` — Extract text from a specific window by handle using Windows OCR. Captures what is currently visible in the window's region. If the window is minimized, behind other windows, or off-screen, the captured region will show whatever is on top at those screen coordinates. Use get_window_state to check state, then focus_window or restore_window first if needed.
-- `read_file` — Read a file with automatic type detection. Supports plaintext (txt, json, csv, yaml, etc.), docx, xlsx, pdf, and images (via OCR). Use page and page_size to paginate long content. Default page_size=8000 chars.
-- `record_and_replicate` — Record mouse and keyboard events for N seconds, then automatically replay them as a chain. Supports slowdown factor and loop count for repeated execution.
-- `reset_state` — Clear accumulated server state (adaptive engine stats, bridge buffer). Use between heavy batch operations to prevent state accumulation and timeouts.
-- `set_working_directory` — Set the working directory for relative path resolution in file tools.
-- `system_find_stats` — Get system-find usage statistics: last used timestamp and total call count.
-- `task_is_active` — Check if a task session is currently active (between task_begin and task_end).
-- `uia_get_all_elements` — Get all immediate child UI elements in a window by handle (title bar, menu bar, content panes, toolbars, status bar — one level deep, not recursive DOM tree). Returns name, control_type, automation_id, bounding rect, and enabled state for each. Use this to understand a window's full control surface — text boxes, buttons, search fields, address bars, menus, etc. The window should be foreground (use focus_window first) for reliable results. Use max_results to cap output.
-- `uia_get_element_at_point` — Identify a UI element at screen coordinates (x, y) using UI Automation. Returns the element's name, control_type, automation_id, bounding rect, and whether it is enabled. Use this after clicking or hovering to validate what was under the cursor, or to determine what element exists at a given point before interacting.
-- `uia_set_text` — Set text in a UI element by name or automation_id using UI Automation.
-- `wait_for_ui_element` — Wait for a UI element to appear in a window, identified by name or control_type. Polls UIA FindFirst on the window's descendants until found or timeout. Use this for content verification after an action (e.g., wait for a dialog to appear after clicking a button). Default timeout is 10 seconds.
-- `write_file` — Write content to a file. Supports plaintext, docx (creates from text, preserves structure on overwrite), xlsx (TSV content becomes cells), and PDF (text creates PDF, JSON fills existing form fields). Requires overwrite=true to replace existing files.
-
 <!--
-Generated by scripts/gen-tools-doc.go — 150 tools found
+Generated by scripts/gen-tools-doc.go — 153 tools found
 -->

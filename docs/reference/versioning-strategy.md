@@ -105,3 +105,43 @@ git push && git push origin v0.1.1  # triggers release workflow
 - `../adr/adr-001-mcp-sdk-selection.md` — SDK choice that defines the version field location
 - `../ci-cd-pipeline.md` — CI/CD workflows for automated build + release
 - `benchmark-results.txt` — performance data updated per release
+
+## Adding a New MCP Tool
+
+Every new tool requires updates in multiple files. Skip one and the count goes stale or the tool silently breaks.
+
+### Step-by-step
+
+1. **`internal/server/server.go`** — add `mcp.AddTool` call. Do NOT manually update the hardcoded `"tools", N` count in the startup log — `gen-tools-doc.go` patches it automatically.
+
+2. **`scripts/gen-tools-doc.go`** — add the tool name to `categoryForTool` map with its category. If creating a new category, also add it to `categoryOrder`. Missing from this map = "Uncategorized" in generated docs.
+
+3. **`internal/actions/chain.go`** (if chain-executable) — add to `toolDispatch` map + implement handler. Register in `inputTools` or `trainingTools`.
+
+4. **`internal/actions/adaptive.go`** (if ML-tracked) — add to `coordTools` or `coordIndex`.
+
+5. **Run `go run ./scripts/gen-tools-doc.go`** — auto-patches tool count in:
+   - `internal/server/server.go` (startup log)
+   - `docs/reference/tools.md` (regenerated)
+   - `README.md`, `docs/architecture.md`, `docs/comparison-vs-alternatives.md`, `docs/guides/agent-guides.md`, `docs/guides/computer-use-guide-for-ai-agents.md`, `docs/meta/known-issues.md`, `docs/reference/scripts.md`, `docs/meta/backlog.md`
+
+6. **Tests** — add in relevant `*_test.go`, run `go test ./internal/actions/...`
+
+7. **CHANGELOG** — add entry under `## [Unreleased]`
+
+### What push-and-release.ps1 does automatically
+
+1. Reads `VERSION` file
+2. Extracts changelog section for that version
+3. Runs `go run ./scripts/gen-tools-doc.go` (patches all counts)
+4. Commits + tags + pushes
+5. Waits for CI release workflow
+6. Downloads release binary, kills old processes, replaces, restarts OpenCode
+
+### Common mistakes
+
+- Forgetting `gen-tools-doc.go` → tool count stays stale in server.go and all docs
+- Adding tool to server.go but not `categoryForTool` → shows as "Uncategorized"
+- Adding chain tool but not `toolDispatch` → registered but not chain-executable
+- Editing `VERSION` without running `gen-tools-doc.go` → CI rebuilds but counts don't update
+- Building locally without `-ldflags` → binary shows "dev" (expected, CI handles it)
