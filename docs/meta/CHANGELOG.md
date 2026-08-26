@@ -38,6 +38,10 @@
 - `vkToShiftedChar` reverse map built from `charToVK` shift entries in keylogger init.
 - 178 tests all passing.
 
+### Fixed
+
+- **`record` tool null structuredContent** — `Record(0)` in manual mode returned nil session, causing MCP SDK to reject the response. Now returns a confirmation message.
+
 ### Fixed (pre-0.3.0)
 
 - **Nil-pointer in `ensureWindowFocus`** — added `state.Rect != nil` guard and bounds checking before clicking the window title bar. `GetWindowState` could return a nil `Rect` on certain window types.

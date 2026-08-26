@@ -791,6 +791,9 @@ func recordHandler(ctx context.Context, req *mcp.CallToolRequest, args RecordArg
 	if err != nil {
 		return nil, nil, fmt.Errorf("record: %w", err)
 	}
+	if session == nil {
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "Recording started (manual stop required). Use record_stop to finish."}}}, nil, nil
+	}
 	return &mcp.CallToolResult{}, session, nil
 }
 
