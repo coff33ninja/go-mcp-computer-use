@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-08-26
+
+### Added
+
+- **Timed recording no longer blocks MCP** — `record(duration_secs=N)` now starts a background goroutine for the sleep+auto-stop, returning immediately with a confirmation. Previously `time.Sleep()` inside the handler caused the MCP SDK to kill the request as timed out. Both manual (`duration_secs=0`) and timed modes now work reliably.
+- **Recording feeds ML on stop** — `RecordStop()` now calls `LogEnrichPatternsFromSession()` asynchronously, feeding OCR, UIA, and ML enrichment payloads back to the adaptive engine immediately when recording ends. No manual wiring required — the full loop is: record → stop → enrich → ML learns.
+
+### Verified
+
+- 30-second timed recording test: started, returned immediately, auto-stopped after 10 seconds, keylogger inactive — no MCP timeout.
+- Manual recording + `record_stop`: full session returned with enrichment. OCR snapshots jumped 1668→1817 (+149 from enrichment logging). ML engine received 692 command sequences, 535 click patterns, 26 double-clicks, 26 long-presses, 49 type patterns. Top sequences: `"reminder"→click` (260 samples), `"delete"→click` (154), `"schedule"→click` (152).
+- AI replication of recorded sessions not yet tested — next validation step.
+
 ## [0.3.0] - 2026-08-25
 
 ### Added

@@ -157,8 +157,13 @@ func Record(durationSecs int) (*RecordSession, error) {
 	}
 
 	slog.Info("record: started, recording for", "duration_secs", durationSecs)
-	time.Sleep(time.Duration(durationSecs) * time.Second)
-	return RecordStop()
+	go func() {
+		time.Sleep(time.Duration(durationSecs) * time.Second)
+		if _, err := RecordStop(); err != nil {
+			slog.Error("record: auto-stop failed", "err", err)
+		}
+	}()
+	return nil, nil
 }
 
 // RecordStop stops an active recording and returns the enriched session.
@@ -189,6 +194,11 @@ func RecordStop() (*RecordSession, error) {
 	}
 
 	slog.Info("record: complete", "events", len(events), "duration", duration, "windows", len(windowsAtStart))
+
+	// Feed enrichment-level patterns (OCR, UIA, ML payloads) back to the ML engine
+	// Run async to avoid blocking the MCP response
+	go LogEnrichPatternsFromSession(session, true)
+
 	return session, nil
 }
 
