@@ -2536,6 +2536,38 @@ func setConfigHandler(ctx context.Context, req *mcp.CallToolRequest, args SetCon
 	}, nil
 }
 
+func getConfigHandler(_ context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
+	cfg := actions.ActiveConfig
+	if cfg == nil {
+		cfg = config.Default()
+	}
+	watcherStatus := actions.GetWatcherStatus()
+	return &mcp.CallToolResult{}, map[string]any{
+		"log_level":               cfg.LogLevel,
+		"mouse_speed":             cfg.MouseSpeed,
+		"click_delay_ms":          cfg.ClickDelay,
+		"verify_bounds":           cfg.VerifyBounds,
+		"action_timeout_ms":       cfg.ActionTimeoutMs,
+		"uia_warmup":              cfg.UIAWarmup,
+		"training_enabled":        cfg.TrainingEnabled,
+		"prior_adjustment":        cfg.PriorAdjustment,
+		"watcher_auto_start":      cfg.WatcherAutoStart,
+		"watcher_interval_seconds": cfg.WatcherIntervalSecs,
+		"watcher_running":         watcherStatus.Running,
+		"tool_denylist":           cfg.ToolDenylist,
+		"retention_days":          cfg.RetentionDays,
+		"chain_abort_enabled":     cfg.ChainAbortEnabled,
+		"chain_abort_keys":        cfg.ChainAbortKeys,
+		"chain_abort_poll_ms":     cfg.ChainAbortPollMs,
+		"window_lock_enabled":     cfg.WindowLockEnabled,
+		"window_lock_auto_focus":  cfg.WindowLockAutoFocus,
+		"log_file_enabled":        cfg.LogFileEnabled,
+		"log_file_max_size_mb":    cfg.LogFileMaxSizeMB,
+		"log_file_retention":      cfg.LogFileRetention,
+		"dashboard_enabled":       cfg.DashboardEnabled,
+	}, nil
+}
+
 func getLogsHandler(ctx context.Context, req *mcp.CallToolRequest, args GetLogsArgs) (*mcp.CallToolResult, any, error) {
 	logPath := logging.LogPath()
 	if logPath == "" {
@@ -2857,7 +2889,7 @@ func New(version string) *mcp.Server {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
 	slog.SetDefault(logger)
 
-	slog.Info("starting go-mcp-computer-use", "version", version, "tools", 155, "tools_doc", "docs/tools.md")
+	slog.Info("starting go-mcp-computer-use", "version", version, "tools", 156, "tools_doc", "docs/tools.md")
 
 	if cfg.UIAWarmup {
 		go func() {
@@ -3641,6 +3673,11 @@ func New(version string) *mcp.Server {
 		Name:        "set_config",
 		Description: "Update runtime configuration. Accepts any subset of: training_enabled (stop/start background screenshot saving), prior_adjustment (enable/disable ML prior confidence tuning), verify_bounds (toggle coordinate bounds checking), log_level (debug/info/warn/error), watcher_enabled (start/stop the background screenshot watcher), watcher_interval_seconds (change polling frequency while running), tool_denylist (list of tool names to disable, e.g. [\"shutdown\",\"restart\"]), retention_days (auto-prune training samples older than N days, 0=disabled), chain_abort_enabled (enable/disable global hotkey abort), chain_abort_keys (hotkey combo like \"Ctrl+Shift+Escape\"), chain_abort_poll_ms (polling interval), window_lock_enabled (enable/disable screen tool locking), window_lock_auto_focus (auto re-focus locked window), log_file_enabled (enable/disable file-based logging), log_file_max_size_mb (max MB per log file before rotation), log_file_retention (number of rotated log files to keep), dashboard_enabled (enable/disable web dashboard on random port). Changes persist to disk.",
 	}, setConfigHandler)
+
+	addToolClean(server, &mcp.Tool{
+		Name:        "get_config",
+		Description: "Get the current runtime configuration. Returns all config fields and their current values, plus live watcher status. Read-only — use set_config to change values.",
+	}, getConfigHandler)
 
 	addToolClean(server, &mcp.Tool{
 		Name:        "list_directory",

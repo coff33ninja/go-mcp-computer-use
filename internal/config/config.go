@@ -42,7 +42,7 @@ func Default() *Config {
 		UIAWarmup:           true,
 		TrainingEnabled:        true,
 		PriorAdjustment:        true,
-		WatcherAutoStart:       false,
+		WatcherAutoStart:       true,
 		WatcherIntervalSecs:    5,
 		ChainAbortEnabled:      true,
 		ChainAbortKeys:         "Ctrl+Shift+Escape",

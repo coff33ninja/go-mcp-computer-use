@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-08-26
+
+### Fixed
+
+- **`find_text_and_click` multi-monitor coordinate bug** — OCR returns bitmap-space coordinates (0,0 at top-left of captured image), but `Click()` expects virtual screen coordinates. On setups with displays above the primary (e.g. Display3 at y=-1080), this caused "y out of bounds" errors. Fixed by tracking the capture region origin (`captureX, captureY`) and offsetting OCR coordinates before clicking and storing in memory.
+- **Window-scoped OCR coordinate offset** — `OCRWindow` returns bitmap-relative coords (0,0 at window top-left), but `Click()` needs virtual screen coords. Now captures the window rect and uses `rect.Left, rect.Top` as offset, matching the same fix applied to full-screen and region OCR paths.
+- **Text location memory coordinate consistency** — `StoreTextLocation` now stores virtual screen coords (converted from OCR bitmap coords at write time). Memory retrieval uses stored coords directly without re-conversion, preventing double-offset bugs when mixing full-screen OCR and SystemFind sources.
+- **Stale text location memory pruning** — On startup, entries with coordinates outside the virtual screen bounds are automatically deleted. Prevents old bitmap-space coordinates (from pre-0.3.4) from being reused. Also added bounds validation in the memory retrieval path — stale entries are skipped even if they haven't been pruned yet.
+
+### Changed
+
+- **`find_text_and_click` scoped window OCR** — When `window_title` is provided, now tries window-specific OCR first (via `OCRWindow`) before falling back to full-screen. This scopes the search to the target window, avoiding false matches from other windows on screen. Window OCR returns coordinates already in virtual screen space, so no offset conversion is needed.
+
+### Added
+
+- **Z-order layering for text location memory** — `TextLocation` now stores `z_order` (window stack position: 0=topmost). `FindTextAndClick` captures the foreground window's z-order at call time and uses it for memory matching via new `FindTextLocationMatch` / `FindTextLocationAnyMatch` functions. These prefer exact z-order matches (clicking the right layer) then fall back to any match. Handles overlapping windows with identical text.
+- Schema migration: `z_order INTEGER NOT NULL DEFAULT 0` column added to `text_locations` table. Existing databases auto-migrate via `ALTER TABLE`.
+- **`get_config` tool** — read-only view of all current configuration values plus live watcher status. Returns every field that `set_config` can change, plus `watcher_running` and `watcher_auto_start`. Use to inspect state without modifying anything.
+
+### Changed
+
+- **Watcher auto-starts on boot by default** — `watcher_auto_start` now defaults to `true`. Previously the watcher had to be manually started with `set_config` after every server restart. The watcher feeds the priors system (element position statistics) which improves UI element lookup confidence. Set to `false` in config to disable.
+
 ## [0.3.3] - 2026-08-26
 
 ### Added

@@ -184,7 +184,8 @@ var categoryForTool = map[string]string{
 	"get_logs":              "Introspection & Debugging",
 	"report_issue":          "Introspection & Debugging",
 
-	// Runtime Config (4)
+	// Runtime Config (5)
+	"get_config":            "Runtime Config",
 	"set_config":            "Runtime Config",
 	"reset_state":           "Runtime Config",
 	"get_working_directory": "Runtime Config",

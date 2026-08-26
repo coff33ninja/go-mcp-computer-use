@@ -43,29 +43,42 @@ func FindTextAndClick(opts FindTextOpts) (clickX, clickY int32, err error) {
 		}
 	}
 
+	// Capture foreground window z-order for layered window matching
+	fgZOrder := 0
+	if fgHwnd := ForegroundWindowHandle(); fgHwnd != 0 {
+		fgZOrder = GetWindowZOrder(fgHwnd)
+	}
+
 	if !opts.SkipMemory {
-		if loc := FindTextLocation(opts.Text, windowTitle); loc != nil {
+		if loc := FindTextLocationMatch(opts.Text, windowTitle, fgZOrder); loc != nil {
 			cx, cy := loc.X+loc.W/2, loc.Y+loc.H/2
-			if clickErr := Click(ClickInput{X: cx, Y: cy, Button: "left", Clicks: 1}); clickErr == nil {
-				return cx, cy, nil
+			if ValidateClickCoord(cx, cy) == nil {
+				if clickErr := Click(ClickInput{X: cx, Y: cy, Button: "left", Clicks: 1}); clickErr == nil {
+					return cx, cy, nil
+				}
 			}
 		}
-		if loc := FindTextLocationAny(opts.Text); loc != nil {
+		if loc := FindTextLocationAnyMatch(opts.Text, fgZOrder); loc != nil {
 			cx, cy := loc.X+loc.W/2, loc.Y+loc.H/2
-			if clickErr := Click(ClickInput{X: cx, Y: cy, Button: "left", Clicks: 1}); clickErr == nil {
-				return cx, cy, nil
+			if ValidateClickCoord(cx, cy) == nil {
+				if clickErr := Click(ClickInput{X: cx, Y: cy, Button: "left", Clicks: 1}); clickErr == nil {
+					return cx, cy, nil
+				}
 			}
 		}
 	}
 
 	if !opts.SkipSystemFind && windowTitle != "" {
 		if found, fx, fy, sysErr := SystemFindTextAndClick(opts.Text, windowTitle); sysErr == nil && found {
-			StoreTextLocation(opts.Text, windowTitle, fx, fy, 10, 10)
+			StoreTextLocation(opts.Text, windowTitle, fx, fy, 10, 10, int32(fgZOrder))
 			return fx, fy, nil
 		}
 	}
 
+	var captureX, captureY int32
+
 	doSearch := func() (*OCRResult, error) {
+		captureX, captureY = 0, 0
 		if opts.RegionW != nil && opts.RegionH != nil {
 			x := int32(0)
 			y := int32(0)
@@ -76,12 +89,28 @@ func FindTextAndClick(opts FindTextOpts) (clickX, clickY int32, err error) {
 				if info, cerr := GetActiveWindowInfo(); cerr == nil && info.Handle != 0 {
 					r, e := OCRProportionalWindowRegion(info.Handle, 0.05, 0.05, 0.95, 0.95, opts.Language)
 					if e == nil {
+						captureX, captureY = x, y
 						return r, nil
 					}
 				}
 			}
+			captureX, captureY = x, y
 			return OCRRegion(x, y, w, h, opts.Language)
 		}
+		// Try window-specific OCR first when title is provided (focused, correct coords)
+		if windowTitle != "" {
+			if hwnd := FindWindowByTitle(windowTitle); hwnd != 0 {
+				if rect, rerr := GetWindowRectByHandle(hwnd); rerr == nil && rect.Width > 0 && rect.Height > 0 {
+					if r, e := OCRWindow(hwnd, opts.Language); e == nil && len(r.Words) > 0 {
+						captureX, captureY = rect.Left, rect.Top
+						return r, nil
+					}
+				}
+			}
+		}
+		// Fall back to full-screen OCR
+		bounds := VirtualScreenBounds()
+		captureX, captureY = bounds.X, bounds.Y
 		return OCRScreen(opts.Language)
 	}
 
@@ -116,8 +145,9 @@ func FindTextAndClick(opts FindTextOpts) (clickX, clickY int32, err error) {
 		}
 		lastResult = result
 		if cx, cy, found := findInResult(result); found {
-			StoreTextLocation(opts.Text, windowTitle, cx, cy, 10, 10)
-			return cx, cy, Click(ClickInput{X: cx, Y: cy, Button: "left", Clicks: 1})
+			vx, vy := cx+captureX, cy+captureY
+			StoreTextLocation(opts.Text, windowTitle, vx, vy, 10, 10, int32(fgZOrder))
+			return vx, vy, Click(ClickInput{X: vx, Y: vy, Button: "left", Clicks: 1})
 		}
 	}
 

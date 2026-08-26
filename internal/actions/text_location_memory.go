@@ -25,6 +25,7 @@ type TextLocation struct {
 	Y           int32     `json:"y"`
 	W           int32     `json:"w"`
 	H           int32     `json:"h"`
+	ZOrder      int       `json:"z_order"`
 	Confidence  float64   `json:"confidence"`
 	LastSeen    time.Time `json:"last_seen"`
 	HitCount    int       `json:"hit_count"`
@@ -43,8 +44,24 @@ func InitTextLocationStore() error {
 			textLocError = fmt.Errorf("create text_location tables: %w", err)
 			return
 		}
+		// Prune stale entries with coords outside virtual screen bounds
+		// (leftover from pre-0.3.4 bitmap-space coordinates)
+		pruneStaleTextLocations()
 	})
 	return textLocError
+}
+
+func pruneStaleTextLocations() {
+	bounds := VirtualScreenBounds()
+	if textLocDB == nil {
+		return
+	}
+	textLocMu.Lock()
+	defer textLocMu.Unlock()
+	textLocDB.Exec(
+		`DELETE FROM text_locations WHERE x < ? OR x >= ? OR y < ? OR y >= ?`,
+		bounds.X, bounds.X+bounds.W, bounds.Y, bounds.Y+bounds.H,
+	)
 }
 
 func createTextLocationTables(db *sql.DB) error {
@@ -58,6 +75,7 @@ func createTextLocationTables(db *sql.DB) error {
 			y INTEGER NOT NULL DEFAULT 0,
 			w INTEGER NOT NULL DEFAULT 0,
 			h INTEGER NOT NULL DEFAULT 0,
+			z_order INTEGER NOT NULL DEFAULT 0,
 			confidence REAL NOT NULL DEFAULT 1.0,
 			last_seen TEXT NOT NULL,
 			hit_count INTEGER NOT NULL DEFAULT 1
@@ -82,10 +100,14 @@ func createTextLocationTables(db *sql.DB) error {
 			INSERT INTO text_locations_fts(rowid, text_content, window_title)
 			VALUES (new.id, new.text_content, new.window_title);
 		END`,
+		`ALTER TABLE text_locations ADD COLUMN z_order INTEGER NOT NULL DEFAULT 0`,
 	}
 	for _, s := range stmts {
 		if _, err := db.Exec(s); err != nil {
-			return err
+			// ALTER TABLE fails silently if column already exists
+			if !strings.Contains(err.Error(), "duplicate column") {
+				return err
+			}
 		}
 	}
 	return nil
@@ -97,7 +119,7 @@ func textHash(text string) string {
 	return fmt.Sprintf("%x", h.Sum32())
 }
 
-func StoreTextLocation(textContent, windowTitle string, x, y, w, h int32) {
+func StoreTextLocation(textContent, windowTitle string, x, y, w, h, zOrder int32) {
 	if textLocDB == nil {
 		return
 	}
@@ -119,25 +141,25 @@ func StoreTextLocation(textContent, windowTitle string, x, y, w, h int32) {
 
 	if err == nil {
 		textLocDB.Exec(
-			`UPDATE text_locations SET x=?, y=?, w=?, h=?, last_seen=?, hit_count=hit_count+1, confidence=MIN(confidence+0.1, 2.0) WHERE id=?`,
-			x, y, w, h, now, existingID,
+			`UPDATE text_locations SET x=?, y=?, w=?, h=?, z_order=?, last_seen=?, hit_count=hit_count+1, confidence=MIN(confidence+0.1, 2.0) WHERE id=?`,
+			x, y, w, h, zOrder, now, existingID,
 		)
 	} else {
 		textLocDB.Exec(
-			`INSERT INTO text_locations (text_hash, text_content, window_title, x, y, w, h, confidence, last_seen, hit_count) VALUES (?, ?, ?, ?, ?, ?, ?, 1.0, ?, 1)`,
-			th, trimmed, windowTitle, x, y, w, h, now,
+			`INSERT INTO text_locations (text_hash, text_content, window_title, x, y, w, h, z_order, confidence, last_seen, hit_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1.0, ?, 1)`,
+			th, trimmed, windowTitle, x, y, w, h, zOrder, now,
 		)
 	}
 }
 
-func StoreOCRResultLocations(result *OCRResult, windowTitle string) {
+func StoreOCRResultLocations(result *OCRResult, windowTitle string, zOrder int32) {
 	if textLocDB == nil || result == nil {
 		return
 	}
 	for _, word := range result.Words {
 		t := strings.TrimSpace(word.Text)
 		if t != "" && len(t) <= 200 {
-			StoreTextLocation(t, windowTitle, int32(word.X), int32(word.Y), int32(word.W), int32(word.H))
+			StoreTextLocation(t, windowTitle, int32(word.X), int32(word.Y), int32(word.W), int32(word.H), zOrder)
 		}
 	}
 }
@@ -154,12 +176,92 @@ func FindTextLocation(text, windowTitle string) *TextLocation {
 	var loc TextLocation
 	var lastSeen string
 	err := textLocDB.QueryRow(
-		`SELECT id, text_hash, text_content, window_title, x, y, w, h, confidence, last_seen, hit_count
+		`SELECT id, text_hash, text_content, window_title, x, y, w, h, z_order, confidence, last_seen, hit_count
 		 FROM text_locations WHERE text_hash=? AND window_title=?
 		 ORDER BY hit_count DESC, last_seen DESC LIMIT 1`,
 		th, windowTitle,
 	).Scan(&loc.ID, &loc.TextHash, &loc.TextContent, &loc.WindowTitle,
-		&loc.X, &loc.Y, &loc.W, &loc.H, &loc.Confidence, &lastSeen, &loc.HitCount)
+		&loc.X, &loc.Y, &loc.W, &loc.H, &loc.ZOrder, &loc.Confidence, &lastSeen, &loc.HitCount)
+	if err != nil {
+		return nil
+	}
+	loc.LastSeen, _ = time.Parse(time.RFC3339, lastSeen)
+	return &loc
+}
+
+// FindTextLocationMatch tries to find text matching the given z_order first (topmost layer),
+// then falls back to any z_order. Returns the best match.
+func FindTextLocationMatch(text, windowTitle string, zOrder int) *TextLocation {
+	if textLocDB == nil {
+		return nil
+	}
+	th := textHash(strings.TrimSpace(text))
+
+	textLocMu.Lock()
+	defer textLocMu.Unlock()
+
+	// Try exact z_order match first (topmost layer preference)
+	var loc TextLocation
+	var lastSeen string
+	err := textLocDB.QueryRow(
+		`SELECT id, text_hash, text_content, window_title, x, y, w, h, z_order, confidence, last_seen, hit_count
+		 FROM text_locations WHERE text_hash=? AND window_title=? AND z_order=?
+		 ORDER BY hit_count DESC, last_seen DESC LIMIT 1`,
+		th, windowTitle, zOrder,
+	).Scan(&loc.ID, &loc.TextHash, &loc.TextContent, &loc.WindowTitle,
+		&loc.X, &loc.Y, &loc.W, &loc.H, &loc.ZOrder, &loc.Confidence, &lastSeen, &loc.HitCount)
+	if err == nil {
+		loc.LastSeen, _ = time.Parse(time.RFC3339, lastSeen)
+		return &loc
+	}
+
+	// Fallback: any z_order for same text+window
+	err = textLocDB.QueryRow(
+		`SELECT id, text_hash, text_content, window_title, x, y, w, h, z_order, confidence, last_seen, hit_count
+		 FROM text_locations WHERE text_hash=? AND window_title=?
+		 ORDER BY hit_count DESC, last_seen DESC LIMIT 1`,
+		th, windowTitle,
+	).Scan(&loc.ID, &loc.TextHash, &loc.TextContent, &loc.WindowTitle,
+		&loc.X, &loc.Y, &loc.W, &loc.H, &loc.ZOrder, &loc.Confidence, &lastSeen, &loc.HitCount)
+	if err != nil {
+		return nil
+	}
+	loc.LastSeen, _ = time.Parse(time.RFC3339, lastSeen)
+	return &loc
+}
+
+// FindTextLocationAnyMatch tries to find text matching z_order first, then any.
+func FindTextLocationAnyMatch(text string, zOrder int) *TextLocation {
+	if textLocDB == nil {
+		return nil
+	}
+	th := textHash(strings.TrimSpace(text))
+
+	textLocMu.Lock()
+	defer textLocMu.Unlock()
+
+	var loc TextLocation
+	var lastSeen string
+	err := textLocDB.QueryRow(
+		`SELECT id, text_hash, text_content, window_title, x, y, w, h, z_order, confidence, last_seen, hit_count
+		 FROM text_locations WHERE text_hash=? AND z_order=?
+		 ORDER BY hit_count DESC, last_seen DESC LIMIT 1`,
+		th, zOrder,
+	).Scan(&loc.ID, &loc.TextHash, &loc.TextContent, &loc.WindowTitle,
+		&loc.X, &loc.Y, &loc.W, &loc.H, &loc.ZOrder, &loc.Confidence, &lastSeen, &loc.HitCount)
+	if err == nil {
+		loc.LastSeen, _ = time.Parse(time.RFC3339, lastSeen)
+		return &loc
+	}
+
+	// Fallback: any z_order
+	err = textLocDB.QueryRow(
+		`SELECT id, text_hash, text_content, window_title, x, y, w, h, z_order, confidence, last_seen, hit_count
+		 FROM text_locations WHERE text_hash=?
+		 ORDER BY hit_count DESC, last_seen DESC LIMIT 1`,
+		th,
+	).Scan(&loc.ID, &loc.TextHash, &loc.TextContent, &loc.WindowTitle,
+		&loc.X, &loc.Y, &loc.W, &loc.H, &loc.ZOrder, &loc.Confidence, &lastSeen, &loc.HitCount)
 	if err != nil {
 		return nil
 	}
@@ -179,12 +281,12 @@ func FindTextLocationAny(text string) *TextLocation {
 	var loc TextLocation
 	var lastSeen string
 	err := textLocDB.QueryRow(
-		`SELECT id, text_hash, text_content, window_title, x, y, w, h, confidence, last_seen, hit_count
+		`SELECT id, text_hash, text_content, window_title, x, y, w, h, z_order, confidence, last_seen, hit_count
 		 FROM text_locations WHERE text_hash=?
 		 ORDER BY hit_count DESC, last_seen DESC LIMIT 1`,
 		th,
 	).Scan(&loc.ID, &loc.TextHash, &loc.TextContent, &loc.WindowTitle,
-		&loc.X, &loc.Y, &loc.W, &loc.H, &loc.Confidence, &lastSeen, &loc.HitCount)
+		&loc.X, &loc.Y, &loc.W, &loc.H, &loc.ZOrder, &loc.Confidence, &lastSeen, &loc.HitCount)
 	if err != nil {
 		return nil
 	}
