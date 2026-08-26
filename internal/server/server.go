@@ -2214,6 +2214,51 @@ func agentSuggestHandler(ctx context.Context, req *mcp.CallToolRequest, args Age
 	}, map[string]any{"predictions": predictions}, nil
 }
 
+type MLQueryArgs struct {
+	Query   string `json:"query"`
+	OCRText string `json:"ocr_text"`
+	Limit   int    `json:"limit,omitempty"`
+}
+
+func mlQueryHandler(ctx context.Context, req *mcp.CallToolRequest, args MLQueryArgs) (*mcp.CallToolResult, any, error) {
+	if args.Query == "" {
+		return nil, nil, fmt.Errorf("query is required — what to find")
+	}
+	result := actions.Adaptive.MLQuery(args.Query, args.OCRText, args.Limit)
+	if result == nil || len(result.Matches) == 0 {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: "no ML knowledge found for this query — try recording some sessions first with record"}},
+		}, map[string]any{"matches": []any{}, "related": []any{}}, nil
+	}
+	b, _ := json.MarshalIndent(result, "", "  ")
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: string(b)}},
+	}, result, nil
+}
+
+type MLTeachArgs struct {
+	Query   string `json:"query"`
+	OCRText string `json:"ocr_text"`
+	Tool    string `json:"tool"`
+	X       int    `json:"x,omitempty"`
+	Y       int    `json:"y,omitempty"`
+	Success bool   `json:"success"`
+}
+
+func mlTeachHandler(ctx context.Context, req *mcp.CallToolRequest, args MLTeachArgs) (*mcp.CallToolResult, any, error) {
+	if args.Query == "" {
+		return nil, nil, fmt.Errorf("query is required — what was being looked for")
+	}
+	if args.Tool == "" {
+		return nil, nil, fmt.Errorf("tool is required — which tool was used")
+	}
+	result := actions.Adaptive.MLTeach(args.Query, args.OCRText, args.Tool, args.X, args.Y, args.Success)
+	b, _ := json.MarshalIndent(result, "", "  ")
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: string(b)}},
+	}, result, nil
+}
+
 func agentTrainHandler(ctx context.Context, req *mcp.CallToolRequest, _ AgentTrainArgs) (*mcp.CallToolResult, any, error) {
 	if err := actions.Adaptive.TrainFromDatalog(); err != nil {
 		return nil, nil, fmt.Errorf("agent_train: %w", err)
@@ -2812,7 +2857,7 @@ func New(version string) *mcp.Server {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
 	slog.SetDefault(logger)
 
-	slog.Info("starting go-mcp-computer-use", "version", version, "tools", 153, "tools_doc", "docs/tools.md")
+	slog.Info("starting go-mcp-computer-use", "version", version, "tools", 155, "tools_doc", "docs/tools.md")
 
 	if cfg.UIAWarmup {
 		go func() {
@@ -3541,6 +3586,16 @@ func New(version string) *mcp.Server {
 		Name:        "agent_suggest",
 		Description: "Given OCR screen text, predict the best next command based on past successful sequences. Returns ranked predictions with confidence scores and optional coord (x, y, confidence, samples) for click/hover/move_mouse.",
 	}, agentSuggestHandler)
+
+	addToolClean(server, &mcp.Tool{
+		Name:        "ml_query",
+		Description: "Query the ML engine's learned knowledge: 'where is X on this screen?' Pass what you're looking for plus current OCR text. Returns coordinate predictions from past recordings ranked by confidence, plus related commands the ML has seen with these tokens.",
+	}, mlQueryHandler)
+
+	addToolClean(server, &mcp.Tool{
+		Name:        "ml_teach",
+		Description: "Feed a confirmed correct answer back to the ML. After every successful action (whether ML-guided or AI-discovered), call this to reinforce learning. Pass what was being looked for, the screen OCR, which tool was used, and the coordinates. The ML strengthens token→coordinate associations with each teach.",
+	}, mlTeachHandler)
 
 	addToolClean(server, &mcp.Tool{
 		Name:        "agent_train",

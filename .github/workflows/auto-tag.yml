@@ -2,7 +2,7 @@ name: Auto Tag
 
 on:
   push:
-    branches: [v0.2.x]
+    branches: [v0.3.x]
     paths: [VERSION]
 
 permissions:

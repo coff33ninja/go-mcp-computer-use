@@ -2,6 +2,27 @@
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-08-26
+
+### Added
+
+- **`ml_query`** — ask the ML engine "where is X on this screen?" Pass a query (what you're looking for) plus current OCR text. Returns coordinate predictions ranked by confidence, matched OCR keywords, and related commands the ML has seen. Searches both `coordIndex` (per-tool coordinate distributions) and `wordToCmds` (command frequency). Query tokens get priority matching, context tokens add breadth.
+- **`ml_teach`** — feed confirmed correct answers back to the ML after every action. Pass what was being looked for, the screen OCR, which tool was used, coordinates, and success/fail. Updates `coordIndex` and `wordToCmds` directly with both query and context tokens. The learning loop: `ml_query` → AI acts → `ml_teach` reinforces. Each cycle strengthens token→coordinate associations.
+
+### Changed
+
+- The ML feedback loop is now complete: query → predict → act → teach. Whether the AI follows an ML prediction or discovers the correct answer itself, `ml_teach` ensures the ML learns from every outcome — including when the user shows the AI the right answer.
+- CI workflows updated from `v0.2.x` to `v0.3.x` (ci.yml, auto-tag.yml, jekyll-gh-pages.yml, mod-maintenance.yml).
+- README status block rewritten — v0.2.x framed as testing/iteration ground, v0.3.x as current stable. Recording & replication and ML feedback loop documented in features section.
+- `docs/architecture.md` — added `record_replicate.go` to code map, ML Loop layer in agent stack diagram, updated `adaptive.go` and `chain.go` descriptions.
+- `docs/ci-cd-pipeline.md` — updated branch references and diagram to v0.3.x.
+- `_config.yml` logo URL updated to v0.3.x branch.
+- `scripts/gen-tools-doc.go` — added `ml_query` + `ml_teach` to Adaptive Agent category (now 5 tools).
+
+### Fixed
+
+- **`scripts/gen-icons.ps1`** — rewritten to handle encoding issues and missing dependencies gracefully. No longer fails with PowerShell parse errors when `rsrc` is not installed or icon path contains spaces. Build script (`scripts/build.ps1`) now works end-to-end again.
+
 ## [0.3.2] - 2026-08-26
 
 ### Added

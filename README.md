@@ -3,18 +3,17 @@
 <p align="center">
   <a href="https://go.dev"><img src="https://img.shields.io/github/go-mod/go-version/coff33ninja/go-mcp-computer-use?logo=go&labelColor=2d333b" alt="Go version"></a>
   <a href="https://github.com/coff33ninja/go-mcp-computer-use/releases"><img src="https://img.shields.io/github/v/release/coff33ninja/go-mcp-computer-use?logo=github&labelColor=2d333b&color=orange" alt="Release"></a>
-  <a href="https://github.com/coff33ninja/go-mcp-computer-use/actions"><img src="https://img.shields.io/github/actions/workflow/status/coff33ninja/go-mcp-computer-use/ci.yml?branch=v0.2.x&logo=github&labelColor=2d333b" alt="CI"></a>
+  <a href="https://github.com/coff33ninja/go-mcp-computer-use/actions"><img src="https://img.shields.io/github/actions/workflow/status/coff33ninja/go-mcp-computer-use/ci.yml?branch=v0.3.x&logo=github&labelColor=2d333b" alt="CI"></a>
   <a href="https://github.com/coff33ninja/go-mcp-computer-use"><img src="https://img.shields.io/badge/Windows-0078D6?logo=windows&logoColor=white&labelColor=2d333b" alt="Windows"></a>
   <a href="https://modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP-Server-5B5BD6?logoColor=white&labelColor=2d333b" alt="MCP"></a>
-  <a href="https://github.com/coff33ninja/go-mcp-computer-use/commits/v0.2.x"><img src="https://img.shields.io/github/last-commit/coff33ninja/go-mcp-computer-use?labelColor=2d333b&color=yellowgreen" alt="Last commit"></a>
+  <a href="https://github.com/coff33ninja/go-mcp-computer-use/commits/v0.3.x"><img src="https://img.shields.io/github/last-commit/coff33ninja/go-mcp-computer-use?labelColor=2d333b&color=yellowgreen" alt="Last commit"></a>
   <a href="https://github.com/coff33ninja/go-mcp-computer-use/pulls"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen?labelColor=2d333b" alt="PRs welcome"></a>
   <a href="https://coff33ninja.github.io/go-mcp-computer-use/"><img src="https://img.shields.io/badge/docs-gh--pages-blue?labelColor=2d333b&logo=github" alt="Docs"></a>
 </p>
 
-> **Built iteratively** across AI-assisted development sessions, with [`v0.1.x`](https://github.com/coff33ninja/go-mcp-computer-use/tree/v0.1.x) covering 70+ bug-fixed Win32/COM tools and [`v0.2.x`](https://github.com/coff33ninja/go-mcp-computer-use/tree/v0.2.x) (default branch) adding the chained automation pipeline, SQLite memory store, ONNX ML detection, introspection engine, adaptive ML, Go-native transformer engine for self-improving action prediction, and the training data pipeline for user-specific model fine-tuning.
-> The AI agent was guided by a curated set of quality-enforcement skills from [coff33ninja/ai-skills](https://github.com/coff33ninja/ai-skills) — anti-hallucination, anti-slop, safe-code-modifications, anti-sycophancy, code-simplification, context-engineering, don't-kill-tokens, os-awareness, anti-tool-sprawl, follow-existing-patterns, no-dead-code-removal, universal-format-lint, self-validate, verify-and-cite, and others.
+> **Built iteratively** across AI-assisted development sessions. [`v0.1.x`](https://github.com/coff33ninja/go-mcp-computer-use/tree/v0.1.x) covered 70+ bug-fixed Win32/COM tools. [`v0.2.x`](https://github.com/coff33ninja/go-mcp-computer-use/tree/v0.2.x) was the testing and iteration ground — chained automation pipeline, SQLite memory store, ONNX ML detection, introspection engine, adaptive ML, Go-native transformer engine, and the training data pipeline were all built and validated there.
 >
-> **Status:** v0.2.59 — 149 tools including smart cascade text finding (memory → Ctrl+F → OCR+scroll), `image_diff` for pixel-level screenshot comparison, file-based structured logging with rotation, `get_logs` for reading past errors, `report_issue` for GitHub issue generation, panic recovery wrappers, `chain_abort` hotkey, window lock-on, `reset_state`, `dismiss_all_menus`, enriched `find_text_and_click` errors, verified window focus with 4-attempt fallback chain, `auto_verify_focus` chain option, `focus_handle` for handle-based chain targeting, `get_dpi_for_point`, handle-based `click_menu_item` and `layout_validate`, window Z-order, UIA element tree dump, element-at-point, `ocr_window`, `ocr_active_window`, window bounding rects, statistical prior model, training pipeline, memory-backed UI element cache, ONNX detection, runtime privacy controls, key hold/release, input recording, set_config, YOLO dataset export, introspection engine, adaptive ML engine, OCR→command training bridge, ONNX cascade fallback, per-tool enable/disable, auto-retention pruning, UIA-integrated chain step types, `system_find_stats`, and `task_is_active`. See [`docs/reference/tools.md`](docs/reference/tools.md) for the full listing.
+> **Current:** [`v0.3.x`](https://github.com/coff33ninja/go-mcp-computer-use/tree/v0.3.x) — 155 tools. Recording & replication plugin, ML feedback loop (`ml_query` + `ml_teach`), timed recording, enrichment pipeline, smart cascade text finding, `image_diff`, structured logging, `get_logs`, `report_issue`, panic recovery, `chain_abort`, window lock-on, `reset_state`, `dismiss_all_menus`, verified window focus with fallback chain, handle-based chain targeting, `get_dpi_for_point`, handle-based `click_menu_item` and `layout_validate`, window Z-order, UIA element tree dump, element-at-point, `ocr_window`, `ocr_active_window`, statistical prior model, training pipeline, memory-backed UI element cache, ONNX detection, runtime privacy controls, key hold/release, input recording, set_config, YOLO dataset export, introspection engine, adaptive ML engine, OCR→command training bridge, ONNX cascade fallback, per-tool enable/disable, auto-retention pruning, UIA-integrated chain step types, `system_find_stats`, and `task_is_active`. See [`docs/reference/tools.md`](docs/reference/tools.md) for the full listing.
 
 MCP server for Windows desktop computer use. Exposes mouse, keyboard, screenshot, OCR, template matching, window management, system control, and screen recording to AI agents via [Model Context Protocol](https://modelcontextprotocol.io).
 
@@ -28,6 +27,8 @@ MCP server for Windows desktop computer use. Exposes mouse, keyboard, screenshot
 - **Find & Click** — OCR + click: find text on screen and click it  
 - **Chained tools** — `find_text_and_click`, `launch_and_wait`, `wait_for_text`, `click_menu_item`, `select_all_and_type`
 - **Screen recording** — capture frames at interval for a duration
+- **Recording & Replication** — `record` captures mouse, keyboard, scroll, drag, typed text, window state snapshots, and enriched context (OCR, UIA elements, ML predictions) at every event. `replicate` replays sessions as smart chains with UIA invoke > OCR > ML > raw coordinate priority. `record_and_replicate` for one-shot record+replay. All mouse buttons, double-click, long-press, context menu, and menu position memory.
+- **ML Feedback Loop** — `ml_query` asks the learned ML engine "where is X on this screen?" and returns coordinate predictions ranked by confidence. `ml_teach` feeds confirmed correct answers back after every action. The AI asks, predicts, acts, and teaches — each cycle strengthens token→coordinate associations.
 - **Window management** — list, focus, move, resize, min/max/restore, close, find, state
 - **Audio devices** — list playback/recording devices, set default
 - **Clipboard** — get/set text with retry + timeout
@@ -47,7 +48,7 @@ MCP server for Windows desktop computer use. Exposes mouse, keyboard, screenshot
 - **Memory-backed UI element cache** — ONNX detections auto-stored as memory facts (`ui:{window}:{class}`) with TTL. AI reuses cached coordinates across sessions.
 - **`find_ui_element` tool** — cascading lookup: memory → ONNX → OCR. Self-learning: saves findings to memory + training store.
 - **Go-native ML transformer** — 14K-param transformer engine (64-dim, 2 layers, 2 heads) trained in-process via Gorgonia. Predicts optimal actions from OCR context. Self-improving: learns from each session, persists to `model.gob`. No Python, no ONNX for training.
-- **153 MCP tools** — see [`docs/reference/tools.md`](docs/reference/tools.md) for the full listing
+- **155 MCP tools** — see [`docs/reference/tools.md`](docs/reference/tools.md) for the full listing
 
 ## Tools
 
@@ -87,7 +88,7 @@ See [`docs/architecture.md`](docs/architecture.md) for the agent stack diagram a
 ## Documentation
 
 - [**GitHub Pages**](https://coff33ninja.github.io/go-mcp-computer-use/) — rendered README and docs
-- [`docs/reference/codebase-map.md`](docs/reference/codebase-map.md) — complete tool→handler→action→file mapping for all 96 tools
+- [`docs/reference/codebase-map.md`](docs/reference/codebase-map.md) — complete tool→handler→action→file mapping for all 155 tools
 - [`docs/reference/windows-dll-ref.md`](docs/reference/windows-dll-ref.md) — Windows DLL, COM, and WinRT API reference — every syscall proc, DLL, and COM interface used
 - [`docs/reference/uipi.md`](docs/reference/uipi.md) — UIPI elevation detection logic, call sites, and error semantics
 - [`docs/reference/com-patterns.md`](docs/reference/com-patterns.md) — COM/WinRT patterns: vtable dispatch, async polling, HSTRING/BSTR lifecycle, threading model, UIA tree traversal, IID table with usage status

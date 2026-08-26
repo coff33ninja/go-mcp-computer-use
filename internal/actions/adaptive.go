@@ -897,6 +897,261 @@ func (e *AdaptiveEngine) GetRecentActions(n int) []string {
 
 // HydratePersisted loads the durable per-tool stat aggregates from the
 // datalog DB into memory so agent_analyze can report timing_stats/
+// MLQueryResult represents a single coordinate prediction from the ML.
+type MLQueryResult struct {
+	Tool       string          `json:"tool"`
+	Coord      *PredictedCoord `json:"coord,omitempty"`
+	Confidence float64         `json:"confidence"`
+	Samples    int             `json:"samples"`
+	Successes  int             `json:"successes"`
+	Keywords   []string        `json:"keywords"` // which OCR tokens matched
+}
+
+// MLQueryResponse is the full response from ml_query.
+type MLQueryResponse struct {
+	Query    string           `json:"query"`
+	Matches  []MLQueryResult  `json:"matches"`
+	Related  []string         `json:"related_commands,omitempty"` // commands seen with these tokens
+	Total    int              `json:"total_coord_samples"`        // total coord samples across all tools
+}
+
+// MLQuery searches the adaptive engine's learned knowledge to answer
+// "where is X on this screen?" It tokenizes the query, looks up each
+// token in the coordIndex (per-tool coordinate distributions) and
+// wordToCmds (command frequency), and returns ranked predictions.
+//
+// Parameters:
+//   - query: what to find (e.g., "steam", "close button", "settings icon")
+//   - ocrText: current screen OCR text for context enrichment
+//   - limit: max results (default 10)
+func (e *AdaptiveEngine) MLQuery(query, ocrText string, limit int) *MLQueryResponse {
+	if limit <= 0 {
+		limit = 10
+	}
+
+	queryTokens := uniqueTokens(tokenize(query))
+	contextTokens := uniqueTokens(tokenize(ocrText))
+
+	// merge: query tokens get priority, context tokens add breadth
+	allTokens := queryTokens
+	seen := make(map[string]bool, len(queryTokens))
+	for _, t := range queryTokens {
+		seen[t] = true
+	}
+	for _, t := range contextTokens {
+		if !seen[t] {
+			allTokens = append(allTokens, t)
+			seen[t] = true
+		}
+	}
+
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	// collect coord predictions per tool
+	type toolMatch struct {
+		tool       string
+		xSum       int64
+		ySum       int64
+		count      int
+		success    int
+		keywords   []string
+		queryHits  int
+	}
+	matches := make(map[string]*toolMatch)
+
+	for _, tok := range allTokens {
+		for tool, toolMap := range e.coordIndex {
+			cs, ok := toolMap[tok]
+			if !ok || cs.count == 0 {
+				continue
+			}
+			tm, exists := matches[tool]
+			if !exists {
+				tm = &toolMatch{tool: tool}
+				matches[tool] = tm
+			}
+			tm.xSum += cs.xSum
+			tm.ySum += cs.ySum
+			tm.count += cs.count
+			tm.success += cs.success
+			tm.keywords = append(tm.keywords, tok)
+			if seen[tok] {
+				tm.queryHits++
+			}
+		}
+	}
+
+	// collect related commands (not coord-bound)
+	cmdSet := make(map[string]bool)
+	for _, tok := range allTokens {
+		cmds, ok := e.wordToCmds[tok]
+		if !ok {
+			continue
+		}
+		for cmd, cf := range cmds {
+			total := cf.success + cf.fail
+			if total >= 2 {
+				cmdSet[cmd] = true
+			}
+		}
+	}
+
+	// build results
+	var results []MLQueryResult
+	totalSamples := 0
+	for _, tm := range matches {
+		if tm.count == 0 {
+			continue
+		}
+		totalSamples += tm.count
+		conf := float64(tm.success) / float64(tm.count)
+		if conf > 1.0 {
+			conf = 1.0
+		}
+		// boost score by query-hit ratio
+		hitRatio := float64(tm.queryHits) / float64(len(queryTokens))
+		adjustedConf := conf * (0.5 + 0.5*hitRatio)
+
+		r := MLQueryResult{
+			Tool:       tm.tool,
+			Confidence: math.Round(adjustedConf*100) / 100,
+			Samples:    tm.count,
+			Successes:  tm.success,
+			Keywords:   tm.keywords,
+		}
+		if coordTools[tm.tool] && tm.count >= 2 {
+			r.Coord = &PredictedCoord{
+				X:          int(tm.xSum / int64(tm.count)),
+				Y:          int(tm.ySum / int64(tm.count)),
+				Confidence: math.Round(conf*100) / 100,
+				Samples:    tm.count,
+			}
+		}
+		results = append(results, r)
+	}
+
+	// sort by confidence descending
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Confidence > results[j].Confidence
+	})
+	if len(results) > limit {
+		results = results[:limit]
+	}
+
+	var related []string
+	for cmd := range cmdSet {
+		related = append(related, cmd)
+	}
+	sort.Strings(related)
+
+	return &MLQueryResponse{
+		Query:   query,
+		Matches: results,
+		Related: related,
+		Total:   totalSamples,
+	}
+}
+
+// MLTeach feeds a confirmed correct answer back into the adaptive engine.
+// After every successful action (whether ML-guided or AI-discovered),
+// call this to reinforce the learning. The ML uses both the query tokens
+// and the full OCR context to build stronger token→coordinate associations.
+//
+// Parameters:
+//   - query: what was being looked for (e.g., "steam", "close button")
+//   - ocrText: the screen OCR text when this action was taken
+//   - tool: the tool that was used (e.g., "click", "scroll", "type")
+//   - x, y: coordinates used (0,0 for non-coordinate tools)
+//   - success: whether the action succeeded
+func (e *AdaptiveEngine) MLTeach(query, ocrText, tool string, x, y int, success bool) map[string]any {
+	queryTokens := uniqueTokens(tokenize(query))
+	contextTokens := uniqueTokens(tokenize(ocrText))
+
+	// merge: query tokens first, then context
+	allTokens := queryTokens
+	seen := make(map[string]bool, len(queryTokens))
+	for _, t := range queryTokens {
+		seen[t] = true
+	}
+	for _, t := range contextTokens {
+		if !seen[t] {
+			allTokens = append(allTokens, t)
+			seen[t] = true
+		}
+	}
+
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	tokensUpdated := 0
+	coordsUpdated := 0
+
+	for _, tok := range allTokens {
+		// update wordToCmds (command frequency)
+		if e.wordToCmds[tok] == nil {
+			e.wordToCmds[tok] = make(map[string]*cmdFreq)
+		}
+		cf, ok := e.wordToCmds[tok][tool]
+		if !ok {
+			cf = &cmdFreq{}
+			e.wordToCmds[tok][tool] = cf
+		}
+		if success {
+			cf.success++
+		} else {
+			cf.fail++
+		}
+		tokensUpdated++
+
+		// update coordIndex for coordinate-bearing tools
+		if coordTools[tool] && (x != 0 || y != 0) {
+			if e.coordIndex[tool] == nil {
+				e.coordIndex[tool] = make(map[string]*coordSample)
+			}
+			cs, ok := e.coordIndex[tool][tok]
+			if !ok {
+				cs = &coordSample{}
+				e.coordIndex[tool][tok] = cs
+			}
+			cs.xSum += int64(x)
+			cs.ySum += int64(y)
+			cs.count++
+			if success {
+				cs.success++
+			}
+			coordsUpdated++
+		}
+	}
+
+	// also update __learned__ aggregate for coord tools
+	if coordTools[tool] && (x != 0 || y != 0) {
+		if e.coordIndex[tool] == nil {
+			e.coordIndex[tool] = make(map[string]*coordSample)
+		}
+		cs, ok := e.coordIndex[tool]["__learned__"]
+		if !ok {
+			cs = &coordSample{}
+			e.coordIndex[tool]["__learned__"] = cs
+		}
+		cs.xSum += int64(x)
+		cs.ySum += int64(y)
+		cs.count++
+		if success {
+			cs.success++
+		}
+	}
+
+	return map[string]any{
+		"query":           query,
+		"tool":            tool,
+		"success":         success,
+		"tokens_updated":  tokensUpdated,
+		"coords_updated":  coordsUpdated,
+		"total_tokens":    len(allTokens),
+	}
+}
+
 // success_rates immediately after a restart, before any new commands
 // have run in this process.
 func (e *AdaptiveEngine) HydratePersisted() {

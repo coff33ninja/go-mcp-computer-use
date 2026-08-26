@@ -168,10 +168,12 @@ var categoryForTool = map[string]string{
 	"datalog_export": "Data Logging",
 	"datalog_status": "Data Logging",
 
-	// Adaptive Agent (3)
+	// Adaptive Agent (5)
 	"agent_analyze": "Adaptive Agent",
 	"agent_suggest": "Adaptive Agent",
 	"agent_train":   "Adaptive Agent",
+	"ml_query":      "Adaptive Agent",
+	"ml_teach":      "Adaptive Agent",
 
 	// Introspection & Debugging (7)
 	"task_begin":            "Introspection & Debugging",

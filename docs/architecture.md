@@ -21,6 +21,8 @@ The server implements the execution and perception layers of a closed-loop embod
 │  Transformer ─ Action Prediction (Go-native 14K-   │
 │  │             param transformer via Gorgonia,      │
 │  │             learns from OCR context → actions)   │
+│  ML Loop ──── Query → Predict → Act → Teach        │
+│  │             (ml_query → ml_teach feedback loop)  │
 │  Memory ────── State Layer (SQLite facts, element   │
 │                 templates, UI position cache)       │
 │  Training ──── Data pipeline (screenshot store,     │
@@ -53,7 +55,7 @@ ml/                             — Go-native ML transformer module
   ├── online/learner.go        — experience replay buffer (circular, 10K samples)
   └── export/serializer.go     — gob weight serialization
 
-internal/server/server.go      — MCP tool registrations (153 tools)
+internal/server/server.go      — MCP tool registrations (155 tools)
 internal/config/config.go      — JSON config file (~/.config/go-mcp-computer-use/config.json)
 
 internal/actions/              — 47 files, organized by capability:
@@ -71,7 +73,8 @@ internal/actions/              — 47 files, organized by capability:
   │   ├── watcher.go           — background ONNX detection loop with caching
   │   ├── priors.go            — element frequency/position priors per window
   │   ├── ui_finder.go         — cascading locator (memory → ONNX → OCR)
-  │   └── recording.go         — screen recording (frames at intervals)
+  │   ├── recording.go         — screen recording (frames at intervals)
+  │   └── record_replicate.go  — input recording, session capture, smart chain replication
   │
   ├── Window & Desktop:
   │   ├── window.go            — EnumWindows, focus, find, move/resize
@@ -97,9 +100,9 @@ internal/actions/              — 47 files, organized by capability:
   │   └── winrt.go             — WinRT infrastructure (HSTRING, RoInitialize, async)
   │
   ├── Automation:
-  │   ├── chain.go             — chain step executor (poll, if/else, loop, variables)
+  │   ├── chain.go             — chain step executor (poll, if/else, loop, variables, LogToolCall learning loop)
   │   ├── keylogger.go         — WinEvent hook input recording
-  │   ├── adaptive.go          — adaptive engine (timing, success rates, coord prediction)
+  │   ├── adaptive.go          — adaptive engine (timing, success rates, coord prediction, ml_query, ml_teach)
   │   └── ml_bridge.go         — Go-native transformer engine integration (MLEngine)
   │
   ├── Persistence:

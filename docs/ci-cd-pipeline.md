@@ -19,8 +19,8 @@ Windows-only Go project. CI builds + vets on every push/PR. Release workflow cut
 
 | Trigger | Action |
 |---------|--------|
-| Push to `main`, `v0.2.x` | Build + vet + upload artifact |
-| PR to `main`, `v0.2.x` | Build + vet |
+| Push to `main`, `v0.3.x` | Build + vet + upload artifact |
+| PR to `main`, `v0.3.x` | Build + vet |
 
 ### Vtable verification
 
@@ -41,8 +41,8 @@ Validates tag matches VERSION file. Builds with Zig cc + CGO. Extracts the corre
 ```
 main  ───────────────────────────────────●─── (stable releases)
                                          │
-v0.2.0-alpha ──●──●──●──●──●──●──●──────┘
-               (feature work, chain/memory/ML)
+v0.3.x ─────●──●──●──●──●──●──●─────────┘
+             (feature work, recording/ML/enrichment)
 ```
 
 | Branch | Purpose |

@@ -57,7 +57,7 @@ jobs:
           $prPayload = @{
             title = "chore(deps): weekly go module update"
             head = $branch
-            base = "v0.2.x"
+            base = "v0.3.x"
             body = "Automated weekly Go module dependency update via ``go get -u ./...`` followed by ``go mod tidy``."
           } | ConvertTo-Json
           
