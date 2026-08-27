@@ -1,0 +1,31 @@
+go-mcp-computer-use
+Copyright 2026 coff33ninja
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+----------------------------------------------------------------------
+Third-party model notice
+----------------------------------------------------------------------
+
+This software bundles `gpa_gui_detector.onnx`, a format-converted export of
+Salesforce GPA-GUI-Detector (https://huggingface.co/Salesforce/GPA-GUI-Detector),
+which is owned and licensed by its original authors under the MIT License.
+This project does not own that model and does not license it under the Apache
+License 2.0. The MIT terms that govern the model continue to apply to the model
+and its outputs; review and comply with the upstream license before use.
+
+THIS PROJECT PROVIDES THE MODEL AND ITS OUTPUTS "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, AND DISCLAIMS ALL LIABILITY FOR THE MODEL'S
+BEHAVIOR, ACCURACY, OR FITNESS FOR ANY PURPOSE. The model's original authors
+retain their copyright and license rights; this project accepts no
+responsibility for any downstream use of the model or its outputs.

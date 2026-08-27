@@ -116,6 +116,8 @@ jobs:
             mcp-server.exe
             mcp-server.exe.sha256
             launch.ps1
+            LICENSE
+            NOTICE
             dist-models/gpa_gui_detector.onnx
           fail_on_unmatched_files: false
           generate_release_notes: false

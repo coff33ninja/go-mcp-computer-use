@@ -9,10 +9,10 @@ import (
 	"runtime"
 	"syscall"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/coff33ninja/go-mcp-computer-use/internal/actions"
 	"github.com/coff33ninja/go-mcp-computer-use/internal/dashboard"
 	"github.com/coff33ninja/go-mcp-computer-use/internal/server"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 var Version = "dev"
@@ -20,8 +20,23 @@ var Version = "dev"
 func main() {
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: nil})))
 
-	if len(os.Args) > 1 && os.Args[1] == "init" {
+	switch {
+	case len(os.Args) > 1 && os.Args[1] == "init":
 		runInit()
+		return
+	case len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-version" || os.Args[1] == "version"):
+		fmt.Printf("go-mcp-computer-use %s\n", Version)
+		return
+	case len(os.Args) > 1 && (os.Args[1] == "--license" || os.Args[1] == "-license" || os.Args[1] == "license"):
+		fmt.Println(embeddedLicense)
+		if embeddedNotice != "" {
+			fmt.Println("\n------------------ NOTICE ------------------")
+			fmt.Println(embeddedNotice)
+		}
+		return
+	case len(os.Args) > 1 && (os.Args[1] == "--help" || os.Args[1] == "-h" || os.Args[1] == "help"):
+		fmt.Println("go-mcp-computer-use — MCP server for Windows computer use")
+		fmt.Printf("Usage:\n  %s            run the MCP server (stdio)\n  %s init       initialize memory/models\n  %s --version   print version\n  %s --license   print license and notice\n", os.Args[0], os.Args[0], os.Args[0], os.Args[0])
 		return
 	}
 

@@ -1,0 +1,64 @@
+{
+  "RT_GROUP_ICON": {
+    "APP": {
+      "0000": [
+        "../icons/app-16.png",
+        "../icons/app-32.png",
+        "../icons/app-48.png",
+        "../icons/app-64.png",
+        "../icons/app-256.png"
+      ]
+    }
+  },
+  "RT_MANIFEST": {
+    "#1": {
+      "0409": {
+        "identity": {
+          "name": "coff33ninja.go-mcp-computer-use",
+          "version": "{{VERSION}}"
+        },
+        "description": "go-mcp-computer-use MCP server",
+        "minimum-os": "win7",
+        "execution-level": "requireAdministrator",
+        "ui-access": false,
+        "auto-elevate": false,
+        "dpi-awareness": "permonitorv2",
+        "disable-theming": false,
+        "disable-window-filtering": false,
+        "high-resolution-scrolling-aware": true,
+        "ultra-high-resolution-scrolling-aware": true,
+        "long-path-aware": true,
+        "printer-driver-isolation": false,
+        "gdi-scaling": false,
+        "segment-heap": false,
+        "use-common-controls-v6": true
+      }
+    }
+  },
+  "RT_VERSION": {
+    "#1": {
+      "0000": {
+        "fixed": {
+          "file_version": "{{VERSION}}.0.0",
+          "product_version": "{{VERSION}}.0.0"
+        },
+        "info": {
+          "0409": {
+            "Comments": "MCP server for Windows computer use. Licensed under the Apache License, Version 2.0.",
+            "CompanyName": "coff33ninja",
+            "FileDescription": "go-mcp-computer-use MCP server",
+            "FileVersion": "{{VERSION}}",
+            "InternalName": "mcp-server",
+            "LegalCopyright": "Copyright (c) 2026 coff33ninja. Licensed under the Apache License, Version 2.0.",
+            "LegalTrademarks": "",
+            "OriginalFilename": "mcp-server.exe",
+            "PrivateBuild": "",
+            "ProductName": "go-mcp-computer-use",
+            "ProductVersion": "{{VERSION}}",
+            "SpecialBuild": ""
+          }
+        }
+      }
+    }
+  }
+}

@@ -31,6 +31,12 @@ Write-Host "Generating icon resource..." -ForegroundColor Gray
 & "$PSScriptRoot\gen-icons.ps1"
 if (-not $?) { exit 1 }
 
+# Refresh embedded legal files (LICENSE.txt/NOTICE.txt) so --license stays in sync
+Write-Host "Refreshing embedded license files..." -ForegroundColor Gray
+$clientDir = Join-Path $PSScriptRoot "..\cmd\mcp-server"
+Copy-Item (Join-Path $PSScriptRoot "..\LICENSE") (Join-Path $clientDir "LICENSE.txt") -Force
+Copy-Item (Join-Path $PSScriptRoot "..\NOTICE") (Join-Path $clientDir "NOTICE.txt") -Force
+
 $ldflags = "-s -w -X main.Version=$ver"
 if (-not $Release) {
     $ldflags = "-X main.Version=$ver"

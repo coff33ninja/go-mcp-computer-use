@@ -10,6 +10,13 @@ boxes. The authoritative per-control UI type (`button`, `text_input`, ...) comes
 from the separate 15-class MobileNet tier (`mobilenetv3_small.onnx`). See
 `internal/actions/onnx.go`.
 
+> **Licensing notice:** The model is owned and licensed by its original authors
+> (Salesforce, MIT). This project only ships the format-converted ONNX artifact
+> and takes no responsibility for the model's behavior, accuracy, or fitness for
+> any purpose. Review and comply with the upstream
+> [GPA-GUI-Detector license](https://huggingface.co/Salesforce/GPA-GUI-Detector)
+> before use, and you are responsible for any downstream use of its outputs.
+
 ## Why re-run this?
 
 The Go binary **auto-downloads** `gpa_gui_detector.onnx` from the latest GitHub

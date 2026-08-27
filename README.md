@@ -9,6 +9,7 @@
   <a href="https://github.com/coff33ninja/go-mcp-computer-use/commits/v0.3.x"><img src="https://img.shields.io/github/last-commit/coff33ninja/go-mcp-computer-use?labelColor=2d333b&color=yellowgreen" alt="Last commit"></a>
   <a href="https://github.com/coff33ninja/go-mcp-computer-use/pulls"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen?labelColor=2d333b" alt="PRs welcome"></a>
   <a href="https://coff33ninja.github.io/go-mcp-computer-use/"><img src="https://img.shields.io/badge/docs-gh--pages-blue?labelColor=2d333b&logo=github" alt="Docs"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-red?labelColor=2d333b" alt="Apache 2.0"></a>
 </p>
 
 > **Built iteratively** across AI-assisted development sessions. [`v0.1.x`](https://github.com/coff33ninja/go-mcp-computer-use/tree/v0.1.x) covered 70+ bug-fixed Win32/COM tools. [`v0.2.x`](https://github.com/coff33ninja/go-mcp-computer-use/tree/v0.2.x) was the testing and iteration ground — chained automation pipeline, SQLite memory store, ONNX ML detection, introspection engine, adaptive ML, Go-native transformer engine, and the training data pipeline were all built and validated there.
@@ -94,6 +95,8 @@ All three **auto-download on first use** when missing — no manual setup requir
 
 To **regenerate `gpa_gui_detector.onnx`** from source (e.g. to re-release a model or iterate on the conversion), see [`scripts/gpa-gui-export/`](scripts/gpa-gui-export/README.md) — a uv-based project (`uv sync` + `uv run export.py`) that downloads the HF checkpoint, validates the single-`icon` layout, and exports the ONNX. CI runs the same script and attaches the model to every release.
 
+> **Licensing notice:** `gpa_gui_detector.onnx` is a conversion of [Salesforce GPA-GUI-Detector](https://huggingface.co/Salesforce/GPA-GUI-Detector), which is owned and licensed by its original authors (MIT). This project only ships the format-converted artifact and takes no responsibility for the model's behavior, accuracy, or fitness for any purpose. You are responsible for reviewing and complying with the upstream model's license before use, and for any downstream use of its outputs.
+
 ## Architecture
 
 See [`docs/architecture.md`](docs/architecture.md) for the agent stack diagram and code map.
@@ -118,6 +121,17 @@ See [`docs/architecture.md`](docs/architecture.md) for the agent stack diagram a
 - [`docs/meta/known-issues.md`](docs/meta/known-issues.md) — known issues and workarounds
 - [`docs/meta/CHANGELOG.md`](docs/meta/CHANGELOG.md) — release history
 - [`docs/ci-cd-pipeline.md`](docs/ci-cd-pipeline.md) — CI/CD workflow documentation
+
+## License
+
+This project is licensed under the [Apache License 2.0](LICENSE), © 2026 coff33ninja.
+See the [NOTICE](NOTICE) file for third-party attribution.
+
+The bundled `gpa_gui_detector.onnx` is a format-converted export of
+[Salesforce GPA-GUI-Detector](https://huggingface.co/Salesforce/GPA-GUI-Detector)
+(MIT) and remains under **that** upstream license — it is not covered by the
+Apache-2.0 grant. See the [Models](#models) section and [NOTICE](NOTICE) for full
+attribution.
 
 ---
 

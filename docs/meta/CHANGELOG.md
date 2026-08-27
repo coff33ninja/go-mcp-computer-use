@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [0.3.7] - 2026-08-27
+
+### Added
+
+- **`--version`, `--license`, and `--help` CLI flags on the server binary** - `mcp-server.exe --version` prints the build version (`go-mcp-computer-use 0.3.7`), `--license` prints the full Apache-2.0 text plus the `NOTICE`, and `--help` lists the available subcommands/flags. LICENSE and NOTICE are embedded into the binary via `go:embed` (kept in sync by `scripts/build.ps1`), so the license text is always retrievable from the shipped executable with no files alongside.
+
+### Changed
+
+- **Project relicensed from MIT to Apache-2.0** - `LICENSE` replaced with the full Apache-2.0 text, (c) 2026 coff33ninja. Added a `NOTICE` file wiring the Apache-2.0 attribution and clarifying that the bundled `gpa_gui_detector.onnx` (a converted Salesforce GPA-GUI-Detector) remains under the upstream MIT license, not Apache-2.0. README gained a license badge, a `License` section, and updated model-attribution wording.
+- **Version-info, copyright, and admin manifest now embedded in the executable** - resource generation switched from `akavel/rsrc` (icon only, no manifest/version) to `go-winres` (`scripts/gen-icons.ps1` + a committed `winres/winres.json.template`). The exe now carries a `VS_VERSION_INFO` block visible in Windows Explorer Properties -> Details (CompanyName `coff33ninja`, LegalCopyright "Copyright (c) 2026 coff33ninja. Licensed under the Apache License, Version 2.0.", ProductName, File/Product version from `VERSION`) and an application manifest declaring `requireAdministrator` (admin is required for the tool's UIA/UIPI automation to fully work) plus per-monitor-v2 DPI awareness. Previously the exe had no embedded manifest at all (as-invoker, no DPI declaration), so this is an explicit behavioral improvement that enforces the project's real admin requirement at the OS level.
+- **License decisions: LICENSE + NOTICE are shipped with each release** - `.github/workflows/release.yml` now attaches `LICENSE` and `NOTICE` to every versioned release alongside `mcp-server.exe`, so the license and third-party model attribution always accompany the binary.
+
 ## [0.3.6] - 2026-08-27
 
 ### Added
