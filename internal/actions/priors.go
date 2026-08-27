@@ -462,6 +462,68 @@ names: [%s]
 	}, nil
 }
 
+// PriorSampleCount returns how many times a (class, window) element has been
+// observed. Used as the dedup gate for watcher training samples so we stop
+// saving near-identical crops once the ML already knows an element well.
+func PriorSampleCount(windowTitle, className string) int {
+	loadPriorsOnce.Do(loadPriorsFromDB)
+	elementPriors.mu.RLock()
+	priors := elementPriors.priors
+	elementPriors.mu.RUnlock()
+
+	normalized := normalizeWindowTitle(windowTitle)
+	for i := range priors {
+		if priors[i].Class == className && priors[i].WindowTitle == normalized {
+			return priors[i].SampleCount
+		}
+	}
+	return 0
+}
+
+// ElementKnownConfidently reports whether the watcher already knows the given
+// element at this location well enough that another snapshot adds no signal.
+//
+//	windowTitle/className identify the element prior.
+//	normX/normY/confidence come from the current detection.
+//	minSample  - a prior qualifies only once observed at least this many times.
+//	locTol     - spatial tolerance in normalized (0-1) units for matching
+//	            location; pass <=0 to ignore location.
+//
+// A prior counts as "known" when it has enough samples AND the detection's
+// confidence is at least the configured floor AND (if locTol>0) the detection
+// is within locTol of the prior's average location. This drives the watcher's
+// "snapshot less and less" behavior: familiar, confident elements are skipped.
+func ElementKnownConfidently(windowTitle, className string, normX, normY, confidence float64, minSample int, locTol float64) bool {
+	loadPriorsOnce.Do(loadPriorsFromDB)
+	elementPriors.mu.RLock()
+	priors := elementPriors.priors
+	elementPriors.mu.RUnlock()
+
+	if minSample < 1 {
+		minSample = 1
+	}
+	normalized := normalizeWindowTitle(windowTitle)
+	for i := range priors {
+		p := &priors[i]
+		if p.Class != className || p.WindowTitle != normalized {
+			continue
+		}
+		if p.SampleCount < minSample {
+			return false
+		}
+		if confidence > 0 && p.Frequency < 0.5 {
+			return false
+		}
+		if locTol > 0 {
+			if math.Abs(normX-p.AvgX) > locTol || math.Abs(normY-p.AvgY) > locTol {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
 func FindPriorPrediction(windowTitle, className string) (*DetectedElement, bool) {
 	loadPriorsOnce.Do(loadPriorsFromDB)
 	elementPriors.mu.RLock()

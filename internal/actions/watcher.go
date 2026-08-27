@@ -1,8 +1,8 @@
 package actions
 
 import (
-	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -128,9 +128,41 @@ func (w *watcher) runOnce() {
 		title = getActiveWindowTitle()
 	}
 
-	cat := TrainingCatNoElements
-	if len(result.Elements) > 0 {
-		cat = TrainingCatElementsFound
+	// Hard guard: never harvest training crops from the desktop/wallpaper —
+	// YOLO fires spurious object detections there with no task context, which
+	// floods disk with garbage. This applies regardless of the lock state.
+	if isDesktopWindow(title) {
+		det := CachedDetection{
+			Timestamp: start.UnixMilli(),
+			WindowTitle: title,
+			Elements:    result.Elements,
+			Normalized:  result.Normalized,
+			SavedRef:    "",
+			TotalMs:     result.TotalMs,
+		}
+		w.mu.Lock()
+		w.lastRun = start
+		w.cache = append([]CachedDetection{det}, w.cache...)
+		if len(w.cache) > w.maxCache {
+			w.cache = w.cache[:w.maxCache]
+		}
+		w.mu.Unlock()
+		return
+	}
+
+	// The watcher is achievement-locked until the AI has proven competence
+	// through real interactive actions (click/type/record) and explicitly
+	// unlocked it. While locked, the watcher still detects/caches for
+	// reference but never persists training crops.
+	locked := ActiveConfig != nil && ActiveConfig.WatcherLocked
+
+	// When elements are found, save a cropped sample per detected element so
+	// the ML sees the element's local context instead of a full-screen image.
+	// This keeps training data small and focused. When nothing is detected we
+	// skip saving entirely.
+	var savedRef string
+	if (ActiveConfig == nil || ActiveConfig.TrainingEnabled) && len(result.Elements) > 0 && !locked {
+		savedRef = saveElementRegionSamples(title, result.Elements)
 	}
 
 	det := CachedDetection{
@@ -138,25 +170,8 @@ func (w *watcher) runOnce() {
 		WindowTitle: title,
 		Elements:    result.Elements,
 		Normalized:  result.Normalized,
+		SavedRef:    savedRef,
 		TotalMs:     result.TotalMs,
-	}
-
-	windowRect := ""
-	if info, err := GetActiveWindowInfo(); err == nil && info != nil && info.Handle != 0 {
-		if rect, err := GetWindowRectByHandle(info.Handle); err == nil {
-			b, _ := json.Marshal(rect)
-			windowRect = string(b)
-		}
-	}
-
-	if ActiveConfig == nil || ActiveConfig.TrainingEnabled {
-		if sample, err := saveTrainingSampleDirect(
-			TrainingSourceWatcher, cat,
-			fmt.Sprintf("find UI elements in window: %s", title),
-			b64, title, "", result.Elements, result.Normalized, windowRect,
-		); err == nil && sample != nil {
-			det.SavedRef = sample.ImagePath
-		}
 	}
 
 	w.mu.Lock()
@@ -174,4 +189,127 @@ func getActiveWindowTitle() string {
 		return ""
 	}
 	return info.Title
+}
+
+// watcherDedupThreshold is the number of times an (element class, window) pair
+// must be observed before the watcher stops saving new crops of it. This
+// prevents over-training (the ML already knows the element) and disk flooding
+// from near-identical full screenshots every cycle.
+const watcherDedupThreshold = 5
+
+// watcherLocTolerance is the normalized (0-1) spatial tolerance used by the
+// watcher's novelty gate. An element detected within this distance of a
+// known prior's average location is treated as already-known and skipped.
+const watcherLocTolerance = 0.15
+
+// watcherCropPadding is added around each detected element's bounding box when
+// capturing its focused training crop, giving the ML a little local context.
+const watcherCropPadding = 24
+
+// watcherDesktopTitles are window titles that indicate no real application is
+// in the foreground (the desktop / wallpaper / shell). The watcher must never
+// harvest training samples from these: YOLO fires spurious "person"/object
+// detections on a wallpaper with no task context, flooding disk with garbage.
+// Even when the watcher is unlocked, crops from the desktop are discarded.
+var watcherDesktopTitles = map[string]bool{
+	"program manager": true,
+	"":                true,
+}
+
+// isDesktopWindow reports whether the given window title represents the
+// desktop/wallpaper rather than a real application window that the AI acted
+// on. Used as a hard guard so the watcher only learns from real app contexts.
+func isDesktopWindow(title string) bool {
+	t := strings.ToLower(strings.TrimSpace(title))
+	if watcherDesktopTitles[t] {
+		return true
+	}
+	// Shell/desktop viewer windows.
+	if strings.Contains(t, "shell_") || strings.Contains(t, "windows shell experience") {
+		return true
+	}
+	return false
+}
+
+// elementCropRegion converts an ONNX-detected element's bitmap-space bounding
+// box (relative to a full-screen capture whose origin is the virtual screen
+// top-left) into a padded, bounds-clamped virtual-screen CaptureRegion rect.
+// Returns ok=false when the resulting crop is empty or invalid.
+func elementCropRegion(bounds Rect, el DetectedElement) (x, y, w, h int32, ok bool) {
+	if el.W <= 0 || el.H <= 0 {
+		return 0, 0, 0, 0, false
+	}
+
+	vx := bounds.X + el.X
+	vy := bounds.Y + el.Y
+
+	px := vx - int32(watcherCropPadding)
+	py := vy - int32(watcherCropPadding)
+	pw := el.W + int32(2*watcherCropPadding)
+	ph := el.H + int32(2*watcherCropPadding)
+
+	if px < bounds.X {
+		pw += px - bounds.X
+		px = bounds.X
+	}
+	if py < bounds.Y {
+		ph += py - bounds.Y
+		py = bounds.Y
+	}
+	if px+pw > bounds.X+bounds.W {
+		pw = bounds.X + bounds.W - px
+	}
+	if py+ph > bounds.Y+bounds.H {
+		ph = bounds.Y + bounds.H - py
+	}
+	if pw <= 0 || ph <= 0 {
+		return 0, 0, 0, 0, false
+	}
+	return px, py, pw, ph, true
+}
+
+// saveElementRegionSamples captures and saves focused, deduplicated training
+// crops around each detected element. It returns the path of the first saved
+// sample (for the detection cache) or "" if nothing was saved.
+func saveElementRegionSamples(windowTitle string, elements []DetectedElement) string {
+	if len(elements) == 0 {
+		return ""
+	}
+
+	bounds := VirtualScreenBounds()
+	var savedFirst string
+	for _, el := range elements {
+		// Novelty gate: if the ML already knows this element at this location
+		// with high confidence, skip saving another near-identical crop. This is
+		// what makes the watcher snapshot less and less as it gains confidence —
+		// it only records truly new/moved/uncertain elements instead of flooding.
+		normX, normY := 0.0, 0.0
+		if bounds.W > 0 && bounds.H > 0 {
+			normX = float64(el.X+el.W/2) / float64(bounds.W)
+			normY = float64(el.Y+el.H/2) / float64(bounds.H)
+		}
+		if ElementKnownConfidently(windowTitle, el.Class, normX, normY, el.Confidence,
+			watcherDedupThreshold, watcherLocTolerance) {
+			continue
+		}
+
+		px, py, pw, ph, ok := elementCropRegion(bounds, el)
+		if !ok {
+			continue
+		}
+
+		cat := TrainingCatElementsFound
+		task := fmt.Sprintf("find UI element %s in window: %s", el.Class, windowTitle)
+		sample, err := SaveRegionTrainingSample(
+			TrainingSourceWatcher, cat, task, windowTitle, "",
+			px, py, pw, ph,
+		)
+		if err != nil || sample == nil {
+			continue
+		}
+		if savedFirst == "" {
+			savedFirst = sample.ImagePath
+		}
+	}
+	return savedFirst
 }

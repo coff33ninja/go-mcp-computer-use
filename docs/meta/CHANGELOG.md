@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-08-27
+
+### Changed
+
+- **Action-triggered training snapshots are now cropped around the target** — `SaveSnapshotAfterAction` (used by click, type, drag, hover, `find_text_and_click`, `type_and_submit`, `select_all_and_type`, and `click_menu_item`) now captures a 400×400 region centered on the action target instead of saving a full-screen screenshot. This gives the ML model a focused view of the element being acted on, dramatically reducing the size of training data. Older call sites fall back to full-screen capture automatically.
+- **Watcher training samples are now cropped around detected elements** — The background watcher (which screenshots the screen every cycle to feed the priors/ML systems) now saves a small padded crop around each detected UI element instead of a full-screen 3200×1980 PNG every cycle. When no elements are detected in a frame, nothing is saved. This prevents the tens of gigabytes of near-identical full-screen images that previously accumulated.
+- **Watcher is AI-gated with an achievement lock** — The background watcher now starts **locked** (`watcher_locked: true` by default). While locked it still runs ONNX detection and caches results for reference, but never persists training crops. The AI must first prove competence through real interactive actions (click/type/record) and then explicitly call `watcher_unlock` to grant the watcher permission to save crops. The unlocked state persists across reboots, so the watcher stays unlocked once earned.
+- **Watcher confidentiality / novelty dedup** — The watcher now consults the priors system before saving a crop via a new `ElementKnownConfidently` check: an element is considered known when its (class, window) pair has enough samples AND its current normalized location falls within tolerance of the learned position. Familiar elements are skipped; only new/moved/uncertain elements are saved. Snapshots therefore decay as the ML gains confidence, replacing the old fragile count-only gate.
+- **Wallpaper guard** — The watcher will never save training crops when the foreground window is the desktop/shell (e.g. "Program Manager", empty title, `Shell_*`, Windows Shell Experience), regardless of the lock state. This prevents the wallpaper from ever being mined as a training signal.
+- **Training DB pruning actually reclaims disk** — `PruneOldSamples` now runs `VACUUM` after deleting rows, and a new `PruneOrphanedSamples` pass (run alongside the periodic retention pruner) removes rows whose image file no longer exists on disk. This reclaims the space that stayed locked inside `samples.db` after the large full-screen PNG cleanup.
+
+### Added
+
+- **`watcher_lock_status` tool** — reports whether the watcher's training-crop capture is achievement-locked, plus the count of real-action training samples gathered (`action_signal`) as guidance on when unlocking is warranted.
+- **`watcher_unlock` tool** — grants the watcher permission to persist training crops after the AI has gathered confident data from real interactive actions. The unlock persists across reboots.
+- **`set_config ... watcher_locked` / `get_config` `watcher_locked`** — the watcher lock can be inspected and toggled through the standard config surface alongside the dedicated tools.
+
 ## [0.3.4] - 2026-08-26
 
 ### Fixed
@@ -14,16 +31,13 @@
 ### Changed
 
 - **`find_text_and_click` scoped window OCR** — When `window_title` is provided, now tries window-specific OCR first (via `OCRWindow`) before falling back to full-screen. This scopes the search to the target window, avoiding false matches from other windows on screen. Window OCR returns coordinates already in virtual screen space, so no offset conversion is needed.
+- **Watcher auto-starts on boot by default** — `watcher_auto_start` now defaults to `true`. Previously the watcher had to be manually started with `set_config` after every server restart. The watcher feeds the priors system (element position statistics) which improves UI element lookup confidence. Set to `false` in config to disable.
 
 ### Added
 
 - **Z-order layering for text location memory** — `TextLocation` now stores `z_order` (window stack position: 0=topmost). `FindTextAndClick` captures the foreground window's z-order at call time and uses it for memory matching via new `FindTextLocationMatch` / `FindTextLocationAnyMatch` functions. These prefer exact z-order matches (clicking the right layer) then fall back to any match. Handles overlapping windows with identical text.
 - Schema migration: `z_order INTEGER NOT NULL DEFAULT 0` column added to `text_locations` table. Existing databases auto-migrate via `ALTER TABLE`.
 - **`get_config` tool** — read-only view of all current configuration values plus live watcher status. Returns every field that `set_config` can change, plus `watcher_running` and `watcher_auto_start`. Use to inspect state without modifying anything.
-
-### Changed
-
-- **Watcher auto-starts on boot by default** — `watcher_auto_start` now defaults to `true`. Previously the watcher had to be manually started with `set_config` after every server restart. The watcher feeds the priors system (element position statistics) which improves UI element lookup confidence. Set to `false` in config to disable.
 
 ## [0.3.3] - 2026-08-26
 

@@ -569,23 +569,75 @@ func captureUIAElementAtPoint(name string, args map[string]any) any {
 var trainingTools = map[string]struct {
 	Category   string
 	MakePrompt func(map[string]any) string
+	// Target returns an optional (x,y,w,h) capture region extracted from the
+	// tool args, used to crop training screenshots around the action target.
+	// Return nil to fall back to full-screen capture.
+	Target func(map[string]any) []int32
 }{
-	"click":               {TrainingCatClick, func(a map[string]any) string { return fmt.Sprintf("click at (%v,%v)", a["x"], a["y"]) }},
-	"type":                {TrainingCatType, func(a map[string]any) string { return "type text" }},
-	"type_and_submit":     {TrainingCatType, func(a map[string]any) string { return "type and submit" }},
-	"select_all_and_type": {TrainingCatType, func(a map[string]any) string { return "select all and type" }},
-	"key_press":           {TrainingCatGeneral, func(a map[string]any) string { return fmt.Sprintf("key press: %v", a["keys"]) }},
-	"key_down":            {TrainingCatGeneral, func(a map[string]any) string { return fmt.Sprintf("key down: %s", a["key"]) }},
-	"key_up":              {TrainingCatGeneral, func(a map[string]any) string { return fmt.Sprintf("key up: %s", a["key"]) }},
-	"scroll":              {TrainingCatGeneral, func(a map[string]any) string { return "scroll" }},
+	"click":               {TrainingCatClick, func(a map[string]any) string { return fmt.Sprintf("click at (%v,%v)", a["x"], a["y"]) }, targetFromXY},
+	"type":                {TrainingCatType, func(a map[string]any) string { return "type text" }, targetFromCursor},
+	"type_and_submit":     {TrainingCatType, func(a map[string]any) string { return "type and submit" }, targetFromCursor},
+	"select_all_and_type": {TrainingCatType, func(a map[string]any) string { return "select all and type" }, targetFromCursor},
+	"key_press":           {TrainingCatGeneral, func(a map[string]any) string { return fmt.Sprintf("key press: %v", a["keys"]) }, nil},
+	"key_down":            {TrainingCatGeneral, func(a map[string]any) string { return fmt.Sprintf("key down: %s", a["key"]) }, nil},
+	"key_up":              {TrainingCatGeneral, func(a map[string]any) string { return fmt.Sprintf("key up: %s", a["key"]) }, nil},
+	"scroll":              {TrainingCatGeneral, func(a map[string]any) string { return "scroll" }, nil},
 	"drag": {TrainingCatGeneral, func(a map[string]any) string {
 		return fmt.Sprintf("drag from (%v,%v) to (%v,%v)", a["from_x"], a["from_y"], a["to_x"], a["to_y"])
-	}},
-	"hover":               {TrainingCatGeneral, func(a map[string]any) string { return fmt.Sprintf("hover at (%v,%v)", a["x"], a["y"]) }},
-	"mouse_down":          {TrainingCatGeneral, func(a map[string]any) string { return fmt.Sprintf("mouse down at (%v,%v)", a["x"], a["y"]) }},
-	"mouse_up":            {TrainingCatGeneral, func(a map[string]any) string { return fmt.Sprintf("mouse up at (%v,%v)", a["x"], a["y"]) }},
-	"find_text_and_click": {TrainingCatClick, func(a map[string]any) string { return fmt.Sprintf("find and click: %s", a["text"]) }},
-	"open_url":            {TrainingCatNavigate, func(a map[string]any) string { return fmt.Sprintf("navigate to %s", a["url"]) }},
+	}, targetFromTo},
+	"hover":               {TrainingCatGeneral, func(a map[string]any) string { return fmt.Sprintf("hover at (%v,%v)", a["x"], a["y"]) }, targetFromXY},
+	"mouse_down":          {TrainingCatGeneral, func(a map[string]any) string { return fmt.Sprintf("mouse down at (%v,%v)", a["x"], a["y"]) }, targetFromXY},
+	"mouse_up":            {TrainingCatGeneral, func(a map[string]any) string { return fmt.Sprintf("mouse up at (%v,%v)", a["x"], a["y"]) }, targetFromXY},
+	"find_text_and_click": {TrainingCatClick, func(a map[string]any) string { return fmt.Sprintf("find and click: %s", a["text"]) }, nil},
+	"open_url":            {TrainingCatNavigate, func(a map[string]any) string { return fmt.Sprintf("navigate to %s", a["url"]) }, nil},
+}
+
+// targetFromXY builds a 400x400 region around an (x,y) from tool args.
+func targetFromXY(a map[string]any) []int32 {
+	x, okX := argInt32(a["x"])
+	y, okY := argInt32(a["y"])
+	if !okX || !okY {
+		return nil
+	}
+	rx, ry, rw, rh := SmartRegionAround(x, y, 400)
+	return []int32{rx, ry, rw, rh}
+}
+
+// targetFromTo builds a region around the drag destination (to_x,to_y).
+func targetFromTo(a map[string]any) []int32 {
+	x, okX := argInt32(a["to_x"])
+	y, okY := argInt32(a["to_y"])
+	if !okX || !okY {
+		return nil
+	}
+	rx, ry, rw, rh := SmartRegionAround(x, y, 400)
+	return []int32{rx, ry, rw, rh}
+}
+
+// targetFromCursor builds a 400x400 region around the current cursor position.
+func targetFromCursor(_ map[string]any) []int32 {
+	x, y, err := GetCursorPosition()
+	if err != nil {
+		return nil
+	}
+	rx, ry, rw, rh := SmartRegionAround(x, y, 400)
+	return []int32{rx, ry, rw, rh}
+}
+
+// argInt32 converts a chain-arg value (float64/int64 from JSON decode) to int32.
+func argInt32(v any) (int32, bool) {
+	switch t := v.(type) {
+	case float64:
+		return int32(t), true
+	case int:
+		return int32(t), true
+	case int32:
+		return t, true
+	case int64:
+		return int32(t), true
+	default:
+		return 0, false
+	}
 }
 
 func execTool(step ChainStep, args map[string]any, _ *chainState) StepResult {
@@ -613,7 +665,7 @@ func execTool(step ChainStep, args map[string]any, _ *chainState) StepResult {
 		}
 	}
 	if t, ok := trainingTools[toolName]; ok {
-		SaveSnapshotAfterAction(TrainingSourceRaw, t.Category, t.MakePrompt(args))
+		SaveSnapshotAfterAction(TrainingSourceRaw, t.Category, t.MakePrompt(args), t.Target(args)...)
 	}
 	// Auto-capture UIA element at point for mouse-based tools
 	uiaEl := captureUIAElementAtPoint(toolName, args)
@@ -662,7 +714,7 @@ func execVerify(step ChainStep, args map[string]any, _ *chainState) StepResult {
 
 		if execErr == nil {
 			if t, ok := trainingTools[toolName]; ok {
-				SaveSnapshotAfterAction(TrainingSourceRaw, t.Category, t.MakePrompt(args))
+				SaveSnapshotAfterAction(TrainingSourceRaw, t.Category, t.MakePrompt(args), t.Target(args)...)
 			}
 		}
 

@@ -17,6 +17,7 @@ type Config struct {
 	UIAWarmup           bool     `json:"uia_warmup"`
 	TrainingEnabled     bool     `json:"training_enabled"`
 	PriorAdjustment     bool     `json:"prior_adjustment"`
+	WatcherLocked       bool     `json:"watcher_locked"`
 	WatcherAutoStart    bool     `json:"watcher_auto_start"`
 	WatcherIntervalSecs int      `json:"watcher_interval_seconds"`
 	ToolDenylist        []string `json:"tool_denylist,omitempty"`
@@ -42,6 +43,7 @@ func Default() *Config {
 		UIAWarmup:           true,
 		TrainingEnabled:        true,
 		PriorAdjustment:        true,
+		WatcherLocked:          true,
 		WatcherAutoStart:       true,
 		WatcherIntervalSecs:    5,
 		ChainAbortEnabled:      true,

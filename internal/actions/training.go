@@ -262,6 +262,27 @@ func SaveScreenshotTrainingSample(source, category, taskPrompt, windowTitle, ocr
 	})
 }
 
+// SaveRegionTrainingSample captures only the given region (cropped around an
+// action target) and saves it as a training sample. This gives the ML model a
+// focused view of the element acted on, instead of a full-screen snapshot.
+func SaveRegionTrainingSample(source, category, taskPrompt, windowTitle, ocrText string, x, y, w, h int32) (*TrainingSample, error) {
+	if w <= 0 || h <= 0 {
+		return SaveScreenshotTrainingSample(source, category, taskPrompt, windowTitle, ocrText)
+	}
+	b64, err := CaptureRegion(x, y, w, h)
+	if err != nil {
+		return nil, fmt.Errorf("capture region (%d,%d %dx%d): %w", x, y, w, h, err)
+	}
+	return SaveTrainingSample(SaveTrainingSampleInput{
+		Source:      source,
+		Category:    category,
+		TaskPrompt:  taskPrompt,
+		ImageB64:    b64,
+		WindowTitle: windowTitle,
+		OCRText:     ocrText,
+	})
+}
+
 func computeSignalLevel(detCount int, category, taskPrompt string) int {
 	if detCount == 0 {
 		return 0
@@ -432,11 +453,19 @@ func TrainingMarkUsed(sampleID int64) error {
 	return err
 }
 
-func SaveSnapshotAfterAction(source, category, taskPrompt string) {
+// SaveSnapshotAfterAction captures a training sample after a tool runs.
+// Pass a target region (x, y, w, h) to crop the screenshot around the action
+// target (e.g. the button that was clicked). When no region is given the full
+// screen is captured (used for actions with no meaningful target coordinate).
+func SaveSnapshotAfterAction(source, category, taskPrompt string, region ...int32) {
 	if ActiveConfig != nil && !ActiveConfig.TrainingEnabled {
 		return
 	}
 	go func() {
+		if len(region) == 4 {
+			SaveRegionTrainingSample(source, category, taskPrompt, "", "", region[0], region[1], region[2], region[3])
+			return
+		}
 		SaveScreenshotTrainingSample(source, category, taskPrompt, "", "")
 	}()
 }
@@ -498,7 +527,48 @@ func PruneOldSamples(retentionDays int) (map[string]int, error) {
 		trainDB.Exec("DELETE FROM training_samples WHERE id = ?", id)
 	}
 	result["deleted"] = len(ids)
+	if len(ids) > 0 {
+		// Reclaim disk space from deleted rows; SQLite does not shrink the
+		// file automatically after deletes.
+		trainDB.Exec("VACUUM")
+	}
 	return result, nil
+}
+
+// PruneOrphanedSamples deletes training_sample rows whose image file no longer
+// exists on disk (e.g. full-screen PNGs wiped by a prior cleanup). These rows
+// are dead weight — no image can ever be used for training. Returns the number
+// of rows removed.
+func PruneOrphanedSamples() (int, error) {
+	if trainDB == nil {
+		if err := InitTrainingStore(); err != nil {
+			return 0, err
+		}
+	}
+	rows, err := trainDB.Query(`SELECT id, image_path FROM training_samples LIMIT 5000`)
+	if err != nil {
+		return 0, fmt.Errorf("query samples: %w", err)
+	}
+	defer rows.Close()
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		var path string
+		if err := rows.Scan(&id, &path); err != nil {
+			continue
+		}
+		if _, statErr := os.Stat(path); os.IsNotExist(statErr) {
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	for _, id := range ids {
+		trainDB.Exec("DELETE FROM training_samples WHERE id = ?", id)
+	}
+	trainDB.Exec("VACUUM")
+	return len(ids), nil
 }
 
 func StartRetentionPruner(retentionDays int) {
@@ -516,6 +586,9 @@ func StartRetentionPruner(retentionDays int) {
 					if ActiveConfig != nil && ActiveConfig.RetentionDays > 0 {
 						if _, err := PruneOldSamples(ActiveConfig.RetentionDays); err != nil {
 							slog.Warn("retention pruner failed", "error", err)
+						}
+						if n, err := PruneOrphanedSamples(); err == nil && n > 0 {
+							slog.Info("orphaned sample pruner cleaned", "deleted", n)
 						}
 						if n := PruneTextLocations(ActiveConfig.RetentionDays); n > 0 {
 							slog.Info("text location pruner cleaned", "deleted", n)

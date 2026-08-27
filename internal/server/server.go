@@ -672,7 +672,7 @@ func clickHandler(ctx context.Context, req *mcp.CallToolRequest, args ClickArgs)
 		return nil, nil, fmt.Errorf("click failed: %w", err)
 	}
 	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatClick,
-		fmt.Sprintf("click at (%d,%d)", args.X, args.Y))
+		fmt.Sprintf("click at (%d,%d)", args.X, args.Y), rx, ry, rw, rh)
 	var vr *actions.VerifyResult
 	if shouldVerify(args.AutoVerify, args.Expected) {
 		vr = actions.VerifyAction(verifyCfg(args.Expected, &rx, &ry, &rw, &rh))
@@ -826,7 +826,7 @@ func typeHandler(ctx context.Context, req *mcp.CallToolRequest, args TypeArgs) (
 	if err := actions.TypeText(args.Text); err != nil {
 		return nil, nil, fmt.Errorf("type failed: %w", err)
 	}
-	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatType, "type text")
+	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatType, "type text", rx, ry, rw, rh)
 	var vr *actions.VerifyResult
 	if shouldVerify(args.AutoVerify, args.Expected) {
 		vr = actions.VerifyAction(verifyCfg(args.Expected, &rx, &ry, &rw, &rh))
@@ -856,7 +856,7 @@ func dragHandler(ctx context.Context, req *mcp.CallToolRequest, args DragArgs) (
 		return nil, nil, fmt.Errorf("drag failed: %w", err)
 	}
 	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatGeneral,
-		fmt.Sprintf("drag from (%d,%d) to (%d,%d)", args.FromX, args.FromY, args.ToX, args.ToY))
+		fmt.Sprintf("drag from (%d,%d) to (%d,%d)", args.FromX, args.FromY, args.ToX, args.ToY), rx, ry, rw, rh)
 	var vr *actions.VerifyResult
 	if shouldVerify(args.AutoVerify, args.Expected) {
 		vr = actions.VerifyAction(verifyCfg(args.Expected, &rx, &ry, &rw, &rh))
@@ -1199,12 +1199,12 @@ func findTextAndClickHandler(ctx context.Context, req *mcp.CallToolRequest, args
 	if err != nil {
 		return nil, nil, fmt.Errorf("find_text_and_click: %w", err)
 	}
+	frx, fry, frw, frh := actions.SmartRegionAround(cx, cy, 400)
 	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatClick,
-		fmt.Sprintf("find text and click: %s", args.Text))
+		fmt.Sprintf("find text and click: %s", args.Text), frx, fry, frw, frh)
 	var vr *actions.VerifyResult
 	if shouldVerify(args.AutoVerify, args.Expected) {
-		rx, ry, rw, rh := actions.SmartRegionAround(cx, cy, 400)
-		vr = actions.VerifyAction(verifyCfg(args.Expected, &rx, &ry, &rw, &rh))
+		vr = actions.VerifyAction(verifyCfg(args.Expected, &frx, &fry, &frw, &frh))
 	}
 	return verifiedResult(nil, vr)
 }
@@ -1221,7 +1221,7 @@ func typeAndSubmitHandler(ctx context.Context, req *mcp.CallToolRequest, args Ty
 	if err := actions.TypeAndSubmit(args.Text); err != nil {
 		return nil, nil, fmt.Errorf("type_and_submit: %w", err)
 	}
-	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatType, "type and submit")
+	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatType, "type and submit", rx, ry, rw, rh)
 	var vr *actions.VerifyResult
 	if shouldVerify(args.AutoVerify, args.Expected) {
 		vr = actions.VerifyAction(verifyCfg(args.Expected, &rx, &ry, &rw, &rh))
@@ -1251,8 +1251,9 @@ func hoverHandler(ctx context.Context, req *mcp.CallToolRequest, args HoverArgs)
 	if err := actions.Hover(args.X, args.Y); err != nil {
 		return nil, nil, fmt.Errorf("hover: %w", err)
 	}
+	hrx, hry, hrw, hrh := actions.SmartRegionAround(args.X, args.Y, 400)
 	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatGeneral,
-		fmt.Sprintf("hover at (%d,%d)", args.X, args.Y))
+		fmt.Sprintf("hover at (%d,%d)", args.X, args.Y), hrx, hry, hrw, hrh)
 	return &mcp.CallToolResult{}, map[string]any{"ok": true}, nil
 }
 
@@ -1283,7 +1284,7 @@ func selectAllAndTypeHandler(ctx context.Context, req *mcp.CallToolRequest, args
 	if err := actions.SelectAllAndType(args.Text); err != nil {
 		return nil, nil, fmt.Errorf("select_all_and_type: %w", err)
 	}
-	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatType, "select all and type")
+	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatType, "select all and type", rx, ry, rw, rh)
 	var vr *actions.VerifyResult
 	if shouldVerify(args.AutoVerify, args.Expected) {
 		vr = actions.VerifyAction(verifyCfg(args.Expected, &rx, &ry, &rw, &rh))
@@ -1316,8 +1317,13 @@ func clickMenuItemHandler(ctx context.Context, req *mcp.CallToolRequest, args Cl
 	if err != nil {
 		return nil, nil, fmt.Errorf("click_menu_item: %w", err)
 	}
-	actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatClick,
-		fmt.Sprintf("click menu item: %s", args.MenuItemText))
+	if rx != nil && ry != nil && rw != nil && rh != nil {
+		actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatClick,
+			fmt.Sprintf("click menu item: %s", args.MenuItemText), *rx, *ry, *rw, *rh)
+	} else {
+		actions.SaveSnapshotAfterAction(actions.TrainingSourceRaw, actions.TrainingCatClick,
+			fmt.Sprintf("click menu item: %s", args.MenuItemText))
+	}
 	var vr *actions.VerifyResult
 	if shouldVerify(args.AutoVerify, args.Expected) {
 		vr = actions.VerifyAction(verifyCfg(args.Expected, rx, ry, rw, rh))
@@ -1634,6 +1640,66 @@ func onnxWatchCacheHandler(ctx context.Context, req *mcp.CallToolRequest, _ any)
 	return &mcp.CallToolResult{}, map[string]any{"detections": actions.GetCachedDetections()}, nil
 }
 
+// watcherLockStatusHandler reports whether the watcher's training-crop capture
+// is achievement-locked. When locked, the watcher still detects/caches for
+// reference but never persists training samples; the AI must unlock it
+// (watcher_unlock) once it has gathered confident data from real interactions.
+func watcherLockStatusHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
+	cfg := actions.ActiveConfig
+	locked := true
+	actionSamples := 0
+	if cfg != nil {
+		locked = cfg.WatcherLocked
+		if stats, err := actions.TrainingStatsReport(); err == nil {
+			actionSamples = stats.BySource["raw"]
+		}
+	}
+	return &mcp.CallToolResult{}, map[string]any{
+		"locked":           locked,
+		"unlocked":         !locked,
+		"action_signal":    actionSamples,
+		"message":          watcherLockMessage(locked, actionSamples),
+	}, nil
+}
+
+// watcherUnlockHandler grants the watcher permission to persist training crops.
+// The AI calls this after proving competence through real interactive actions
+// whose structured (class, location, confidence) detections have built up a
+// trustworthy prior basis. The unlock persists across reboots.
+func watcherUnlockHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
+	cfg := actions.ActiveConfig
+	if cfg == nil {
+		return nil, nil, fmt.Errorf("watcher_unlock: no active config")
+	}
+	if !cfg.WatcherLocked {
+		return &mcp.CallToolResult{}, map[string]any{
+			"locked":   false,
+			"unlocked": true,
+			"message":  "watcher already unlocked",
+		}, nil
+	}
+	cfg.WatcherLocked = false
+	if err := cfg.Save(); err != nil {
+		return nil, nil, fmt.Errorf("watcher_unlock: persist config: %w", err)
+	}
+	slog.Info("watcher unlocked by AI", "reason", "ai granted")
+	return &mcp.CallToolResult{}, map[string]any{
+		"locked":   false,
+		"unlocked": true,
+		"message":  "watcher unlocked; it will persist training crops until locked again",
+	}, nil
+}
+
+func watcherLockMessage(locked bool, actionSamples int) string {
+	if !locked {
+		return "watcher unlocked: it will snapshot new/uncertain elements as it learns"
+	}
+	if actionSamples < 5 {
+		return "watcher locked: gather confident real-action detections, then call watcher_unlock"
+	}
+	return "watcher locked: real-action training basis exists; call watcher_unlock when confident"
+}
+
 type TemplateStoreArgs struct {
 	ElementKey        string   `json:"element_key"`
 	Scope             string   `json:"scope,omitempty"`
@@ -1944,6 +2010,7 @@ func trainingCleanupNoiseHandler(ctx context.Context, req *mcp.CallToolRequest, 
 type SetConfigArgs struct {
 	TrainingEnabled      *bool    `json:"training_enabled,omitempty"`
 	PriorAdjustment      *bool    `json:"prior_adjustment,omitempty"`
+	WatcherLocked        *bool    `json:"watcher_locked,omitempty"`
 	VerifyBounds         *bool    `json:"verify_bounds,omitempty"`
 	LogLevel             string   `json:"log_level,omitempty"`
 	WatcherEnabled       *bool    `json:"watcher_enabled,omitempty"`
@@ -2350,6 +2417,13 @@ func setConfigHandler(ctx context.Context, req *mcp.CallToolRequest, args SetCon
 			changed = true
 		}
 	}
+	if args.WatcherLocked != nil {
+		val := *args.WatcherLocked
+		if cfg.WatcherLocked != val {
+			cfg.WatcherLocked = val
+			changed = true
+		}
+	}
 	if args.VerifyBounds != nil {
 		val := *args.VerifyBounds
 		if cfg.VerifyBounds != val {
@@ -2521,6 +2595,7 @@ func setConfigHandler(ctx context.Context, req *mcp.CallToolRequest, args SetCon
 		"log_level":               cfg.LogLevel,
 		"watcher_running":         watcherStatus.Running,
 		"watcher_interval_secs":   cfg.WatcherIntervalSecs,
+		"watcher_locked":          cfg.WatcherLocked,
 		"tool_denylist":           cfg.ToolDenylist,
 		"retention_days":          cfg.RetentionDays,
 		"chain_abort_enabled":     cfg.ChainAbortEnabled,
@@ -2554,6 +2629,7 @@ func getConfigHandler(_ context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.Ca
 		"watcher_auto_start":      cfg.WatcherAutoStart,
 		"watcher_interval_seconds": cfg.WatcherIntervalSecs,
 		"watcher_running":         watcherStatus.Running,
+		"watcher_locked":          cfg.WatcherLocked,
 		"tool_denylist":           cfg.ToolDenylist,
 		"retention_days":          cfg.RetentionDays,
 		"chain_abort_enabled":     cfg.ChainAbortEnabled,
@@ -2889,7 +2965,7 @@ func New(version string) *mcp.Server {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
 	slog.SetDefault(logger)
 
-	slog.Info("starting go-mcp-computer-use", "version", version, "tools", 156, "tools_doc", "docs/tools.md")
+	slog.Info("starting go-mcp-computer-use", "version", version, "tools", 158, "tools_doc", "docs/tools.md")
 
 	if cfg.UIAWarmup {
 		go func() {
@@ -2922,6 +2998,22 @@ func New(version string) *mcp.Server {
 	if cfg.RetentionDays > 0 && cfg.TrainingEnabled {
 		actions.StartRetentionPruner(cfg.RetentionDays)
 		slog.Info("retention pruner started", "retention_days", cfg.RetentionDays)
+	}
+
+	// Reclaim dead space on boot: delete training-sample rows whose image file
+	// no longer exists (e.g. full-screen PNGs cleaned up earlier) and VACUUM so
+	// SQLite actually releases the disk. Runs once at startup before the
+	// watcher starts writing, to avoid lock contention.
+	if cfg.TrainingEnabled {
+		go func() {
+			if n, err := actions.PruneOrphanedSamples(); err == nil {
+				if n > 0 {
+					slog.Info("startup orphan sample prune", "deleted", n)
+				}
+			} else {
+				slog.Warn("startup orphan sample prune failed", "error", err)
+			}
+		}()
 	}
 
 	if cfg.ChainAbortEnabled {
@@ -3493,6 +3585,16 @@ func New(version string) *mcp.Server {
 	}, onnxWatchCacheHandler)
 
 	addToolClean(server, &mcp.Tool{
+		Name:        "watcher_lock_status",
+		Description: "Report whether the watcher's training-crop capture is achievement-locked. When locked, the watcher detects/caches for reference but never persists training samples. Returns locked, unlocked, and the count of real-action training samples gathered.",
+	}, watcherLockStatusHandler)
+
+	addToolClean(server, &mcp.Tool{
+		Name:        "watcher_unlock",
+		Description: "Grant the watcher permission to persist training crops. Call after gathering confident data from real interactive actions (click/type/record) whose detections have built a trustworthy prior basis. The unlock persists across reboots.",
+	}, watcherUnlockHandler)
+
+	addToolClean(server, &mcp.Tool{
 		Name:        "layout_validate",
 		Description: "Validate stored UI element layout against the current screen. Checks window existence, position drift, and OCR keyword verification. Returns adjusted coordinates and confidence levels (ok/drifted/stale).",
 	}, layoutValidateHandler)
@@ -3671,7 +3773,7 @@ func New(version string) *mcp.Server {
 
 	addToolClean(server, &mcp.Tool{
 		Name:        "set_config",
-		Description: "Update runtime configuration. Accepts any subset of: training_enabled (stop/start background screenshot saving), prior_adjustment (enable/disable ML prior confidence tuning), verify_bounds (toggle coordinate bounds checking), log_level (debug/info/warn/error), watcher_enabled (start/stop the background screenshot watcher), watcher_interval_seconds (change polling frequency while running), tool_denylist (list of tool names to disable, e.g. [\"shutdown\",\"restart\"]), retention_days (auto-prune training samples older than N days, 0=disabled), chain_abort_enabled (enable/disable global hotkey abort), chain_abort_keys (hotkey combo like \"Ctrl+Shift+Escape\"), chain_abort_poll_ms (polling interval), window_lock_enabled (enable/disable screen tool locking), window_lock_auto_focus (auto re-focus locked window), log_file_enabled (enable/disable file-based logging), log_file_max_size_mb (max MB per log file before rotation), log_file_retention (number of rotated log files to keep), dashboard_enabled (enable/disable web dashboard on random port). Changes persist to disk.",
+		Description: "Update runtime configuration. Accepts any subset of: training_enabled (stop/start background screenshot saving), prior_adjustment (enable/disable ML prior confidence tuning), watcher_locked (achievement lock: when true the watcher detects/caches but never persists training crops until the AI unlocks via watcher_unlock), verify_bounds (toggle coordinate bounds checking), log_level (debug/info/warn/error), watcher_enabled (start/stop the background screenshot watcher), watcher_interval_seconds (change polling frequency while running), tool_denylist (list of tool names to disable, e.g. [\"shutdown\",\"restart\"]), retention_days (auto-prune training samples older than N days, 0=disabled), chain_abort_enabled (enable/disable global hotkey abort), chain_abort_keys (hotkey combo like \"Ctrl+Shift+Escape\"), chain_abort_poll_ms (polling interval), window_lock_enabled (enable/disable screen tool locking), window_lock_auto_focus (auto re-focus locked window), log_file_enabled (enable/disable file-based logging), log_file_max_size_mb (max MB per log file before rotation), log_file_retention (number of rotated log files to keep), dashboard_enabled (enable/disable web dashboard on random port). Changes persist to disk.",
 	}, setConfigHandler)
 
 	addToolClean(server, &mcp.Tool{

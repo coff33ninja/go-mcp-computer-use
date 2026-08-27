@@ -8,7 +8,7 @@ A survey of the computer-use agent landscape as of mid-2026, with detailed deep-
 
 | Project | Lang | MCP | Desktop | ONNX/ML | Training | Memory | Tools | Stars | Open Source |
 |---------|------|-----|---------|---------|---------|--------|-------|-------|-------------|
-| **[go-mcp-computer-use](https://github.com/coff33ninja/go-mcp-computer-use)** | Go | ✅ | ✅ Win | ✅ YOLO11+MobileNet + Go-native transformer | ✅ auto-collect + self-improving | ✅ SQLite FTS | 156 | — | ✅ MIT |
+| **[go-mcp-computer-use](https://github.com/coff33ninja/go-mcp-computer-use)** | Go | ✅ | ✅ Win | ✅ YOLO11+MobileNet + Go-native transformer | ✅ auto-collect + self-improving | ✅ SQLite FTS | 158 | — | ✅ MIT |
 | **[Cua](https://github.com/trycua/cua)** | Py/HTML | ✅ | ✅ Win/Mac/Linux | ❌ | ❌ | ❌ | SDK | 19.4k | ✅ |
 | **[Agent-S](https://github.com/simular-ai/Agent-S)** | Python | ❌ | ✅ Win/Mac/Linux | ❌ | ❌ | ✅ in-context RL | SDK | 12k | ✅ |
 | **[Bytebot](https://github.com/bytebot-ai/bytebot)** | TypeScript | ❌ | ❌ Linux container | ❌ | ❌ | ❌ | SDK | 11.1k | ✅ |
@@ -37,7 +37,7 @@ Windows-MCP is the closest direct competitor — both are MCP servers for Window
 | **Memory cache** | SQLite FTS5 with TTL | None |
 | **Training pipeline** | Auto-screenshots per action, categorized, YOLO export | None |
 | **UI Automation** | Native COM UIAutomation (IUIAutomation) | UIA via Python |
-| **Tool count** | 156 | ~30 |
+| **Tool count** | 158 | ~30 |
 | **Chained automation** | if/else, loops, polling, verify, error handling | None |
 | **Browser automation** | No (basic find_text_and_click) | Snapshot + DOM mode for Chrome/Edge/Firefox |
 | **Security** | `tool_denylist` config-based enable/disable (stdio/local only) | Bearer token, IP allowlist, TLS, OAuth 2.0 + PKCE, CORS, per-tool enable/disable |
@@ -67,14 +67,14 @@ DesktopCtl is a Rust CLI tool for desktop control, not an MCP server. It uses GP
 
 | Feature | go-mcp-computer-use | DesktopCtl |
 |---------|-------------------|------------|
-| **Interface** | MCP protocol (156 tools) | CLI commands |
+| **Interface** | MCP protocol (158 tools) | CLI commands |
 | **Vision** | ONNX YOLO11 + MobileNetV3 + Go-native transformer | GPU-accelerated OCR (no object detection) |
 | **Privacy** | Screenshots shared with AI agent | Screenshots stay local by default |
 | **Transport** | stdio (TCP optional) | CLI pipes |
 | **Language** | Go | Rust |
-| **Unique** | Training pipeline, memory, priors, Go-native transformer (self-improving), 156 tools | `screen tokenize` for structured UI tokens |
+| **Unique** | Training pipeline, memory, priors, Go-native transformer (self-improving), 158 tools | `screen tokenize` for structured UI tokens |
 
-**Verdict**: DesktopCtl prioritizes privacy (screenshots not shared by default) and structured token output. go-mcp-computer-use prioritizes depth (training, memory, 156 tools).
+**Verdict**: DesktopCtl prioritizes privacy (screenshots not shared by default) and structured token output. go-mcp-computer-use prioritizes depth (training, memory, 158 tools).
 
 ---
 
