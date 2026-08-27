@@ -48,7 +48,8 @@ MCP server for Windows desktop computer use. Exposes mouse, keyboard, screenshot
 - **Memory-backed UI element cache** — ONNX detections auto-stored as memory facts (`ui:{window}:{class}`) with TTL. AI reuses cached coordinates across sessions.
 - **`find_ui_element` tool** — cascading lookup: memory → ONNX → OCR. Self-learning: saves findings to memory + training store.
 - **Go-native ML transformer** — 14K-param transformer engine (64-dim, 2 layers, 2 heads) trained in-process via Gorgonia. Predicts optimal actions from OCR context. Self-improving: learns from each session, persists to `model.gob`. No Python, no ONNX for training.
-- **158 MCP tools** — see [`docs/reference/tools.md`](docs/reference/tools.md) for the full listing
+- **UI-aware element detection** — a fused annotation pipeline (`onnx_detect`, `onnx_classify`, and every capture tool) pairs a UI-native **box proposer** — [Salesforce GPA-GUI-Detector](https://huggingface.co/Salesforce/GPA-GUI-Detector) (MIT), a single-class `icon` ONNX detector fine-tuned from OmniParser — with the 15-class MobileNet UI classifier to tag each element with its real control type (`button`, `link`, `text_input`, ...). The watcher & element-priors novelty gate key on that MobileNet label so the ML learns per-control-type locations rather than generic object classes. See [Models](#models).
+- **159 MCP tools** — see [`docs/reference/tools.md`](docs/reference/tools.md) for the full listing
 
 ## Tools
 
@@ -80,6 +81,18 @@ See [`docs/guides/build.md`](docs/guides/build.md) for:
 ## Configuration
 
 See [`docs/reference/configuration.md`](docs/reference/configuration.md) for the full config file reference.
+
+## Models
+
+The ONNX ML tier (`onnx_detect`, `onnx_classify`, the watcher, and the fused annotation pipeline) uses three models stored in `%APPDATA%\go-mcp-computer-use\models\`:
+
+- **`gpa_gui_detector.onnx`** — UI element **box proposer**. A single-class (`icon`) ONNX export of [Salesforce GPA-GUI-Detector](https://huggingface.co/Salesforce/GPA-GUI-Detector) (MIT, fine-tuned from OmniParser). Proposes interactive-element boxes; it does not distinguish control types.
+- **`mobilenetv3_small.onnx`** — 15-class UI control classifier (`button`, `link`, `text_input`, ...). Provides the authoritative per-element label that drives priors, dedup, and the clickable gate.
+- **`onnxruntime.dll`** — the ONNX Runtime native DLL.
+
+All three **auto-download on first use** when missing — no manual setup required. The detector downloads from `https://github.com/coff33ninja/go-mcp-computer-use/releases/latest/download/gpa_gui_detector.onnx`, a URL GitHub redirects to the **newest** release's asset, so it always matches the installed build across version updates. (See `ONNXDownload` for a manual pull.)
+
+To **regenerate `gpa_gui_detector.onnx`** from source (e.g. to re-release a model or iterate on the conversion), see [`scripts/gpa-gui-export/`](scripts/gpa-gui-export/README.md) — a uv-based project (`uv sync` + `uv run export.py`) that downloads the HF checkpoint, validates the single-`icon` layout, and exports the ONNX. CI runs the same script and attaches the model to every release.
 
 ## Architecture
 

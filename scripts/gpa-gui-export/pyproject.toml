@@ -1,0 +1,17 @@
+[project]
+name = "gpa-gui-export"
+version = "0.1.0"
+description = "Convert Salesforce GPA-GUI-Detector (model.pt) to the single-class 'icon' ONNX used by go-mcp-computer-use"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "ultralytics==8.4.130",
+    "huggingface_hub==1.28.0",
+    "onnx==1.22.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.uv]
+package = false

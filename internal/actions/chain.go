@@ -84,9 +84,19 @@ type ChainStep struct {
 }
 
 type VerifyStepConfig struct {
-	Expected *ExpConfig `json:"expected,omitempty"`
-	Retries  int        `json:"retries,omitempty"`
-	WaitMs   int        `json:"wait_ms,omitempty"`
+	Expected *ExpConfig         `json:"expected,omitempty"`
+	Retries  int                `json:"retries,omitempty"`
+	WaitMs   int                `json:"wait_ms,omitempty"`
+	Classify *ClassifyVerifyCfg `json:"classify,omitempty"`
+}
+
+// ClassifyVerifyCfg, when enabled, runs the MobileNet GUI element classifier as
+// an advisory tier after a verify step. It never fails the step — it only adds
+// a `classify` advisory payload to the step output.
+type ClassifyVerifyCfg struct {
+	Enabled bool   `json:"enabled,omitempty"`
+	TopN    int    `json:"top_n,omitempty"`
+	Source  string `json:"source,omitempty"`
 }
 
 type ChainResult struct {
@@ -746,21 +756,62 @@ func execVerify(step ChainStep, args map[string]any, _ *chainState) StepResult {
 			if !vr.Passed {
 				errStr = vr.Reason
 			}
+
+			stepOut := map[string]any{
+				"tool_output":  output,
+				"tool_error":   execErr,
+				"verified":     vr.Passed,
+				"verification": vr,
+			}
+			// Advisory MobileNet classification tier — never fails the step.
+			if cfg.Classify != nil && cfg.Classify.Enabled {
+				if adv, aerr := classifyAdvisory(cfg.Classify); aerr == nil {
+					stepOut["classify"] = adv
+				}
+			}
 			return StepResult{
 				Tool:    step.Tool,
 				Success: vr.Passed,
 				Error:   errStr,
-				Output: map[string]any{
-					"tool_output":  output,
-					"tool_error":   execErr,
-					"verified":     vr.Passed,
-					"verification": vr,
-				},
+				Output:  stepOut,
 			}
 		}
 	}
 
 	return StepResult{Tool: step.Tool, Success: false, Error: "verify: max retries exceeded"}
+}
+
+// classifyAdvisory runs the MobileNet classifier over the requested source and
+// returns a compact, serializable advisory payload. It is best-effort: errors
+// are returned so callers can ignore them.
+func classifyAdvisory(cfg *ClassifyVerifyCfg) (any, error) {
+	topN := cfg.TopN
+	if topN <= 0 {
+		topN = 3
+	}
+	source := cfg.Source
+	if source == "" {
+		source = "window"
+	}
+	var out *ClassificationOutput
+	var err error
+	switch source {
+	case "screen":
+		out, err = ClassifyScreen(topN)
+	case "region":
+		b := VirtualScreenBounds()
+		out, err = ClassifyRegion(b.X, b.Y, b.W, b.H, topN)
+	default:
+		out, err = ClassifyWindow(topN)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"model":    out.Model,
+		"total_ms": out.TotalMs,
+		"top":      out.Top,
+	}, nil
 }
 
 // ── Verify UI step ──

@@ -96,6 +96,11 @@ func Click(args ClickInput) (err error) {
 		in(upFlag)
 	}
 
+	// Advisory post-click validation: classify the click target (MobileNet +
+	// priors + ML memory) so the AI can confirm what it clicked. Best-effort,
+	// never fails the click.
+	RecordClickValidation(classifyClickTarget(args.X, args.Y))
+
 	return nil
 }
 

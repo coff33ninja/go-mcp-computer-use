@@ -11,11 +11,11 @@ import (
 	"runtime"
 	"strings"
 
-	jsonschema "github.com/google/jsonschema-go/jsonschema"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/coff33ninja/go-mcp-computer-use/internal/actions"
 	"github.com/coff33ninja/go-mcp-computer-use/internal/config"
 	"github.com/coff33ninja/go-mcp-computer-use/internal/logging"
+	jsonschema "github.com/google/jsonschema-go/jsonschema"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 func shouldVerify(autoVerify *bool, expected *actions.ExpConfig) bool {
@@ -124,13 +124,41 @@ func verifiedResult(extra any, vr *actions.VerifyResult) (*mcp.CallToolResult, a
 		if extra == nil {
 			return &mcp.CallToolResult{}, map[string]any{"ok": true}, nil
 		}
-		return &mcp.CallToolResult{}, extra, nil
+		// extra carries a {validated: ...} map — merge it so "validated" stays
+		// at the top level alongside "ok".
+		out := map[string]any{"ok": true}
+		if m, ok := extra.(map[string]any); ok {
+			for k, v := range m {
+				out[k] = v
+			}
+		} else {
+			out["extra"] = extra
+		}
+		return &mcp.CallToolResult{}, out, nil
 	}
 	out := map[string]any{"ok": true, "verified": vr.Passed, "verification": vr}
 	if extra != nil {
-		out["extra"] = extra
+		if m, ok := extra.(map[string]any); ok {
+			for k, v := range m {
+				out[k] = v
+			}
+		} else {
+			out["extra"] = extra
+		}
 	}
 	return &mcp.CallToolResult{}, out, nil
+}
+
+// validationExtra returns the advisory post-click validation as a result
+// payload, wrapped under a stable "validated" key so the AI sees a consistent
+// top-level shape whether or not OCR auto-verify ran. Returns nil when there is
+// no validation to report (no click in this request).
+func validationExtra() any {
+	v := actions.LastClickValidation()
+	if v == nil {
+		return nil
+	}
+	return map[string]any{"validated": v}
 }
 
 type VerifyArgs struct {
@@ -144,6 +172,8 @@ type ScreenshotArgs struct {
 	Y *int32 `json:"y,omitempty"`
 	W *int32 `json:"w,omitempty"`
 	H *int32 `json:"h,omitempty"`
+	// Language is passed to the OCR signal inside the annotation (optional).
+	Language string `json:"language,omitempty"`
 }
 
 type ClickArgs struct {
@@ -159,12 +189,12 @@ type MoveMouseArgs struct {
 	Y int32 `json:"y"`
 }
 
-	type ScrollArgs struct {
-		Clicks     int32  `json:"clicks"`
-		Direction  string `json:"direction,omitempty"`
-		Horizontal bool   `json:"horizontal,omitempty"`
-		VerifyArgs
-	}
+type ScrollArgs struct {
+	Clicks     int32  `json:"clicks"`
+	Direction  string `json:"direction,omitempty"`
+	Horizontal bool   `json:"horizontal,omitempty"`
+	VerifyArgs
+}
 
 type KeyPressArgs struct {
 	Keys []string `json:"keys"`
@@ -305,18 +335,18 @@ type PingArgs struct {
 }
 
 type FindTextAndClickArgs struct {
-	Text      string  `json:"text"`
-	Language  string  `json:"language,omitempty"`
-	X         *int32  `json:"x,omitempty"`
-	Y         *int32  `json:"y,omitempty"`
-	W         *int32  `json:"w,omitempty"`
-	H         *int32  `json:"h,omitempty"`
-	MaxScrolls    *int32 `json:"max_scrolls,omitempty"`
-	ScrollClicks  *int32 `json:"scroll_clicks,omitempty"`
-	ScrollDown    *bool  `json:"scroll_down,omitempty"`
-	WindowTitle   string `json:"window_title,omitempty"`
-	SkipMemory    *bool  `json:"skip_memory,omitempty"`
-	SkipSystemFind *bool `json:"skip_system_find,omitempty"`
+	Text           string `json:"text"`
+	Language       string `json:"language,omitempty"`
+	X              *int32 `json:"x,omitempty"`
+	Y              *int32 `json:"y,omitempty"`
+	W              *int32 `json:"w,omitempty"`
+	H              *int32 `json:"h,omitempty"`
+	MaxScrolls     *int32 `json:"max_scrolls,omitempty"`
+	ScrollClicks   *int32 `json:"scroll_clicks,omitempty"`
+	ScrollDown     *bool  `json:"scroll_down,omitempty"`
+	WindowTitle    string `json:"window_title,omitempty"`
+	SkipMemory     *bool  `json:"skip_memory,omitempty"`
+	SkipSystemFind *bool  `json:"skip_system_find,omitempty"`
 	VerifyArgs
 }
 
@@ -333,6 +363,8 @@ type LaunchAndWaitArgs struct {
 
 type ScreenshotElementArgs struct {
 	Handle uintptr `json:"handle"`
+	// Language is passed to the OCR signal inside the annotation (optional).
+	Language string `json:"language,omitempty"`
 }
 
 type OCRWindowArgs struct {
@@ -364,10 +396,10 @@ type SelectAllAndTypeArgs struct {
 }
 
 type ClickMenuItemArgs struct {
-	WindowTitle  string `json:"window_title,omitempty"`
+	WindowTitle  string  `json:"window_title,omitempty"`
 	Handle       uintptr `json:"handle,omitempty"`
-	MenuItemText string `json:"menu_item_text"`
-	Language     string `json:"language,omitempty"`
+	MenuItemText string  `json:"menu_item_text"`
+	Language     string  `json:"language,omitempty"`
 	VerifyArgs
 }
 
@@ -612,10 +644,10 @@ func chainInputSchema() *jsonschema.Schema {
 }
 
 type ChainArgs struct {
-	Steps          []actions.ChainStep `json:"steps"`
-	TimeoutMs      int                 `json:"timeout_ms,omitempty"`
-	OnError        string              `json:"on_error,omitempty"`
-	AutoVerifyFocus bool               `json:"auto_verify_focus,omitempty"`
+	Steps           []actions.ChainStep `json:"steps"`
+	TimeoutMs       int                 `json:"timeout_ms,omitempty"`
+	OnError         string              `json:"on_error,omitempty"`
+	AutoVerifyFocus bool                `json:"auto_verify_focus,omitempty"`
 }
 
 func chainHandler(ctx context.Context, req *mcp.CallToolRequest, args ChainArgs) (*mcp.CallToolResult, any, error) {
@@ -633,8 +665,7 @@ func chainHandler(ctx context.Context, req *mcp.CallToolRequest, args ChainArgs)
 }
 
 func screenshotHandler(ctx context.Context, req *mcp.CallToolRequest, args ScreenshotArgs) (*mcp.CallToolResult, any, error) {
-	var b64 string
-	var err error
+	var ann *actions.AnnotatedCapture
 
 	if args.W != nil && args.H != nil {
 		x := int32(0)
@@ -645,20 +676,20 @@ func screenshotHandler(ctx context.Context, req *mcp.CallToolRequest, args Scree
 		if args.Y != nil {
 			y = *args.Y
 		}
-		b64, err = actions.CaptureRegion(x, y, *args.W, *args.H)
+		ann = actions.AnnotateRegion(x, y, *args.W, *args.H, args.Language, 3)
 	} else {
-		b64, err = actions.CaptureScreen()
+		ann = actions.AnnotateScreen(args.Language, 3)
 	}
 
-	if err != nil {
-		return nil, nil, fmt.Errorf("screenshot failed: %w", err)
+	if ann.ImageB64 == "" {
+		return nil, nil, fmt.Errorf("screenshot failed: no capture")
 	}
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
-			&mcp.TextContent{Text: b64},
+			&mcp.TextContent{Text: ann.ImageB64},
 		},
-	}, nil, nil
+	}, ann, nil
 }
 
 func clickHandler(ctx context.Context, req *mcp.CallToolRequest, args ClickArgs) (*mcp.CallToolResult, any, error) {
@@ -677,7 +708,7 @@ func clickHandler(ctx context.Context, req *mcp.CallToolRequest, args ClickArgs)
 	if shouldVerify(args.AutoVerify, args.Expected) {
 		vr = actions.VerifyAction(verifyCfg(args.Expected, &rx, &ry, &rw, &rh))
 	}
-	return verifiedResult(nil, vr)
+	return verifiedResult(validationExtra(), vr)
 }
 
 func moveMouseHandler(ctx context.Context, req *mcp.CallToolRequest, args MoveMouseArgs) (*mcp.CallToolResult, any, error) {
@@ -1083,23 +1114,24 @@ func lockWorkstationHandler(ctx context.Context, req *mcp.CallToolRequest, _ any
 }
 
 func ocrHandler(ctx context.Context, req *mcp.CallToolRequest, args OCRArgs) (*mcp.CallToolResult, any, error) {
-	var result *actions.OCRResult
-	var err error
-
+	var ann *actions.AnnotatedCapture
 	if args.W != nil && args.H != nil {
 		x := int32(0)
 		y := int32(0)
-		if args.X != nil { x = *args.X }
-		if args.Y != nil { y = *args.Y }
-		result, err = actions.OCRRegion(x, y, *args.W, *args.H, args.Language)
+		if args.X != nil {
+			x = *args.X
+		}
+		if args.Y != nil {
+			y = *args.Y
+		}
+		ann = actions.AnnotateRegion(x, y, *args.W, *args.H, args.Language, 3)
 	} else {
-		result, err = actions.OCRScreen(args.Language)
+		ann = actions.AnnotateScreen(args.Language, 3)
 	}
-
-	if err != nil {
-		return nil, nil, fmt.Errorf("ocr failed: %w", err)
+	if ann.OCR == nil {
+		return nil, nil, fmt.Errorf("ocr failed: no OCR result")
 	}
-	return &mcp.CallToolResult{}, result, nil
+	return &mcp.CallToolResult{}, ann, nil
 }
 
 type OcrLanguagesArgs struct{}
@@ -1113,11 +1145,11 @@ func ocrLanguagesHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (
 }
 
 func ocrWindowHandler(ctx context.Context, req *mcp.CallToolRequest, args OCRWindowArgs) (*mcp.CallToolResult, any, error) {
-	result, err := actions.OCRWindow(args.Handle, args.Language)
-	if err != nil {
-		return nil, nil, fmt.Errorf("ocr_window: %w", err)
+	ann := actions.AnnotateWindow(args.Handle, args.Language, 3)
+	if ann.OCR == nil {
+		return nil, nil, fmt.Errorf("ocr_window: no OCR result")
 	}
-	return &mcp.CallToolResult{}, result, nil
+	return &mcp.CallToolResult{}, ann, nil
 }
 
 func ocrActiveWindowHandler(ctx context.Context, req *mcp.CallToolRequest, args OcrActiveWindowArgs) (*mcp.CallToolResult, any, error) {
@@ -1125,11 +1157,11 @@ func ocrActiveWindowHandler(ctx context.Context, req *mcp.CallToolRequest, args 
 	if hwnd == 0 {
 		return nil, nil, fmt.Errorf("ocr_active_window: no foreground window")
 	}
-	result, err := actions.OCRWindow(hwnd, args.Language)
-	if err != nil {
-		return nil, nil, fmt.Errorf("ocr_active_window: %w", err)
+	ann := actions.AnnotateWindow(hwnd, args.Language, 3)
+	if ann.OCR == nil {
+		return nil, nil, fmt.Errorf("ocr_active_window: no OCR result")
 	}
-	return &mcp.CallToolResult{}, result, nil
+	return &mcp.CallToolResult{}, ann, nil
 }
 
 func getBrightnessHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
@@ -1206,7 +1238,7 @@ func findTextAndClickHandler(ctx context.Context, req *mcp.CallToolRequest, args
 	if shouldVerify(args.AutoVerify, args.Expected) {
 		vr = actions.VerifyAction(verifyCfg(args.Expected, &frx, &fry, &frw, &frh))
 	}
-	return verifiedResult(nil, vr)
+	return verifiedResult(validationExtra(), vr)
 }
 
 func typeAndSubmitHandler(ctx context.Context, req *mcp.CallToolRequest, args TypeAndSubmitArgs) (*mcp.CallToolResult, any, error) {
@@ -1231,7 +1263,9 @@ func typeAndSubmitHandler(ctx context.Context, req *mcp.CallToolRequest, args Ty
 
 func launchAndWaitHandler(ctx context.Context, req *mcp.CallToolRequest, args LaunchAndWaitArgs) (*mcp.CallToolResult, any, error) {
 	timeout := args.TimeoutMs
-	if timeout == 0 { timeout = 10000 }
+	if timeout == 0 {
+		timeout = 10000
+	}
 	hwnd, err := actions.LaunchAndWait(args.Path, args.WindowTitle, timeout)
 	if err != nil {
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "timeout"}}}, map[string]any{"found": false}, nil
@@ -1240,11 +1274,11 @@ func launchAndWaitHandler(ctx context.Context, req *mcp.CallToolRequest, args La
 }
 
 func screenshotElementHandler(ctx context.Context, req *mcp.CallToolRequest, args ScreenshotElementArgs) (*mcp.CallToolResult, any, error) {
-	b64, err := actions.ScreenshotElement(args.Handle)
-	if err != nil {
-		return nil, nil, fmt.Errorf("screenshot_element: %w", err)
+	ann := actions.AnnotateWindow(args.Handle, args.Language, 3)
+	if ann.ImageB64 == "" {
+		return nil, nil, fmt.Errorf("screenshot_element failed: no capture")
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: b64}}}, nil, nil
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: ann.ImageB64}}}, ann, nil
 }
 
 func hoverHandler(ctx context.Context, req *mcp.CallToolRequest, args HoverArgs) (*mcp.CallToolResult, any, error) {
@@ -1259,12 +1293,20 @@ func hoverHandler(ctx context.Context, req *mcp.CallToolRequest, args HoverArgs)
 
 func waitForTextHandler(ctx context.Context, req *mcp.CallToolRequest, args WaitForTextArgs) (*mcp.CallToolResult, any, error) {
 	timeout := args.TimeoutMs
-	if timeout == 0 { timeout = 10000 }
+	if timeout == 0 {
+		timeout = 10000
+	}
 	var maxScrolls, scrollClicks int32
 	var scrollDown bool
-	if args.MaxScrolls != nil { maxScrolls = *args.MaxScrolls }
-	if args.ScrollClicks != nil { scrollClicks = *args.ScrollClicks }
-	if args.ScrollDown != nil { scrollDown = *args.ScrollDown }
+	if args.MaxScrolls != nil {
+		maxScrolls = *args.MaxScrolls
+	}
+	if args.ScrollClicks != nil {
+		scrollClicks = *args.ScrollClicks
+	}
+	if args.ScrollDown != nil {
+		scrollDown = *args.ScrollDown
+	}
 	result, err := actions.WaitForTextScroll(args.Text, timeout, args.Language, maxScrolls, scrollClicks, scrollDown)
 	if err != nil {
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "not_found"}}}, map[string]any{"found": false}, nil
@@ -1392,7 +1434,9 @@ func getDiskUsageHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (
 
 func openFileExplorerHandler(ctx context.Context, req *mcp.CallToolRequest, args OpenExplorerArgs) (*mcp.CallToolResult, any, error) {
 	path := args.Path
-	if path == "" { path = "C:\\" }
+	if path == "" {
+		path = "C:\\"
+	}
 	if err := actions.OpenFileExplorer(path); err != nil {
 		return nil, nil, fmt.Errorf("open_file_explorer: %w", err)
 	}
@@ -1587,25 +1631,90 @@ func onnxStatusHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*m
 }
 
 func onnxDetectHandler(ctx context.Context, req *mcp.CallToolRequest, args ONNXDetectArgs) (*mcp.CallToolResult, any, error) {
-	// If no image provided, capture full screen
-	imgB64 := args.ImageB64
-	if imgB64 == "" {
-		var err error
-		imgB64, err = actions.CaptureScreen()
-		if err != nil {
-			return nil, nil, fmt.Errorf("onnx_detect screenshot: %w", err)
-		}
+	var ann *actions.AnnotatedCapture
+	if args.ImageB64 != "" {
+		ann = actions.AnnotateDetectImage(args.ImageB64, "", 3, args.Threshold, args.IOUThreshold)
+	} else {
+		ann = actions.AnnotateDetectScreen("", 3, args.Threshold, args.IOUThreshold)
+	}
+	return &mcp.CallToolResult{}, ann, nil
+}
+
+type ONNXClassifyArgs struct {
+	Source   string                    `json:"source,omitempty"`
+	ImageB64 string                    `json:"image_b64,omitempty"`
+	X        int32                     `json:"x,omitempty"`
+	Y        int32                     `json:"y,omitempty"`
+	W        int32                     `json:"w,omitempty"`
+	H        int32                     `json:"h,omitempty"`
+	TopN     int                       `json:"top_n,omitempty"`
+	Elements []actions.DetectedElement `json:"elements,omitempty"`
+}
+
+func onnxClassifyHandler(ctx context.Context, req *mcp.CallToolRequest, args ONNXClassifyArgs) (*mcp.CallToolResult, any, error) {
+	topN := args.TopN
+	if topN <= 0 {
+		topN = 3
+	}
+	source := args.Source
+	if source == "" {
+		source = "screen"
 	}
 
-	result, err := actions.ONNXDetect(actions.DetectionInput{
-		ImageB64:     imgB64,
-		Threshold:    args.Threshold,
-		IOUThreshold: args.IOUThreshold,
-	})
-	if err != nil {
-		return nil, nil, fmt.Errorf("onnx_detect: %w", err)
+	switch source {
+	case "screen":
+		return &mcp.CallToolResult{}, actions.AnnotateScreen("", topN), nil
+	case "region":
+		return &mcp.CallToolResult{}, actions.AnnotateRegion(args.X, args.Y, args.W, args.H, "", topN), nil
+	case "window":
+		hwnd := actions.ForegroundWindowHandle()
+		if hwnd == 0 {
+			return nil, nil, fmt.Errorf("onnx_classify window: no foreground window")
+		}
+		return &mcp.CallToolResult{}, actions.AnnotateWindow(hwnd, "", topN), nil
+	case "elements":
+		out, err := actions.ClassifyElements(args.Elements, topN)
+		if err != nil {
+			return nil, nil, fmt.Errorf("onnx_classify elements: %w", err)
+		}
+		return &mcp.CallToolResult{}, wrapClassifyOutput(out), nil
+	case "crop":
+		top, cerr := actions.ClassifyB64(args.ImageB64, topN)
+		if cerr != nil {
+			return nil, nil, fmt.Errorf("onnx_classify crop: %w", cerr)
+		}
+		return &mcp.CallToolResult{}, wrapClassifyOutput(&actions.ClassificationOutput{Top: top, Model: "mobilenetv3_small", Source: "crop"}), nil
+	default:
+		return nil, nil, fmt.Errorf("onnx_classify: unknown source %q (use screen|window|region|elements|crop)", source)
 	}
-	return &mcp.CallToolResult{}, result, nil
+}
+
+// wrapClassifyOutput converts a raw ClassificationOutput (from the elements/crop
+// onnx_classify sources, where there is no live capture to derive screen boxes)
+// into a minimal AnnotatedCapture so the classify tools return a consistent,
+// AI-actionable shape alongside every other capture tool.
+func wrapClassifyOutput(out *actions.ClassificationOutput) *actions.AnnotatedCapture {
+	if out == nil {
+		return &actions.AnnotatedCapture{Source: "classify", Elements: []actions.AnnotatedElement{}, TotalMs: 0}
+	}
+	ann := &actions.AnnotatedCapture{
+		Source:      out.Source,
+		WindowTitle: out.WindowTitle,
+		TotalMs:     out.TotalMs,
+		Elements:    []actions.AnnotatedElement{},
+	}
+	for _, ec := range out.Elements {
+		ae := actions.AnnotatedElement{
+			Class:          ec.Element.Class,
+			YOLOConfidence: ec.Element.Confidence,
+			ImageBox:       actions.ElementBox{X: ec.Element.X, Y: ec.Element.Y, W: ec.Element.W, H: ec.Element.H},
+			Classified:     ec.Top,
+		}
+		ae.CombinedConfidence = actions.CombineElementConfidence(ae)
+		ae.Clickable = actions.ElementIsClickable(ae)
+		ann.Elements = append(ann.Elements, ae)
+	}
+	return ann
 }
 
 func onnxDownloadHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
@@ -1655,10 +1764,10 @@ func watcherLockStatusHandler(ctx context.Context, req *mcp.CallToolRequest, _ a
 		}
 	}
 	return &mcp.CallToolResult{}, map[string]any{
-		"locked":           locked,
-		"unlocked":         !locked,
-		"action_signal":    actionSamples,
-		"message":          watcherLockMessage(locked, actionSamples),
+		"locked":        locked,
+		"unlocked":      !locked,
+		"action_signal": actionSamples,
+		"message":       watcherLockMessage(locked, actionSamples),
 	}, nil
 }
 
@@ -2008,24 +2117,24 @@ func trainingCleanupNoiseHandler(ctx context.Context, req *mcp.CallToolRequest, 
 }
 
 type SetConfigArgs struct {
-	TrainingEnabled      *bool    `json:"training_enabled,omitempty"`
-	PriorAdjustment      *bool    `json:"prior_adjustment,omitempty"`
-	WatcherLocked        *bool    `json:"watcher_locked,omitempty"`
-	VerifyBounds         *bool    `json:"verify_bounds,omitempty"`
-	LogLevel             string   `json:"log_level,omitempty"`
-	WatcherEnabled       *bool    `json:"watcher_enabled,omitempty"`
-	WatcherIntervalSecs  *int     `json:"watcher_interval_seconds,omitempty"`
-	ToolDenylist         []string `json:"tool_denylist,omitempty"`
-	RetentionDays        *int     `json:"retention_days,omitempty"`
-	ChainAbortEnabled    *bool    `json:"chain_abort_enabled,omitempty"`
-	ChainAbortKeys       string   `json:"chain_abort_keys,omitempty"`
-	ChainAbortPollMs     *int     `json:"chain_abort_poll_ms,omitempty"`
-	WindowLockEnabled    *bool    `json:"window_lock_enabled,omitempty"`
-	WindowLockAutoFocus  *bool    `json:"window_lock_auto_focus,omitempty"`
-	LogFileEnabled       *bool    `json:"log_file_enabled,omitempty"`
-	LogFileMaxSizeMB     *int     `json:"log_file_max_size_mb,omitempty"`
-	LogFileRetention     *int     `json:"log_file_retention,omitempty"`
-	DashboardEnabled     *bool    `json:"dashboard_enabled,omitempty"`
+	TrainingEnabled     *bool    `json:"training_enabled,omitempty"`
+	PriorAdjustment     *bool    `json:"prior_adjustment,omitempty"`
+	WatcherLocked       *bool    `json:"watcher_locked,omitempty"`
+	VerifyBounds        *bool    `json:"verify_bounds,omitempty"`
+	LogLevel            string   `json:"log_level,omitempty"`
+	WatcherEnabled      *bool    `json:"watcher_enabled,omitempty"`
+	WatcherIntervalSecs *int     `json:"watcher_interval_seconds,omitempty"`
+	ToolDenylist        []string `json:"tool_denylist,omitempty"`
+	RetentionDays       *int     `json:"retention_days,omitempty"`
+	ChainAbortEnabled   *bool    `json:"chain_abort_enabled,omitempty"`
+	ChainAbortKeys      string   `json:"chain_abort_keys,omitempty"`
+	ChainAbortPollMs    *int     `json:"chain_abort_poll_ms,omitempty"`
+	WindowLockEnabled   *bool    `json:"window_lock_enabled,omitempty"`
+	WindowLockAutoFocus *bool    `json:"window_lock_auto_focus,omitempty"`
+	LogFileEnabled      *bool    `json:"log_file_enabled,omitempty"`
+	LogFileMaxSizeMB    *int     `json:"log_file_max_size_mb,omitempty"`
+	LogFileRetention    *int     `json:"log_file_retention,omitempty"`
+	DashboardEnabled    *bool    `json:"dashboard_enabled,omitempty"`
 }
 
 type GetLogsArgs struct {
@@ -2589,25 +2698,25 @@ func setConfigHandler(ctx context.Context, req *mcp.CallToolRequest, args SetCon
 	watcherStatus := actions.GetWatcherStatus()
 
 	return &mcp.CallToolResult{}, map[string]any{
-		"training_enabled":        cfg.TrainingEnabled,
-		"prior_adjustment":        cfg.PriorAdjustment,
-		"verify_bounds":           cfg.VerifyBounds,
-		"log_level":               cfg.LogLevel,
-		"watcher_running":         watcherStatus.Running,
-		"watcher_interval_secs":   cfg.WatcherIntervalSecs,
-		"watcher_locked":          cfg.WatcherLocked,
-		"tool_denylist":           cfg.ToolDenylist,
-		"retention_days":          cfg.RetentionDays,
-		"chain_abort_enabled":     cfg.ChainAbortEnabled,
-		"chain_abort_keys":        cfg.ChainAbortKeys,
-		"chain_abort_poll_ms":     cfg.ChainAbortPollMs,
-		"window_lock_enabled":     cfg.WindowLockEnabled,
-		"window_lock_auto_focus":  cfg.WindowLockAutoFocus,
-		"log_file_enabled":        cfg.LogFileEnabled,
-		"log_file_max_size_mb":    cfg.LogFileMaxSizeMB,
-		"log_file_retention":      cfg.LogFileRetention,
-		"dashboard_enabled":       cfg.DashboardEnabled,
-		"saved":                   changed,
+		"training_enabled":       cfg.TrainingEnabled,
+		"prior_adjustment":       cfg.PriorAdjustment,
+		"verify_bounds":          cfg.VerifyBounds,
+		"log_level":              cfg.LogLevel,
+		"watcher_running":        watcherStatus.Running,
+		"watcher_interval_secs":  cfg.WatcherIntervalSecs,
+		"watcher_locked":         cfg.WatcherLocked,
+		"tool_denylist":          cfg.ToolDenylist,
+		"retention_days":         cfg.RetentionDays,
+		"chain_abort_enabled":    cfg.ChainAbortEnabled,
+		"chain_abort_keys":       cfg.ChainAbortKeys,
+		"chain_abort_poll_ms":    cfg.ChainAbortPollMs,
+		"window_lock_enabled":    cfg.WindowLockEnabled,
+		"window_lock_auto_focus": cfg.WindowLockAutoFocus,
+		"log_file_enabled":       cfg.LogFileEnabled,
+		"log_file_max_size_mb":   cfg.LogFileMaxSizeMB,
+		"log_file_retention":     cfg.LogFileRetention,
+		"dashboard_enabled":      cfg.DashboardEnabled,
+		"saved":                  changed,
 	}, nil
 }
 
@@ -2618,29 +2727,29 @@ func getConfigHandler(_ context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.Ca
 	}
 	watcherStatus := actions.GetWatcherStatus()
 	return &mcp.CallToolResult{}, map[string]any{
-		"log_level":               cfg.LogLevel,
-		"mouse_speed":             cfg.MouseSpeed,
-		"click_delay_ms":          cfg.ClickDelay,
-		"verify_bounds":           cfg.VerifyBounds,
-		"action_timeout_ms":       cfg.ActionTimeoutMs,
-		"uia_warmup":              cfg.UIAWarmup,
-		"training_enabled":        cfg.TrainingEnabled,
-		"prior_adjustment":        cfg.PriorAdjustment,
-		"watcher_auto_start":      cfg.WatcherAutoStart,
+		"log_level":                cfg.LogLevel,
+		"mouse_speed":              cfg.MouseSpeed,
+		"click_delay_ms":           cfg.ClickDelay,
+		"verify_bounds":            cfg.VerifyBounds,
+		"action_timeout_ms":        cfg.ActionTimeoutMs,
+		"uia_warmup":               cfg.UIAWarmup,
+		"training_enabled":         cfg.TrainingEnabled,
+		"prior_adjustment":         cfg.PriorAdjustment,
+		"watcher_auto_start":       cfg.WatcherAutoStart,
 		"watcher_interval_seconds": cfg.WatcherIntervalSecs,
-		"watcher_running":         watcherStatus.Running,
-		"watcher_locked":          cfg.WatcherLocked,
-		"tool_denylist":           cfg.ToolDenylist,
-		"retention_days":          cfg.RetentionDays,
-		"chain_abort_enabled":     cfg.ChainAbortEnabled,
-		"chain_abort_keys":        cfg.ChainAbortKeys,
-		"chain_abort_poll_ms":     cfg.ChainAbortPollMs,
-		"window_lock_enabled":     cfg.WindowLockEnabled,
-		"window_lock_auto_focus":  cfg.WindowLockAutoFocus,
-		"log_file_enabled":        cfg.LogFileEnabled,
-		"log_file_max_size_mb":    cfg.LogFileMaxSizeMB,
-		"log_file_retention":      cfg.LogFileRetention,
-		"dashboard_enabled":       cfg.DashboardEnabled,
+		"watcher_running":          watcherStatus.Running,
+		"watcher_locked":           cfg.WatcherLocked,
+		"tool_denylist":            cfg.ToolDenylist,
+		"retention_days":           cfg.RetentionDays,
+		"chain_abort_enabled":      cfg.ChainAbortEnabled,
+		"chain_abort_keys":         cfg.ChainAbortKeys,
+		"chain_abort_poll_ms":      cfg.ChainAbortPollMs,
+		"window_lock_enabled":      cfg.WindowLockEnabled,
+		"window_lock_auto_focus":   cfg.WindowLockAutoFocus,
+		"log_file_enabled":         cfg.LogFileEnabled,
+		"log_file_max_size_mb":     cfg.LogFileMaxSizeMB,
+		"log_file_retention":       cfg.LogFileRetention,
+		"dashboard_enabled":        cfg.DashboardEnabled,
 	}, nil
 }
 
@@ -2658,11 +2767,11 @@ func getLogsHandler(ctx context.Context, req *mcp.CallToolRequest, args GetLogsA
 	entries, totalLines, truncated := logging.ReadLogs(logPath, lines, args.Level, args.Search, args.SinceMinutes)
 
 	return &mcp.CallToolResult{}, map[string]any{
-		"entries":    entries,
-		"count":      len(entries),
+		"entries":     entries,
+		"count":       len(entries),
 		"total_lines": totalLines,
-		"truncated":  truncated,
-		"log_path":   logPath,
+		"truncated":   truncated,
+		"log_path":    logPath,
 	}, nil
 }
 
@@ -2680,11 +2789,11 @@ func reportIssueHandler(ctx context.Context, req *mcp.CallToolRequest, args Repo
 	}
 
 	return &mcp.CallToolResult{}, map[string]any{
-		"title":          issue.Title,
-		"body":           issue.Body,
-		"issue_url":      issue.IssueURL,
+		"title":              issue.Title,
+		"body":               issue.Body,
+		"issue_url":          issue.IssueURL,
 		"log_lines_included": issue.LogLines,
-		"submitted":      issue.IssueURL != "",
+		"submitted":          issue.IssueURL != "",
 	}, nil
 }
 
@@ -2892,8 +3001,8 @@ func dismissAllMenusHandler(_ context.Context, _ *mcp.CallToolRequest, _ any) (*
 		}
 	}
 	result := map[string]any{
-		"esc_pressed":    true,
-		"menus_before":   detectedMenus,
+		"esc_pressed":      true,
+		"menus_before":     detectedMenus,
 		"menus_still_open": menusStillOpen,
 	}
 	if menusStillOpen {
@@ -2965,7 +3074,7 @@ func New(version string) *mcp.Server {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
 	slog.SetDefault(logger)
 
-	slog.Info("starting go-mcp-computer-use", "version", version, "tools", 158, "tools_doc", "docs/tools.md")
+	slog.Info("starting go-mcp-computer-use", "version", version, "tools", 159, "tools_doc", "docs/tools.md")
 
 	if cfg.UIAWarmup {
 		go func() {
@@ -3558,6 +3667,11 @@ func New(version string) *mcp.Server {
 		Name:        "onnx_detect",
 		Description: "Run YOLO-based UI element detection on a screenshot (or full screen if no image provided). Returns detected elements with class labels, confidence scores, and bounding boxes. Requires onnxruntime.dll and YOLO model file.",
 	}, onnxDetectHandler)
+
+	addToolClean(server, &mcp.Tool{
+		Name:        "onnx_classify",
+		Description: "Classify image content with the MobileNetV3 GUI element classifier (15 classes: button, checkbox, container, dropdown, icon_button, image, label, link, menu_item, scrollbar, slider, tab, text_input, toggle, unknown). source=screen|window|region (x,y,w,h)|elements (list of detected bboxes)|crop (image_b64). Advisory tier: returns label+confidence as an additional signal. Requires mobilenetv3_small.onnx.",
+	}, onnxClassifyHandler)
 
 	addToolClean(server, &mcp.Tool{
 		Name:        "onnx_download",

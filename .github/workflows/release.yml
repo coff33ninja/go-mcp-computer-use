@@ -64,6 +64,25 @@ jobs:
           $env:CGO_LDFLAGS = "-mcpu=x86_64_v2 -fno-sanitize=all -Wno-error=unused-command-line-argument"
           go build -ldflags="-X main.Version=${{ steps.version.outputs.version }}" -o mcp-server.exe ./cmd/mcp-server/
 
+      - name: Build GUI detector model (GPA-GUI -> ONNX)
+        # Reproduce gpa_gui_detector.onnx from Salesforce GPA-GUI-Detector so it
+        # ships with this release. The Go binary auto-downloads it from
+        # releases/latest/download/... which resolves to the newest release.
+        shell: pwsh
+        run: |
+          if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
+            Invoke-RestMethod https://astral.sh/uv/install.ps1 | Invoke-Expression
+          }
+          Push-Location scripts/gpa-gui-export
+          uv sync
+          if ($LASTEXITCODE -ne 0) { throw "uv sync failed" }
+          New-Item -ItemType Directory -Path ../../dist-models -Force | Out-Null
+          uv run export.py --out ../../dist-models
+          if ($LASTEXITCODE -ne 0) { throw "export.py failed" }
+          Pop-Location
+          if (-not (Test-Path dist-models/gpa_gui_detector.onnx)) { throw "model not produced" }
+          echo "model_bytes=$((Get-Item dist-models/gpa_gui_detector.onnx).Length)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
       - name: Extract changelog
         id: changelog
         shell: pwsh
@@ -94,5 +113,6 @@ jobs:
             mcp-server.exe
             mcp-server.exe.sha256
             launch.ps1
+            dist-models/gpa_gui_detector.onnx
           fail_on_unmatched_files: false
           generate_release_notes: false
