@@ -72,6 +72,9 @@ jobs:
         run: |
           if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
             Invoke-RestMethod https://astral.sh/uv/install.ps1 | Invoke-Expression
+            # uv installs to ~/.local/bin but PATH only updates after shell
+            # restart, which never happens mid-step. Prepend it so `uv` resolves.
+            $env:Path = "$env:USERPROFILE\.local\bin;$env:Path"
           }
           Push-Location scripts/gpa-gui-export
           uv sync
