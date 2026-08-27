@@ -48,13 +48,15 @@ def export(pt_path: Path, out_dir: Path) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     target = out_dir / "gpa_gui_detector.onnx"
 
-    # ultralytics writes alongside model.pt; then we move/rename to target.
+    # ultralytics writes alongside model.pt; then we copy to target. Copy, not
+    # rename/replace: the HF cache (model.pt dir) and the output dir can live on
+    # different drives, and os.replace fails across volumes on Windows (WinError 17).
     exported = model.export(format="onnx", imgsz=640, opset=12, simplify=False, dynamic=False)
     src = Path(exported)
     if src.resolve() != target.resolve():
-        # Remove any stale target before replace.
-        target.unlink(missing_ok=True)
-        src.replace(target)
+        import shutil
+
+        shutil.copy2(src, target)
     print("EXPORTED:", target, target.stat().st_size, "bytes")
     return target
 
