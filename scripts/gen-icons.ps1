@@ -32,7 +32,12 @@ if (-not (Test-Path $templatePath)) {
     Write-Host "winres template not found at $templatePath - skipping resource generation" -ForegroundColor Yellow
     exit 0
 }
-(Get-Content $templatePath -Raw).Replace("{{VERSION}}", $ver) | Set-Content -Path $jsonOut -Encoding UTF8
+$rendered = (Get-Content $templatePath -Raw).Replace("{{VERSION}}", $ver)
+# Write WITHOUT a UTF-8 BOM: PowerShell 5.1's Set-Content -Encoding UTF8 (and 7's)
+# can prepend a BOM, which go-winres rejects ("invalid character 'ï' looking for
+# beginning of value"). [IO.File]::WriteAllText with a BOM-less UTF8Encoding works
+# identically on both hosts.
+[System.IO.File]::WriteAllText($jsonOut, $rendered, [System.Text.UTF8Encoding]::new($false))
 
 $sysoOut = Join-Path $repoRoot "cmd\mcp-server\rsrc_windows_amd64.syso"
 # Remove the legacy akavel/rsrc .syso (icon only, no version-info) so the two

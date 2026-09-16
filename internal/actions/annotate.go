@@ -2,7 +2,22 @@ package actions
 
 import (
 	"image"
+	"sort"
 	"time"
+)
+
+// Defaults for the fused-capture element array. Without a cap and a trust floor,
+// a busy desktop can yield thousands of degenerate YOLO "icon" boxes, turning
+// every capture response into a multi-hundred-KB JSON blob the AI must grep
+// through. These defaults keep responses compact while detection still runs
+// internally; the AI pulls what it needs via the structured query tool.
+var (
+	// defaultElementLimit caps how many AnnotatedElements are embedded in a
+	// capture response (highest-confidence first).
+	defaultElementLimit = 50
+	// defaultMinElementConfidence drops elements whose fused YOLO+MobileNet+
+	// priors+ML trust score is below this floor (degenerate boxes rarely clear it).
+	defaultMinElementConfidence = 0.40
 )
 
 // ElementBox is a bounding box in one coordinate space.
@@ -102,14 +117,17 @@ type AnnotatedCapture struct {
 // fails the capture; unavailable engines yield empty sub-blocks noted in Errors.
 // topN limits the per-element classification depth.
 func AnnotateCapture(b64, language, source string, originX, originY int32, topN int) *AnnotatedCapture {
-	return annotateCaptureOpts(b64, language, source, originX, originY, topN, 0, 0, "")
+	return annotateCaptureOpts(b64, language, source, originX, originY, topN, 0, 0, "", "")
 }
 
 // annotateCaptureOpts is the core fused-annotation producer. It additionally
 // accepts YOLO detection threshold/IOU overrides (0 = model defaults) and an
 // optional provided-image source tag used by onnx_detect when a caller passes an
-// explicit image_b64 rather than a live capture.
-func annotateCaptureOpts(b64, language, source string, originX, originY int32, topN int, threshold, iou float64, providedSource string) *AnnotatedCapture {
+// explicit image_b64 rather than a live capture. windowTitle, when non-empty,
+// is the authoritative window title for the capture (used by the window-scoped
+// paths so priors/ML-memory are keyed on the CAPTURED window, not the foreground
+// window); when empty, the foreground window title is used as a fallback.
+func annotateCaptureOpts(b64, language, source string, originX, originY int32, topN int, threshold, iou float64, providedSource string, windowTitle string) *AnnotatedCapture {
 	start := time.Now()
 	ac := &AnnotatedCapture{
 		ImageB64: b64,
@@ -141,9 +159,12 @@ func annotateCaptureOpts(b64, language, source string, originX, originY int32, t
 		}
 	}
 
-	if title := getActiveWindowTitle(); title != "" {
-		ac.WindowTitle = title
+	if windowTitle == "" {
+		if title := getActiveWindowTitle(); title != "" {
+			windowTitle = title
+		}
 	}
+	ac.WindowTitle = windowTitle
 
 	// OCR (text + bboxes on the same frame).
 	if ocr, err := ocrFromBase64(b64, language); err == nil && ocr != nil {
@@ -201,6 +222,11 @@ func annotateCaptureOpts(b64, language, source string, originX, originY int32, t
 		}
 	}
 
+	// Keep the embedded element array bounded: drop low-trust degenerate boxes
+	// and cap the count so capture responses stay compact. Detection still ran
+	// fully; we only shrink what is returned on the wire.
+	ac.Elements = FilterAndCapElements(ac.Elements, defaultElementLimit, defaultMinElementConfidence)
+
 	ac.TotalMs = time.Since(start).Milliseconds()
 	return ac
 }
@@ -209,7 +235,7 @@ func annotateCaptureOpts(b64, language, source string, originX, originY int32, t
 // YOLO detection threshold/IOU overrides. Origin defaults to (0,0) (image-relative
 // coords), so screen_box reflects the image's own pixel space.
 func AnnotateDetectImage(b64, language string, topN int, threshold, iou float64) *AnnotatedCapture {
-	return annotateCaptureOpts(b64, language, "detect_image", 0, 0, topN, threshold, iou, "detect_image")
+	return annotateCaptureOpts(b64, language, "detect_image", 0, 0, topN, threshold, iou, "detect_image", "")
 }
 
 // AnnotateDetectScreen captures the live screen and annotates it with explicit
@@ -221,7 +247,7 @@ func AnnotateDetectScreen(language string, topN int, threshold, iou float64) *An
 		return &AnnotatedCapture{Source: "detect_screen", Errors: []string{"capture: " + err.Error()}, ImageB64: ""}
 	}
 	b := VirtualScreenBounds()
-	return annotateCaptureOpts(b64, language, "detect_screen", b.X, b.Y, topN, threshold, iou, "detect_screen")
+	return annotateCaptureOpts(b64, language, "detect_screen", b.X, b.Y, topN, threshold, iou, "detect_screen", "")
 }
 
 // AnnotateScreen captures the full virtual screen and annotates it. The origin
@@ -248,7 +274,9 @@ func AnnotateRegion(x, y, w, h int32, language string, topN int) *AnnotatedCaptu
 
 // AnnotateWindow captures a window (clamped to visible screen bounds, matching
 // ScreenshotElement) and annotates it. The origin is the clamped on-screen
-// top-left, so ScreenBox coords are actionable screen coordinates.
+// top-left, so ScreenBox coords are actionable screen coordinates. The WindowTitle
+// is resolved from the CAPTURED handle (not the foreground window) so priors and
+// ML-memory are keyed on the correct window.
 func AnnotateWindow(handle uintptr, language string, topN int) *AnnotatedCapture {
 	b64, err := ScreenshotElement(handle)
 	if err != nil {
@@ -264,7 +292,7 @@ func AnnotateWindow(handle uintptr, language string, topN int) *AnnotatedCapture
 			oy = 0
 		}
 	}
-	return AnnotateCapture(b64, language, "window", ox, oy, topN)
+	return annotateCaptureOpts(b64, language, "window", ox, oy, topN, 0, 0, "", getWindowTitle(handle))
 }
 
 // classifyElementFromImage classifies a single detected element's crop extracted
@@ -421,6 +449,33 @@ func ElementIsClickable(ae AnnotatedElement) bool {
 		return false
 	}
 	return ae.CombinedConfidence >= 0.35
+}
+
+// FilterAndCapElements returns a compacted copy of els: it keeps only elements
+// whose fused CombinedConfidence clears minConf (stable), sorts the survivors by
+// confidence descending, and truncates to limit (non-positive limit means no
+// cap). This is what keeps capture responses bounded while detection still runs
+// at full fidelity internally. A nil/empty input returns an empty (non-nil)
+// slice so JSON always emits [] rather than null.
+func FilterAndCapElements(els []AnnotatedElement, limit int, minConf float64) []AnnotatedElement {
+	out := make([]AnnotatedElement, 0, len(els))
+	for _, e := range els {
+		if e.CombinedConfidence >= minConf {
+			out = append(out, e)
+		}
+	}
+	if len(out) > 1 {
+		sort.SliceStable(out, func(i, j int) bool {
+			return out[i].CombinedConfidence > out[j].CombinedConfidence
+		})
+	}
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	if out == nil {
+		out = []AnnotatedElement{}
+	}
+	return out
 }
 
 // min64 returns the smaller of two float64 values.

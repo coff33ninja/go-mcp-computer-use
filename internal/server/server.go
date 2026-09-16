@@ -93,8 +93,109 @@ func safeHandler[Args any](name string, fn func(ctx context.Context, req *mcp.Ca
 				err = fmt.Errorf("panic in %s: %v", name, r)
 			}
 		}()
-		return fn(ctx, req, args)
+		result, payload, err = fn(ctx, req, args)
+		stripImageIfExcluded(args, result, payload)
+		return result, payload, err
 	}
+}
+
+// stripImageIfExcluded applies the global config include_image opt-out (and any
+// per-call include_image override) to capture-tool responses. When the effective
+// decision is "exclude", the returned AnnotatedCapture's image_b64 is cleared so
+// the ~1MB base64 bloat is omitted from the wire, while OCR/elements/confidence
+// metadata is preserved. Detection/ML still runs internally; only the returned
+// copy is stripped. This is the single choke point for all capture tools.
+//
+// It also honors the exclude_elements opt-out (global config + per-call
+// ExcludeElements override): when active, the embedded element array is emptied
+// so text-only captures (ocr etc.) don't drag thousands of YOLO boxes onto the
+// wire. The AI can still pull structured elements on demand via elements_query.
+func stripImageIfExcluded[Args any](args Args, result *mcp.CallToolResult, payload any) {
+	ac, ok := payload.(*actions.AnnotatedCapture)
+	if !ok || ac == nil {
+		return
+	}
+	if !effectiveIncludeImage(args) {
+		orig := ac.ImageB64
+		ac.ImageB64 = ""
+		if result != nil && len(result.Content) > 0 {
+			kept := result.Content[:0]
+			for _, c := range result.Content {
+				if tc, isText := c.(*mcp.TextContent); isText && orig != "" && tc.Text == orig {
+					continue
+				}
+				kept = append(kept, c)
+			}
+			result.Content = kept
+		}
+	}
+	if effectiveExcludeElements(args) {
+		ac.Elements = []actions.AnnotatedElement{}
+	}
+}
+
+// effectiveExcludeElements resolves the exclude-elements decision for a call.
+// A per-call ExcludeElements *bool overrides the global config value; otherwise
+// the global config default is used. Default (config zero-value) is false, so
+// the element array is preserved for dedicated detection tools unless explicitly
+// opted out.
+func effectiveExcludeElements[Args any](args Args) bool {
+	if v, ok := argsExcludeElements(args); ok {
+		return v
+	}
+	return actions.ActiveConfig != nil && actions.ActiveConfig.ExcludeElements
+}
+
+// argsExcludeElements reads the optional ExcludeElements *bool field from an
+// args struct. Returns (value, found); found is false when the struct has no
+// such field or it is nil.
+func argsExcludeElements[Args any](args Args) (bool, bool) {
+	rv := reflect.ValueOf(args)
+	if !rv.IsValid() || rv.Kind() != reflect.Struct {
+		return false, false
+	}
+	f := rv.FieldByName("ExcludeElements")
+	if !f.IsValid() || f.Kind() != reflect.Ptr || f.IsNil() {
+		return false, false
+	}
+	elem := f.Elem()
+	if elem.Kind() != reflect.Bool {
+		return false, false
+	}
+	return elem.Bool(), true
+}
+
+// effectiveIncludeImage resolves the include-image decision for a call.
+// A per-call IncludeImage *bool on the args overrides the global config value;
+// otherwise the global config default is used.
+func effectiveIncludeImage[Args any](args Args) bool {
+	include := true
+	if actions.ActiveConfig != nil {
+		include = actions.ActiveConfig.IncludeImage
+	}
+	if v, ok := argsIncludeImage(args); ok {
+		return v
+	}
+	return include
+}
+
+// argsIncludeImage reads the optional IncludeImage *bool field from an args
+// struct. Returns (value, found); found is false when the struct has no such
+// field or it is nil.
+func argsIncludeImage[Args any](args Args) (bool, bool) {
+	rv := reflect.ValueOf(args)
+	if !rv.IsValid() || rv.Kind() != reflect.Struct {
+		return false, false
+	}
+	f := rv.FieldByName("IncludeImage")
+	if !f.IsValid() || f.Kind() != reflect.Ptr || f.IsNil() {
+		return false, false
+	}
+	elem := f.Elem()
+	if elem.Kind() != reflect.Bool {
+		return false, false
+	}
+	return elem.Bool(), true
 }
 
 func verifyCfg(ec *actions.ExpConfig, rx, ry, rw, rh *int32) *actions.VerifyConfig {
@@ -174,6 +275,12 @@ type ScreenshotArgs struct {
 	H *int32 `json:"h,omitempty"`
 	// Language is passed to the OCR signal inside the annotation (optional).
 	Language string `json:"language,omitempty"`
+	// IncludeImage overrides the global config include_image for this call.
+	// When false, the response omits image_b64 (metadata/elements/OCR still returned).
+	IncludeImage *bool `json:"include_image,omitempty"`
+	// ExcludeElements overrides the global config exclude_elements for this call.
+	// When true, the response omits the element array (OCR/text still returned).
+	ExcludeElements *bool `json:"exclude_elements,omitempty"`
 }
 
 type ClickArgs struct {
@@ -324,6 +431,12 @@ type OCRArgs struct {
 	W        *int32 `json:"w,omitempty"`
 	H        *int32 `json:"h,omitempty"`
 	Language string `json:"language,omitempty"`
+	// IncludeImage overrides the global config include_image for this call.
+	// When false, the response omits image_b64 (metadata/elements/OCR still returned).
+	IncludeImage *bool `json:"include_image,omitempty"`
+	// ExcludeElements overrides the global config exclude_elements for this call.
+	// When true, the response omits the element array (OCR/text still returned).
+	ExcludeElements *bool `json:"exclude_elements,omitempty"`
 }
 
 type BrightnessArgs struct {
@@ -365,15 +478,29 @@ type ScreenshotElementArgs struct {
 	Handle uintptr `json:"handle"`
 	// Language is passed to the OCR signal inside the annotation (optional).
 	Language string `json:"language,omitempty"`
+	// IncludeImage overrides the global config include_image for this call.
+	// When false, the response omits image_b64 (metadata/elements/OCR still returned).
+	IncludeImage *bool `json:"include_image,omitempty"`
+	// ExcludeElements overrides the global config exclude_elements for this call.
+	// When true, the response omits the element array (OCR/text still returned).
+	ExcludeElements *bool `json:"exclude_elements,omitempty"`
 }
 
 type OCRWindowArgs struct {
 	Handle   uintptr `json:"handle"`
 	Language string  `json:"language,omitempty"`
+	// IncludeImage overrides the global config include_image for this call.
+	IncludeImage *bool `json:"include_image,omitempty"`
+	// ExcludeElements overrides the global config exclude_elements for this call.
+	ExcludeElements *bool `json:"exclude_elements,omitempty"`
 }
 
 type OcrActiveWindowArgs struct {
 	Language string `json:"language,omitempty"`
+	// IncludeImage overrides the global config include_image for this call.
+	IncludeImage *bool `json:"include_image,omitempty"`
+	// ExcludeElements overrides the global config exclude_elements for this call.
+	ExcludeElements *bool `json:"exclude_elements,omitempty"`
 }
 
 type HoverArgs struct {
@@ -1623,6 +1750,11 @@ type ONNXDetectArgs struct {
 	ImageB64     string  `json:"image_b64,omitempty"`
 	Threshold    float64 `json:"threshold,omitempty"`
 	IOUThreshold float64 `json:"iou_threshold,omitempty"`
+	// IncludeImage overrides the global config include_image for this call.
+	// When false, the response omits image_b64 (elements still returned).
+	IncludeImage *bool `json:"include_image,omitempty"`
+	// ExcludeElements overrides the global config exclude_elements for this call.
+	ExcludeElements *bool `json:"exclude_elements,omitempty"`
 }
 
 func onnxStatusHandler(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
@@ -2135,6 +2267,8 @@ type SetConfigArgs struct {
 	LogFileMaxSizeMB    *int     `json:"log_file_max_size_mb,omitempty"`
 	LogFileRetention    *int     `json:"log_file_retention,omitempty"`
 	DashboardEnabled    *bool    `json:"dashboard_enabled,omitempty"`
+	IncludeImage        *bool    `json:"include_image,omitempty"`
+	ExcludeElements     *bool    `json:"exclude_elements,omitempty"`
 }
 
 type GetLogsArgs struct {
@@ -2684,6 +2818,20 @@ func setConfigHandler(ctx context.Context, req *mcp.CallToolRequest, args SetCon
 			changed = true
 		}
 	}
+	if args.IncludeImage != nil {
+		val := *args.IncludeImage
+		if cfg.IncludeImage != val {
+			cfg.IncludeImage = val
+			changed = true
+		}
+	}
+	if args.ExcludeElements != nil {
+		val := *args.ExcludeElements
+		if cfg.ExcludeElements != val {
+			cfg.ExcludeElements = val
+			changed = true
+		}
+	}
 
 	if changed {
 		slog.Info("config updated", "training_enabled", cfg.TrainingEnabled,
@@ -2716,6 +2864,8 @@ func setConfigHandler(ctx context.Context, req *mcp.CallToolRequest, args SetCon
 		"log_file_max_size_mb":   cfg.LogFileMaxSizeMB,
 		"log_file_retention":     cfg.LogFileRetention,
 		"dashboard_enabled":      cfg.DashboardEnabled,
+		"include_image":          cfg.IncludeImage,
+		"exclude_elements":       cfg.ExcludeElements,
 		"saved":                  changed,
 	}, nil
 }
@@ -2750,6 +2900,8 @@ func getConfigHandler(_ context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.Ca
 		"log_file_max_size_mb":     cfg.LogFileMaxSizeMB,
 		"log_file_retention":       cfg.LogFileRetention,
 		"dashboard_enabled":        cfg.DashboardEnabled,
+		"include_image":            cfg.IncludeImage,
+		"exclude_elements":         cfg.ExcludeElements,
 	}, nil
 }
 
@@ -3074,7 +3226,7 @@ func New(version string) *mcp.Server {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
 	slog.SetDefault(logger)
 
-	slog.Info("starting go-mcp-computer-use", "version", version, "tools", 159, "tools_doc", "docs/tools.md")
+	slog.Info("starting go-mcp-computer-use", "version", version, "tools", 160, "tools_doc", "docs/tools.md")
 
 	if cfg.UIAWarmup {
 		go func() {
@@ -3175,7 +3327,7 @@ func New(version string) *mcp.Server {
 	addToolClean(server, &mcp.Tool{
 		Name:        "screenshot",
 		Description: "Capture the screen or a region. If w/h omitted, captures full screen.",
-	}, screenshotHandler)
+	}, safeHandler("screenshot", screenshotHandler))
 
 	addToolClean(server, &mcp.Tool{
 		Name:        "click",
@@ -3450,7 +3602,7 @@ func New(version string) *mcp.Server {
 	addToolClean(server, &mcp.Tool{
 		Name:        "ocr",
 		Description: "Extract text from screen using Windows OCR. Supports full screen, specific monitor (screen=N where N is the display index from list_displays, 0-based), or region (x,y,w,h).",
-	}, ocrHandler)
+	}, safeHandler("ocr", ocrHandler))
 
 	addToolClean(server, &mcp.Tool{
 		Name:        "get_brightness",
@@ -3495,7 +3647,7 @@ func New(version string) *mcp.Server {
 	addToolClean(server, &mcp.Tool{
 		Name:        "screenshot_element",
 		Description: "Take a screenshot of a specific window by handle.",
-	}, screenshotElementHandler)
+	}, safeHandler("screenshot_element", screenshotElementHandler))
 
 	addToolClean(server, &mcp.Tool{
 		Name:        "hover",
@@ -3595,12 +3747,12 @@ func New(version string) *mcp.Server {
 	addToolClean(server, &mcp.Tool{
 		Name:        "ocr_window",
 		Description: "Extract text from a specific window by handle using Windows OCR. Captures what is currently visible in the window's region. If the window is minimized, behind other windows, or off-screen, the captured region will show whatever is on top at those screen coordinates. Use get_window_state to check state, then focus_window or restore_window first if needed.",
-	}, ocrWindowHandler)
+	}, safeHandler("ocr_window", ocrWindowHandler))
 
 	addToolClean(server, &mcp.Tool{
 		Name:        "ocr_active_window",
 		Description: "Extract text from the currently active/foreground window using Windows OCR.",
-	}, ocrActiveWindowHandler)
+	}, safeHandler("ocr_active_window", ocrActiveWindowHandler))
 
 	addToolClean(server, &mcp.Tool{
 		Name:        "list_audio_devices",
@@ -3666,12 +3818,17 @@ func New(version string) *mcp.Server {
 	addToolClean(server, &mcp.Tool{
 		Name:        "onnx_detect",
 		Description: "Run YOLO-based UI element detection on a screenshot (or full screen if no image provided). Returns detected elements with class labels, confidence scores, and bounding boxes. Requires onnxruntime.dll and YOLO model file.",
-	}, onnxDetectHandler)
+	}, safeHandler("onnx_detect", onnxDetectHandler))
+
+	addToolClean(server, &mcp.Tool{
+		Name:        "elements_query",
+		Description: "Query the fused capture (YOLO + MobileNet + OCR) for a compact, text-LLM-friendly result instead of a full element dump. Filters by source (screen/window/region), class, mobile label, region, minimum confidence, clickable-only, and OCR text. Returns a flat list of elements with screen coordinates (class, label, confidence, clickable, screen_box, click_point) plus matching OCR text hits. Use this to locate a control or text on screen and get its clickable screen coordinate without parsing a giant JSON.",
+	}, safeHandler("elements_query", elementsQueryHandler))
 
 	addToolClean(server, &mcp.Tool{
 		Name:        "onnx_classify",
 		Description: "Classify image content with the MobileNetV3 GUI element classifier (15 classes: button, checkbox, container, dropdown, icon_button, image, label, link, menu_item, scrollbar, slider, tab, text_input, toggle, unknown). source=screen|window|region (x,y,w,h)|elements (list of detected bboxes)|crop (image_b64). Advisory tier: returns label+confidence as an additional signal. Requires mobilenetv3_small.onnx.",
-	}, onnxClassifyHandler)
+	}, safeHandler("onnx_classify", onnxClassifyHandler))
 
 	addToolClean(server, &mcp.Tool{
 		Name:        "onnx_download",

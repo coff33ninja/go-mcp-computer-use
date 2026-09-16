@@ -84,10 +84,25 @@ var charToVK = map[rune]charVK{
 }
 
 var vkModMap = map[string]uint16{
-	"CTRL":    0x11,
-	"CONTROL": 0x11,
-	"ALT":     0x12,
-	"SHIFT":   0x10,
+	"CTRL":     0x11,
+	"CONTROL":  0x11,
+	"LCTRL":    0xA2,
+	"LCONTROL": 0xA2,
+	"RCTRL":    0xA3,
+	"RCONTROL": 0xA3,
+	"ALT":      0x12,
+	"LALT":     0xA4,
+	"RALT":     0xA5,
+	"SHIFT":    0x10,
+	"LSHIFT":   0xA0,
+	"RSHIFT":   0xA1,
+	"WIN":      0x5B,
+	"META":     0x5B,
+	"LWIN":     0x5B,
+	"SUPER":    0x5B,
+	"CMD":      0x5B,
+	"COMMAND":  0x5B,
+	"RWIN":     0x5C,
 }
 
 var vkSpecialMap = map[string]uint16{
@@ -129,8 +144,39 @@ var vkSpecialMap = map[string]uint16{
 	"NUMLOCK":    0x90,
 	"SCROLLLOCK": 0x91,
 	"PRINTSCREEN": 0x2C,
+	"SNAPSHOT":   0x2C,
 	"PAUSE":      0x13,
 	"MENU":       0x5D,
+	"APPS":       0x5D,
+	"CONTEXT":    0x5D,
+	"CLEAR":      0x0C,
+	"EXECUTE":    0x2B,
+	"SLEEP":      0x5F,
+	// Numpad block
+	"NUMPAD0":        0x60,
+	"NUMPAD1":        0x61,
+	"NUMPAD2":        0x62,
+	"NUMPAD3":        0x63,
+	"NUMPAD4":        0x64,
+	"NUMPAD5":        0x65,
+	"NUMPAD6":        0x66,
+	"NUMPAD7":        0x67,
+	"NUMPAD8":        0x68,
+	"NUMPAD9":        0x69,
+	"NUMPAD_MULTIPLY":  0x6A,
+	"NUMPAD_ADD":       0x6B,
+	"NUMPAD_SEPARATOR": 0x6C,
+	"NUMPAD_SUBTRACT":  0x6D,
+	"NUMPAD_DECIMAL":   0x6E,
+	"NUMPAD_DIVIDE":    0x6F,
+	// Media / volume
+	"VOLUME_MUTE":       0xAD,
+	"VOLUME_DOWN":       0xAE,
+	"VOLUME_UP":         0xAF,
+	"MEDIA_NEXT_TRACK":  0xB0,
+	"MEDIA_PREV_TRACK":  0xB1,
+	"MEDIA_STOP":        0xB2,
+	"MEDIA_PLAY_PAUSE":  0xB3,
 }
 
 func sendVK(vk uint16, down bool) {
@@ -171,10 +217,11 @@ func sendCharWithVK(r rune) {
 }
 
 func keyNameToVK(name string) (uint16, bool) {
-	if vk, ok := vkModMap[name]; ok {
+	upper := strings.ToUpper(name)
+	if vk, ok := vkModMap[upper]; ok {
 		return vk, true
 	}
-	if vk, ok := vkSpecialMap[name]; ok {
+	if vk, ok := vkSpecialMap[upper]; ok {
 		return vk, true
 	}
 	if len(name) == 1 {
@@ -187,6 +234,10 @@ func keyNameToVK(name string) (uint16, bool) {
 		}
 		if ch >= '0' && ch <= '9' {
 			return uint16(ch), true
+		}
+		// Punctuation / single-char keys via the charToVK table
+		if cv, ok := charToVK[rune(ch)]; ok {
+			return cv.vk, true
 		}
 	}
 	return 0, false
@@ -245,23 +296,27 @@ func KeyPress(keys []string) (err error) {
 	for _, k := range keys {
 		// Normalize to uppercase for map lookups
 		ku := strings.ToUpper(k)
-		// Check CTRL+/CONTROL+ prefix (e.g. "CTRL+A")
-		if strings.HasPrefix(ku, "CTRL+") || strings.HasPrefix(ku, "CONTROL+") {
-			parts := strings.SplitN(k, "+", 2)
-			if len(parts) == 2 && len(parts[1]) == 1 {
-				ch := parts[1][0]
-				var vk uint16
-				if ch >= 'A' && ch <= 'Z' {
-					vk = uint16(ch)
-				} else if ch >= 'a' && ch <= 'z' {
-					vk = uint16(ch - 32)
-				} else {
+		// Check modifier+ prefix (e.g. "CTRL+A", "WIN+R", "ALT+F4")
+		// prefix maps any <MOD>+<key> form to a modifier VK.
+		if idx := strings.IndexByte(ku, '+'); idx > 0 {
+			prefix := ku[:idx]
+			if mvk, ok := vkModMap[prefix]; ok {
+				rest := k[idx+1:]
+				if len(rest) == 1 {
+					ruk := strings.ToUpper(rest)
+					var vk uint16
+					if ruk[0] >= 'A' && ruk[0] <= 'Z' {
+						vk = uint16(ruk[0])
+					} else if ruk[0] >= '0' && ruk[0] <= '9' {
+						vk = uint16(ruk[0])
+					} else {
+						continue
+					}
+					sendVK(mvk, true)
+					pressedMods = append(pressedMods, mvk)
+					sendVKPress(vk)
 					continue
 				}
-				sendVK(0x11, true)
-				pressedMods = append(pressedMods, 0x11)
-				sendVKPress(vk)
-				continue
 			}
 		}
 		// Modifier keys

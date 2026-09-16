@@ -31,6 +31,8 @@ type Config struct {
 	LogFileMaxSizeMB    int      `json:"log_file_max_size_mb"`
 	LogFileRetention    int      `json:"log_file_retention"`
 	DashboardEnabled    bool     `json:"dashboard_enabled"`
+	IncludeImage        bool     `json:"include_image"`
+	ExcludeElements     bool     `json:"exclude_elements"`
 }
 
 func Default() *Config {
@@ -55,6 +57,7 @@ func Default() *Config {
 		LogFileMaxSizeMB:       10,
 		LogFileRetention:       7,
 		DashboardEnabled:       true,
+		IncludeImage:           true,
 	}
 }
 

@@ -237,7 +237,7 @@ func ONNXDetect(in DetectionInput) (*DetectionOutput, error) {
 		}, nil
 	}
 
-	blob := preprocessYOLO(img, yoloInputSize)
+	blob, lb := preprocessYOLO(img, yoloInputSize)
 	inputShape := ort.NewShape(1, 3, yoloInputSize, yoloInputSize)
 	inputTensor, err := ort.NewTensor(inputShape, blob)
 	if err != nil {
@@ -275,7 +275,7 @@ func ONNXDetect(in DetectionInput) (*DetectionOutput, error) {
 		iouThresh = yoloNMSThresh
 	}
 
-	boxes := parseYOLOOutput(outputData, yoloInputSize, img.Bounds().Dx(), img.Bounds().Dy(), thresh)
+	boxes := parseYOLOOutput(outputData, yoloInputSize, lb, thresh)
 	filtered := nms(boxes, iouThresh)
 
 	elements := make([]DetectedElement, 0, len(filtered))
@@ -285,6 +285,8 @@ func ONNXDetect(in DetectionInput) (*DetectionOutput, error) {
 		winTitle = info.Title
 		winHandle = info.Handle
 	}
+	bnd := img.Bounds()
+	imgW, imgH := int32(bnd.Dx()), int32(bnd.Dy())
 	for _, b := range filtered {
 		el := DetectedElement{
 			Class:      yoloLabels[b.classID],
@@ -293,6 +295,11 @@ func ONNXDetect(in DetectionInput) (*DetectionOutput, error) {
 			Y:          int32(b.y),
 			W:          int32(b.w),
 			H:          int32(b.h),
+		}
+		// Drop letterbox-padding false positives and clip the rest to the
+		// captured image so element coords can never land off-image.
+		if !clipElementToImage(&el, imgW, imgH) {
+			continue
 		}
 		if winTitle != "" {
 			el.Confidence = AdjustConfidenceWithPriors(el.Class, winTitle, el.Confidence, float64(el.X), float64(el.Y))
@@ -326,46 +333,85 @@ type yoloBox struct {
 	x, y, w, h float32
 }
 
-func preprocessYOLO(img image.Image, targetSize int) []float32 {
+// yoloLetterbox carries the geometry used to fit a non-square source image into
+// the square YOLO input via aspect-preserving letterboxing (uniform scale +
+// centered gray padding). parseYOLOOutput uses it to map normalized boxes back
+// to source-image pixel space.
+type yoloLetterbox struct {
+	scale float64 // uniform scale applied to the source (x and y identical)
+	padX  int     // left padding, in model-input pixels
+	padY  int     // top padding, in model-input pixels
+}
+
+// preprocessYOLO converts an image into the (1,3,640,640) model blob using
+// standard YOLO letterboxing: the source is scaled by ONE uniform factor so its
+// aspect ratio is preserved, then centered on a 128-gray square with padding.
+// Rescaling X and Y with different factors (as the older code did) distorted
+// non-square inputs and made the detector emit degenerate boxes.
+func preprocessYOLO(img image.Image, targetSize int) ([]float32, yoloLetterbox) {
 	bounds := img.Bounds()
+	srcW, srcH := bounds.Dx(), bounds.Dy()
+	if srcW <= 0 || srcH <= 0 {
+		return make([]float32, 3*targetSize*targetSize), yoloLetterbox{scale: 1}
+	}
+
+	scale := math.Min(float64(targetSize)/float64(srcW), float64(targetSize)/float64(srcH))
+	newW := int(math.Round(float64(srcW) * scale))
+	newH := int(math.Round(float64(srcH) * scale))
+	if newW < 1 {
+		newW = 1
+	}
+	if newH < 1 {
+		newH = 1
+	}
+	padX := (targetSize - newW) / 2
+	padY := (targetSize - newH) / 2
+	lb := yoloLetterbox{scale: scale, padX: padX, padY: padY}
+
 	blob := make([]float32, 3*targetSize*targetSize)
+	pad := float32(128.0 / 255.0)
+	for i := range blob {
+		blob[i] = pad
+	}
 
-	rScale := float64(targetSize) / float64(bounds.Dx())
-	cScale := float64(targetSize) / float64(bounds.Dy())
-
-	for y := 0; y < targetSize; y++ {
-		for x := 0; x < targetSize; x++ {
-			srcX := int(float64(x) / rScale)
-			srcY := int(float64(y) / cScale)
-			if srcX >= bounds.Dx() {
-				srcX = bounds.Dx() - 1
+	for y := 0; y < newH; y++ {
+		for x := 0; x < newW; x++ {
+			srcX := int(float64(x) / scale)
+			srcY := int(float64(y) / scale)
+			if srcX >= srcW {
+				srcX = srcW - 1
 			}
-			if srcY >= bounds.Dy() {
-				srcY = bounds.Dy() - 1
+			if srcY >= srcH {
+				srcY = srcH - 1
 			}
 			r, g, b, _ := img.At(srcX, srcY).RGBA()
-			idx := y*targetSize + x
+			dx := padX + x
+			dy := padY + y
+			idx := dy*targetSize + dx
 			blob[idx] = float32(r>>8) / 255.0
 			blob[targetSize*targetSize+idx] = float32(g>>8) / 255.0
 			blob[2*targetSize*targetSize+idx] = float32(b>>8) / 255.0
 		}
 	}
-	return blob
+	return blob, lb
 }
 
-func parseYOLOOutput(data []float32, inputSize, imgW, imgH int, confThresh float32) []yoloBox {
+func parseYOLOOutput(data []float32, inputSize int, lb yoloLetterbox, confThresh float32) []yoloBox {
 	numDetections := 8400
 	rowStride := 4 + yoloNumClasses
-	scaleX := float32(imgW) / float32(inputSize)
-	scaleY := float32(imgH) / float32(inputSize)
+	scale := float32(lb.scale)
+	padX := float32(lb.padX)
+	padY := float32(lb.padY)
 
 	boxes := make([]yoloBox, 0, 256)
 	for i := 0; i < numDetections; i++ {
 		offset := i * rowStride
-		cx := data[offset] * scaleX
-		cy := data[offset+1] * scaleY
-		w := data[offset+2] * scaleX
-		h := data[offset+3] * scaleY
+		// The model emits boxes in 640-input space (post-letterbox, centered).
+		// Undo the letterbox fit to recover source-image pixel coordinates.
+		cx := (data[offset] - padX) / scale
+		cy := (data[offset+1] - padY) / scale
+		w := data[offset+2] / scale
+		h := data[offset+3] / scale
 
 		bestClass := 0
 		bestConf := float32(0)
@@ -395,6 +441,49 @@ func parseYOLOOutput(data []float32, inputSize, imgW, imgH int, confThresh float
 
 func sigmoid(x float32) float32 {
 	return 1.0 / (1.0 + float32(math.Exp(float64(-x))))
+}
+
+// clipElementToImage gates a YOLO detection against the captured-image bounds.
+// The letterboxed 640x640 model input carries gray padding bands (0.5*srcH up
+// to 320px tall on wide screens), and the model sometimes emits confident boxes
+// centered inside that padding. Undoing the letterbox maps those to negative or
+// oversized source coordinates — garbage the AI would try to click. This filters
+// them out: a box whose center lies outside the image is dropped entirely
+// (padding false positive), any other box is clipped to the image rectangle and
+// its width/height recomputed so the resulting click point is always actionable
+// and on-screen. Returns false when the box is degenerate or after clipping has
+// no remaining area.
+func clipElementToImage(el *DetectedElement, imgW, imgH int32) bool {
+	if el.W <= 0 || el.H <= 0 {
+		return false
+	}
+	// Center must land inside the capture. This is the padding-band gate: a box
+	// centered above the top or below the bottom of the source image has no real
+	// on-screen target.
+	cx := el.X + el.W/2
+	cy := el.Y + el.H/2
+	if cx < 0 || cy < 0 || cx >= imgW || cy >= imgH {
+		return false
+	}
+	// Clip the box to the image, preserving the visible (overlapped) portion.
+	if el.X < 0 {
+		el.W += el.X
+		el.X = 0
+	}
+	if el.Y < 0 {
+		el.H += el.Y
+		el.Y = 0
+	}
+	if right := el.X + el.W; right > imgW {
+		el.W = imgW - el.X
+	}
+	if bottom := el.Y + el.H; bottom > imgH {
+		el.H = imgH - el.Y
+	}
+	if el.W <= 0 || el.H <= 0 {
+		return false
+	}
+	return true
 }
 
 func nms(boxes []yoloBox, iouThreshold float32) []yoloBox {

@@ -99,3 +99,74 @@ func TestAnnotatedElementTrust(t *testing.T) {
 		}
 	}
 }
+
+// TestAnnotateWindowTitle verifies the E1 fix: window-scoped captures must be
+// keyed on the CAPTURED window's title, not the foreground window's. The
+// explicit windowTitle passed to annotateCaptureOpts must win; an empty title
+// falls back to the active-window title (or stays empty when none is available).
+func TestAnnotateWindowTitle(t *testing.T) {
+	b64 := validTestPngB64(10, 10)
+
+	// Explicit title must be used verbatim (E1: ocr_window/screenshot_element
+	// reported the foreground window even when a different handle was captured).
+	ann := annotateCaptureOpts(b64, "", "window", 0, 0, 3, 0, 0, "", "Mozilla Firefox")
+	if ann.WindowTitle != "Mozilla Firefox" {
+		t.Fatalf("WindowTitle = %q, want %q (explicit title must override foreground)", ann.WindowTitle, "Mozilla Firefox")
+	}
+
+	// Empty title falls back to the foreground window's title (unchanged legacy
+	// behavior for screen/region/detect_image paths).
+	ann2 := annotateCaptureOpts(b64, "", "screen", 0, 0, 3, 0, 0, "", "")
+	if ann2.WindowTitle == "" {
+		// If no foreground window, empty is acceptable; when one exists it must
+		// be reported. Just ensure the field is populated from some source.
+		return
+	}
+	active := getActiveWindowTitle()
+	if active != "" && ann2.WindowTitle != active {
+		t.Fatalf("empty-title fallback = %q, want active window %q", ann2.WindowTitle, active)
+	}
+}
+
+// TestFilterAndCapElements verifies the fused-capture element array stays
+// bounded: low-confidence degenerate boxes are dropped to a trust floor and the
+// survivors are sorted by confidence and capped to the limit (the OCR-dump fix).
+func TestFilterAndCapElements(t *testing.T) {
+	mk := func(conf float64, class string) AnnotatedElement {
+		return AnnotatedElement{Class: class, CombinedConfidence: conf}
+	}
+	in := []AnnotatedElement{
+		mk(0.95, "icon"),
+		mk(0.10, "icon"), // degenerate, below floor
+		mk(0.50, "icon"),
+		mk(0.30, "icon"), // below floor (0.40)
+		mk(0.80, "icon"),
+	}
+
+	// No cap: drops the two low boxes, sorts high-first, keeps 3.
+	got := FilterAndCapElements(in, 0, 0.40)
+	if len(got) != 3 {
+		t.Fatalf("filter: got %d elements, want 3", len(got))
+	}
+	if got[0].CombinedConfidence != 0.95 || got[1].CombinedConfidence != 0.80 || got[2].CombinedConfidence != 0.50 {
+		t.Fatalf("filter: wrong sort order: %v", got)
+	}
+
+	// Cap of 2 truncates to highest two.
+	got2 := FilterAndCapElements(in, 2, 0.40)
+	if len(got2) != 2 || got2[0].CombinedConfidence != 0.95 || got2[1].CombinedConfidence != 0.80 {
+		t.Fatalf("cap: got %d elements with wrong values", len(got2))
+	}
+
+	// All-below-floor yields empty non-nil slice (JSON [] not null).
+	got3 := FilterAndCapElements([]AnnotatedElement{mk(0.1, "icon")}, 0, 0.40)
+	if got3 == nil || len(got3) != 0 {
+		t.Fatalf("all-filtered: expected empty non-nil slice, got %#v", got3)
+	}
+
+	// Nil input yields empty non-nil slice.
+	got4 := FilterAndCapElements(nil, 0, 0.40)
+	if got4 == nil || len(got4) != 0 {
+		t.Fatalf("nil input: expected empty non-nil slice, got %#v", got4)
+	}
+}

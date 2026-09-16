@@ -13,6 +13,14 @@
 
 ---
 
+## Key Constraints (What is NOT enabled)
+
+- **No Easing** — only straight-line interpolation is supported for `drag` (from→to); there are no bezier or eased pointer paths.
+- **No CLI Help** — *RESOLVED in 0.3.7*: `--help`, `-h`, `--version`, and `--license` were added in v0.3.7. Prior to 0.3.7 the binary had no help or version flags.
+- **No Robotgo** — the server uses raw Windows syscalls (`user32!SetCursorPos`, `user32!SendInput`) rather than the robotgo library (see ADR-002, Windows Automation Strategy).
+
+---
+
 ## 1. VISION — See What's on Screen
 
 ### HAVE (13 tools)
