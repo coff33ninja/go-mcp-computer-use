@@ -18,8 +18,8 @@ Write-Host "=== icon resource ===" -ForegroundColor Cyan
 if ($LASTEXITCODE -ne 0) { exit 1 }
 
 Write-Host "=== go build ===" -ForegroundColor Cyan
-$ver = (Get-Content VERSION -Raw).Trim()
-go build -ldflags="-X main.Version=$ver" ./cmd/mcp-server/
+$ver = (Get-Content (Join-Path $PSScriptRoot "..\VERSION") -Raw).Trim()
+go build -ldflags="-X main.Version=$ver" (Join-Path $PSScriptRoot "..\cmd\mcp-server")
 if ($LASTEXITCODE -ne 0) {
     exit 1
 }

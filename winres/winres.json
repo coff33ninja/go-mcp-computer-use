@@ -15,7 +15,7 @@
       "0409": {
         "identity": {
           "name": "coff33ninja.go-mcp-computer-use",
-          "version": "0.3.8"
+          "version": "0.3.9"
         },
         "description": "go-mcp-computer-use MCP server",
         "minimum-os": "win7",
@@ -39,22 +39,22 @@
     "#1": {
       "0000": {
         "fixed": {
-          "file_version": "0.3.8.0.0",
-          "product_version": "0.3.8.0.0"
+          "file_version": "0.3.9.0.0",
+          "product_version": "0.3.9.0.0"
         },
         "info": {
           "0409": {
             "Comments": "MCP server for Windows computer use. Licensed under the Apache License, Version 2.0.",
             "CompanyName": "coff33ninja",
             "FileDescription": "go-mcp-computer-use MCP server",
-            "FileVersion": "0.3.8",
+            "FileVersion": "0.3.9",
             "InternalName": "mcp-server",
             "LegalCopyright": "Copyright (c) 2026 coff33ninja. Licensed under the Apache License, Version 2.0.",
             "LegalTrademarks": "",
             "OriginalFilename": "mcp-server.exe",
             "PrivateBuild": "",
             "ProductName": "go-mcp-computer-use",
-            "ProductVersion": "0.3.8",
+            "ProductVersion": "0.3.9",
             "SpecialBuild": ""
           }
         }

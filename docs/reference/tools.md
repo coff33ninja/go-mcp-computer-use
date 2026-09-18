@@ -170,7 +170,7 @@ Auto-generated from `internal/server/server.go`. Total: **160 tools**.
 
 - `agent_analyze` — Analyze the adaptive engine state — timing stats, success rates per tool, and learned OCR→command sequences. Returns a full report for AI decision-making.
 - `agent_suggest` — Given OCR screen text, predict the best next command based on past successful sequences. Returns ranked predictions with confidence scores and optional coord (x, y, confidence, samples) for click/hover/move_mouse.
-- `agent_train` — Train the adaptive engine from datalog training_pairs. Rebuilds the OCR→command word index and sequence cache. Call after the datalog has accumulated new pairs.
+- `agent_train` — Train the adaptive engine from datalog training_pairs AND retrain the Go transformer (writes model.gob + vocab.bin + ml_meta.json). Returns analysis plus ml_status (holdout accuracy vs majority baseline).
 - `ml_query` — Query the ML engine's learned knowledge: 'where is X on this screen?' Pass what you're looking for plus current OCR text. Returns coordinate predictions from past recordings ranked by confidence, plus related commands the ML has seen with these tokens.
 - `ml_teach` — Feed a confirmed correct answer back to the ML. After every successful action (whether ML-guided or AI-discovered), call this to reinforce learning. Pass what was being looked for, the screen OCR, which tool was used, and the coordinates. The ML strengthens token→coordinate associations with each teach.
 

@@ -180,8 +180,18 @@ func (t *Trainer) FinetuneEpoch(samples []dataloader.Sample, lr float64) (*Epoch
 func (t *Trainer) prepareBatch(samples []dataloader.Sample, idx int) ([][]int, [][]float64, [][]float64) {
 	s := samples[idx]
 	tokens := [][]int{t.tokenizer.Encode(s.Context, t.maxLen)}
-	coords := [][]float64{t.encoder.Encode(0, 0)}
-	target := t.makeTarget(s.Action, s.ArgsJSON)
+	// Feed real click/drag coordinates into the spatial encoder.
+	// Previously this was always Encode(0,0), so the model never saw position.
+	sx, sy := s.CoordX, s.CoordY
+	fx, fy := s.FromCoordX, s.FromCoordY
+	if sx == 0 && sy == 0 {
+		_, _, dx, dy := decodeCoords(s.Action, s.ArgsJSON)
+		sx, sy = int(dx), int(dy)
+	}
+	coords := [][]float64{t.encoder.Encode(sx, sy)}
+	_ = fx
+	_ = fy
+	target := t.makeTargetFromSample(s)
 
 	// fill sequence section if sequence training is enabled
 	if t.sequenceLen > 0 && idx+t.sequenceLen <= len(samples) {
@@ -199,20 +209,39 @@ func (t *Trainer) prepareBatch(samples []dataloader.Sample, idx int) ([][]int, [
 	return tokens, coords, [][]float64{target}
 }
 
+func (t *Trainer) makeTargetFromSample(s dataloader.Sample) []float64 {
+	// Prefer loader-normalized coords; fall back to decoding args JSON.
+	fromX, fromY, toX, toY := float64(s.FromCoordX), float64(s.FromCoordY), float64(s.CoordX), float64(s.CoordY)
+	if toX == 0 && toY == 0 {
+		fromX, fromY, toX, toY = decodeCoords(s.Action, s.ArgsJSON)
+	}
+	if s.Action == "drag" || s.Action == "drag_and_drop" {
+		if fromX == 0 && fromY == 0 && s.CoordX != 0 {
+			fromX, fromY = float64(s.CoordX), float64(s.CoordY)
+		}
+	} else if fromX == 0 && fromY == 0 {
+		fromX, fromY = toX, toY
+	}
+	return t.makeTargetWithCoords(s.Action, s.ArgsJSON, fromX, fromY, toX, toY)
+}
+
 func (t *Trainer) makeTarget(action string, argsJSON string) []float64 {
+	fromX, fromY, toX, toY := decodeCoords(action, argsJSON)
+	return t.makeTargetWithCoords(action, argsJSON, fromX, fromY, toX, toY)
+}
+
+func (t *Trainer) makeTargetWithCoords(action string, argsJSON string, fromX, fromY, toX, toY float64) []float64 {
 	target := make([]float64, t.outputDim)
-	// tool one-hot
+	// tool one-hot (amplified so MSE is not drowned by zero coord/arg dims)
 	for i, tool := range t.tools {
 		if i >= t.toolStart {
 			break
 		}
 		if tool == action {
-			target[i] = 1.0
+			target[i] = 2.0
 			break
 		}
 	}
-	// decode coords from ArgsJSON and normalize to 0-1
-	fromX, fromY, toX, toY := decodeCoords(action, argsJSON)
 	numTools := len(t.tools)
 	// from_xy (only set if FromCoordDim > 0)
 	if t.fromCoordDim > 0 {
@@ -282,27 +311,86 @@ func (t *Trainer) makeSequenceTargets(target []float64, actions []struct {
 }
 
 // decodeCoords extracts coordinate values from ArgsJSON for different action types.
+// Accepts production shapes:
+//   - normalized object: {"x":700,"y":400}
+//   - nested string args: {"tool":"click","args":"{\"X\":700,\"Y\":400}"}
+//   - nested object args: {"tool":"click","args":{"X":700,"Y":400}}
+//
 // Returns (fromX, fromY, toX, toY). For single-coord actions, from == to.
 func decodeCoords(action string, argsJSON string) (float64, float64, float64, float64) {
-	var args struct {
-		X     int `json:"x"`
-		Y     int `json:"y"`
-		FromX int `json:"from_x"`
-		FromY int `json:"from_y"`
-		ToX   int `json:"to_x"`
-		ToY   int `json:"to_y"`
-	}
-	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
+	args := decodeArgsMap(argsJSON)
+	if args == nil {
 		return 0, 0, 0, 0
 	}
-	switch action {
+	x := mapFloat(args, "x", "X")
+	y := mapFloat(args, "y", "Y")
+	fromX := mapFloat(args, "from_x", "fromX", "FromX")
+	fromY := mapFloat(args, "from_y", "fromY", "FromY")
+	toX := mapFloat(args, "to_x", "toX", "ToX")
+	toY := mapFloat(args, "to_y", "toY", "ToY")
+
+	switch strings.ToLower(action) {
 	case "drag", "drag_and_drop":
-		// drag uses from_x/from_y + to_x/to_y
-		return float64(args.FromX), float64(args.FromY), float64(args.ToX), float64(args.ToY)
+		if toX == 0 && toY == 0 {
+			toX, toY = x, y
+		}
+		return fromX, fromY, toX, toY
 	default:
-		// click, hover, scroll, etc. use x/y as destination
-		return float64(args.X), float64(args.Y), float64(args.X), float64(args.Y)
+		if x == 0 && y == 0 {
+			x, y = toX, toY
+		}
+		if fromX == 0 && fromY == 0 {
+			fromX, fromY = x, y
+		}
+		return fromX, fromY, x, y
 	}
+}
+
+func decodeArgsMap(argsJSON string) map[string]any {
+	argsJSON = strings.TrimSpace(argsJSON)
+	if argsJSON == "" || argsJSON[0] != '{' {
+		return nil
+	}
+	var top map[string]any
+	if err := json.Unmarshal([]byte(argsJSON), &top); err != nil {
+		return nil
+	}
+	if raw, ok := top["args"]; ok {
+		switch a := raw.(type) {
+		case string:
+			var inner map[string]any
+			if err := json.Unmarshal([]byte(a), &inner); err == nil {
+				return inner
+			}
+		case map[string]any:
+			return a
+		}
+	}
+	return top
+}
+
+func mapFloat(m map[string]any, keys ...string) float64 {
+	for _, want := range keys {
+		for k, v := range m {
+			if !strings.EqualFold(k, want) {
+				continue
+			}
+			switch n := v.(type) {
+			case float64:
+				return n
+			case int:
+				return float64(n)
+			case int64:
+				return float64(n)
+			case json.Number:
+				f, err := n.Float64()
+				if err == nil {
+					return f
+				}
+			}
+		}
+	}
+	return 0
 }
 
 // decodeArgIndex returns the index into ArgCategories for the given action+args.
@@ -378,23 +466,42 @@ func (t *Trainer) Evaluate(samples []dataloader.Sample) float64 {
 	return sum / float64(len(samples))
 }
 
-// Accuracy returns the fraction of samples where the argmax tool prediction
-// matches the target tool. Used for checkpoint versioning and rollback.
+// Accuracy returns tool-classification accuracy (argmax over tool logits only).
+// Previously this used toolStart (tools+coords+args), which mixed continuous
+// coord dims into the argmax and inflated scores.
 func (t *Trainer) Accuracy(samples []dataloader.Sample) float64 {
 	if len(samples) == 0 {
+		return 0
+	}
+	numTools := len(t.tools)
+	if numTools == 0 {
 		return 0
 	}
 	correct := 0
 	evaluated := 0
 	for i := range samples {
+		s := samples[i]
+		// skip rows whose tool is not in the label set
+		gold := -1
+		for j, tool := range t.tools {
+			if tool == s.Action {
+				gold = j
+				break
+			}
+		}
+		if gold < 0 {
+			continue
+		}
 		tokens, coords, targets := t.prepareBatch(samples, i)
 		logits, err := t.model.Forward(tokens, coords, nil)
 		if err != nil {
 			continue
 		}
+		if len(logits) == 0 || len(logits[0]) < numTools || len(targets[0]) < numTools {
+			continue
+		}
 		evaluated++
-		gold := argmax(targets[0][:t.toolStart])
-		if targets[0][gold] > 0.5 && argmax(logits[0][:t.toolStart]) == gold {
+		if argmax(logits[0][:numTools]) == gold {
 			correct++
 		}
 	}

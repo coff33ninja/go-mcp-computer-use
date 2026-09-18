@@ -1,6 +1,8 @@
 package predict
 
 import (
+	"fmt"
+
 	"github.com/coff33ninja/go-mcp-computer-use/ml/spatial"
 	"github.com/coff33ninja/go-mcp-computer-use/ml/tokenizer"
 	"github.com/coff33ninja/go-mcp-computer-use/ml/transformer"
@@ -82,6 +84,13 @@ type Engine struct {
 	windowDim   int  // window category dimensions (0 = disabled)
 	sequenceLen int  // number of future actions to predict (0 = disabled)
 	loaded      bool
+	ctxX        int // spatial context point (cursor / focus)
+	ctxY        int
+}
+
+// SetContextPoint sets the spatial features used at inference (cursor pos, etc.).
+func (e *Engine) SetContextPoint(x, y int) {
+	e.ctxX, e.ctxY = x, y
 }
 
 // NewEngine creates a new prediction engine.
@@ -128,8 +137,20 @@ func (e *Engine) Predict(ocrText string, topK int) ([]Prediction, error) {
 
 // PredictWithContext includes preceding action history for better predictions.
 func (e *Engine) PredictWithContext(ocrText string, history []string, topK int) ([]Prediction, error) {
+	if e.tokenizer == nil {
+		return nil, fmt.Errorf("predict: nil tokenizer")
+	}
 	tokens := e.tokenizer.Encode(ocrText, e.maxLen)
-	coordFeatures := make([]float64, e.encoder.FeatureDimValue())
+	if len(tokens) == 0 {
+		return nil, fmt.Errorf("predict: tokenizer produced no tokens (unfitted or empty OCR)")
+	}
+	// Use the configured context point so spatial features are not always zero.
+	var coordFeatures []float64
+	if e.encoder != nil {
+		coordFeatures = e.encoder.Encode(e.ctxX, e.ctxY)
+	} else {
+		coordFeatures = make([]float64, 14)
+	}
 
 	// encode history actions into token sequences
 	var historyTokens [][]int

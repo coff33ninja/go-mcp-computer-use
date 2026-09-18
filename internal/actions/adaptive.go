@@ -130,6 +130,7 @@ type PredictedAction struct {
 	Coord       *PredictedCoord `json:"coord,omitempty"`
 	FromCoord   *PredictedCoord `json:"from_coord,omitempty"` // for drag operations
 	Args        *PredictedArgs  `json:"args,omitempty"`
+	Source      string          `json:"source,omitempty"` // transformer | statistical
 }
 
 type PredictedArgs struct {
@@ -347,7 +348,14 @@ func extractArgsFromJSON(cmdJSON string) string {
 	switch a := cmdData["args"].(type) {
 	case string:
 		return a
+	case map[string]any:
+		b, err := json.Marshal(a)
+		if err != nil {
+			return ""
+		}
+		return string(b)
 	default:
+		// args may be absent; coordinates sometimes sit on the command object
 		return ""
 	}
 }
@@ -566,6 +574,22 @@ func (e *AdaptiveEngine) rebuildSequences() {
 	}
 }
 
+// MLStatus returns transformer health from the ML engine (nil-safe).
+func (e *AdaptiveEngine) MLStatus() MLStatus {
+	if e.mlEngine == nil {
+		return MLStatus{Source: MLSourceUnavailable, Notes: "ml engine not initialized"}
+	}
+	return e.mlEngine.Status()
+}
+
+// TrainML trains the Go-native transformer from datalog training_pairs.
+func (e *AdaptiveEngine) TrainML() error {
+	if e.mlEngine == nil {
+		return fmt.Errorf("ml engine not initialized")
+	}
+	return e.mlEngine.Train()
+}
+
 func (e *AdaptiveEngine) PredictActions(ocrText string, limit int) []PredictedAction {
 	if limit <= 0 {
 		limit = 5
@@ -630,6 +654,7 @@ func (e *AdaptiveEngine) PredictActions(ocrText string, limit int) []PredictedAc
 			Confidence:  math.Round(conf*100) / 100,
 			SampleSize:  cs.samples,
 			SuccessRate: math.Round(sr*100) / 100,
+			Source:      MLSourceStatistical,
 		}
 		if cmd == "click" || cmd == "move_mouse" || cmd == "hover" {
 			pa.Coord = e.predictCoord(cmd, tokens)

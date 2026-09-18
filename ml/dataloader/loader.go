@@ -6,10 +6,12 @@ import "context"
 type Sample struct {
 	Context     string  // OCR text snapshot
 	Action      string  // tool name (click, hover, type_text, etc.)
-	ArgsJSON    string  // tool arguments as JSON string
+	ArgsJSON    string  // tool arguments as a JSON object string (normalized)
 	Success     bool    // whether the action succeeded
-	CoordX      int     // predicted X coordinate (0 if N/A)
-	CoordY      int     // predicted Y coordinate (0 if N/A)
+	CoordX      int     // destination X pixel (0 if N/A)
+	CoordY      int     // destination Y pixel (0 if N/A)
+	FromCoordX  int     // source X for drag (0 if N/A)
+	FromCoordY  int     // source Y for drag (0 if N/A)
 	WindowTitle string  // window title at time of action
 	DPI         float64 // screen DPI scale at time of action
 	CreatedAt   string  // timestamp of the sample

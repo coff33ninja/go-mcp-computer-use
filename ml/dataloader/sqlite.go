@@ -213,7 +213,9 @@ func (l *SQLiteLoader) queryDB(ctx context.Context, db *sql.DB, query string, ar
 		}
 		s.Success = successInt == 1
 		s.Action = extractTool(cmdJSON)
-		s.ArgsJSON = cmdJSON
+		// Production logs store args as a nested JSON string with mixed-case
+		// keys ({\"X\":..}). Normalize to tool + object args + pixel coords.
+		ApplyNormalization(&s, cmdJSON)
 		samples = append(samples, s)
 	}
 	return samples, rows.Err()

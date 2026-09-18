@@ -346,20 +346,20 @@ func TestMakeTarget_ArgDim(t *testing.T) {
 		LearningRate: 0.01,
 	})
 
-	// scroll down → tool index 1 = 1.0, arg index 1 (scroll_down) = 1.0
+	// scroll down → tool index 1 = 2.0 (amplified), arg index 1 (scroll_down) = 1.0
 	target := tr.makeTarget("scroll", `{"clicks":-5}`)
 	numTools := 5
-	if target[1] != 1.0 {
-		t.Errorf("scroll tool: got %.1f, want 1.0", target[1])
+	if target[1] != 2.0 {
+		t.Errorf("scroll tool: got %.1f, want 2.0 (amplified tool target)", target[1])
 	}
 	if target[numTools+2+1] != 1.0 {
 		t.Errorf("scroll_down arg: got %.1f, want 1.0 at index %d", target[numTools+2+1], numTools+2+1)
 	}
 
-	// key_press Enter → tool index 2 = 1.0, arg index 9 (special) = 1.0
+	// key_press Enter → tool index 2 = 2.0, arg index 9 (special) = 1.0
 	target = tr.makeTarget("key_press", `{"keys":["Enter"]}`)
-	if target[2] != 1.0 {
-		t.Errorf("key_press tool: got %.1f, want 1.0", target[2])
+	if target[2] != 2.0 {
+		t.Errorf("key_press tool: got %.1f, want 2.0", target[2])
 	}
 	if target[numTools+2+9] != 1.0 {
 		t.Errorf("key_special arg: got %.1f, want 1.0 at index %d", target[numTools+2+9], numTools+2+9)
@@ -367,8 +367,8 @@ func TestMakeTarget_ArgDim(t *testing.T) {
 
 	// click → no arg set
 	target = tr.makeTarget("click", `{"x":100,"y":200}`)
-	if target[0] != 1.0 {
-		t.Errorf("click tool: got %.1f, want 1.0", target[0])
+	if target[0] != 2.0 {
+		t.Errorf("click tool: got %.1f, want 2.0", target[0])
 	}
 	// all arg dims should be 0
 	for i := numTools + 2; i < numTools+2+10; i++ {

@@ -56,6 +56,14 @@ type MLEngine struct {
 	// app-specific models for transfer learning
 	appModels map[string]*predict.Engine // keyed by normalized app name
 	appDir    string                     // directory for app model checkpoints
+	// health / persistence
+	vocabLoaded      bool
+	cfg              transformer.Config
+	lastErr          string
+	lastEvalLoss     float64
+	lastEvalAcc      float64
+	lastMajority     float64
+	lastTrainSamples int
 }
 
 // detectScreenConfig reads the actual screen dimensions and DPI scale
@@ -147,7 +155,7 @@ func NewMLEngine(dataDir string) *MLEngine {
 }
 
 // Train loads training pairs from the SQLite datalog and trains the
-// transformer model. It saves the model to disk on success.
+// transformer model. Saves model weights + tokenizer vocab + meta.
 func (m *MLEngine) Train() error {
 	loader := dataloader.NewSQLiteLoader(m.dbPath)
 	defer loader.Close()
@@ -155,6 +163,7 @@ func (m *MLEngine) Train() error {
 	ctx := context.Background()
 	count, err := loader.Count(ctx)
 	if err != nil {
+		m.setErr(fmt.Sprintf("count training data: %v", err))
 		return fmt.Errorf("ml: count training data: %w", err)
 	}
 	if count < 5 {
@@ -162,69 +171,59 @@ func (m *MLEngine) Train() error {
 		return nil
 	}
 
-	cfg := transformer.Config{
-		VocabSize:    2000,
-		MaxLen:       128,
-		EmbedDim:     64,
-		NumHeads:     2,
-		NumLayers:    2,
-		FFNDim:       128,
-		CoordDim:     spatial.FeatureDim,
-		OutputDim:    len(m.tools) + 4 + 10 + 6, // tool + from_xy(2) + to_xy(2) + arg(10) + window(6)
-		FromCoordDim: 2,
-		WindowDim:    6,
-		HistoryLen:   5,
-	}
-
-	// try loading existing model, create new if not found
-	var mdl transformer.Model
-	if _, statErr := os.Stat(m.modelPath); statErr == nil {
-		mdl, err = transformer.New(cfg)
-		if err != nil {
-			return fmt.Errorf("ml: create model: %w", err)
-		}
-		if err := mdl.Load(m.modelPath); err != nil {
-			slog.Warn("ml: failed to load saved model, retraining", "err", err)
-			mdl, err = transformer.New(cfg)
-			if err != nil {
-				return fmt.Errorf("ml: recreate model: %w", err)
-			}
-		}
-	} else {
-		mdl, err = transformer.New(cfg)
-		if err != nil {
-			return fmt.Errorf("ml: create model: %w", err)
-		}
-	}
-
-	// build vocabulary from training data (with augmentation)
 	samples, err := loader.LoadAll(ctx)
 	if err != nil {
+		m.setErr(fmt.Sprintf("load samples: %v", err))
 		return fmt.Errorf("ml: load samples: %w", err)
 	}
 
-	// hold out 10% for evaluation before augmenting so eval stays honest
 	nTest := len(samples) / 10
 	if nTest == 0 {
 		nTest = 1
 	}
 	testSamples := samples[:nTest]
-	trainSamples := samples[nTest:]
+	trainSamples := balanceTools(samples[nTest:])
 
 	aug := dataloader.NewAugmentor()
-	augmented := aug.AugmentAll(trainSamples, 2) // 2 augmented per original
+	augmented := aug.AugmentAll(trainSamples, 1)
 
 	tok := tokenizer.NewSimpleTokenizer()
 	corpus := make([]string, 0, len(augmented)+len(testSamples))
 	for _, s := range augmented {
-		corpus = append(corpus, s.Context)
+		if s.Context != "" {
+			corpus = append(corpus, s.Context)
+		}
 	}
 	for _, s := range testSamples {
-		corpus = append(corpus, s.Context)
+		if s.Context != "" {
+			corpus = append(corpus, s.Context)
+		}
 	}
-	tok.Fit(corpus)
+	if len(corpus) == 0 {
+		return fmt.Errorf("ml: empty OCR corpus")
+	}
+	if err := tok.Fit(corpus); err != nil {
+		m.setErr(fmt.Sprintf("tokenizer fit: %v", err))
+		return fmt.Errorf("ml: tokenizer fit: %w", err)
+	}
 
+	cfg := modelConfigFor(m.tools, tok.VocabSize())
 	enc := spatial.NewEncoder(m.screenCfg)
+
+	mdl, err := transformer.New(cfg)
+	if err != nil {
+		m.setErr(fmt.Sprintf("create model: %v", err))
+		return fmt.Errorf("ml: create model: %w", err)
+	}
+	if meta, ok := m.loadMeta(); ok && meta.VocabSize == cfg.VocabSize && meta.NumTools == len(m.tools) {
+		if err := mdl.Load(m.modelPath); err != nil {
+			slog.Warn("ml: failed to warm-start from saved model, training fresh", "err", err)
+			mdl, err = transformer.New(cfg)
+			if err != nil {
+				return fmt.Errorf("ml: recreate model: %w", err)
+			}
+		}
+	}
 
 	tr := trainer.NewTrainer(trainer.TrainerConfig{
 		Model:        mdl,
@@ -235,39 +234,66 @@ func (m *MLEngine) Train() error {
 		LearningRate: 0.001,
 	})
 
-	// multiple passes — a single epoch barely moves the loss
 	const epochs = 5
 	var result *trainer.EpochResult
 	for e := 1; e <= epochs; e++ {
 		result, err = tr.TrainSamples(augmented)
 		if err != nil {
+			m.setErr(fmt.Sprintf("train epoch %d: %v", e, err))
 			return fmt.Errorf("ml: train epoch %d: %w", e, err)
 		}
 	}
 
 	evalLoss := tr.Evaluate(testSamples)
 	accuracy := tr.Accuracy(testSamples)
-	if result.SamplesProcessed > 0 {
+	majority := majorityBaseline(samples)
+	nonClickAcc := toolSubsetAccuracy(tr, testSamples, func(a string) bool { return a != "click" })
+	clickAcc := toolSubsetAccuracy(tr, testSamples, func(a string) bool { return a == "click" })
+	if result != nil && result.SamplesProcessed > 0 {
 		slog.Info("ml: training complete",
 			"epochs", epochs,
 			"loss_train_final", fmt.Sprintf("%.4f", result.FinalLoss),
 			"loss_eval", fmt.Sprintf("%.4f", evalLoss),
 			"accuracy", fmt.Sprintf("%.2f%%", accuracy*100),
+			"click_acc", fmt.Sprintf("%.2f%%", clickAcc*100),
+			"non_click_acc", fmt.Sprintf("%.2f%%", nonClickAcc*100),
+			"majority_baseline", fmt.Sprintf("%.2f%%", majority*100),
 			"samples_train", result.SamplesProcessed,
 			"samples_eval", len(testSamples),
+			"vocab", tok.VocabSize(),
 		)
 	}
 
 	if err := tr.SaveModel(m.modelPath); err != nil {
+		m.setErr(fmt.Sprintf("save model: %v", err))
 		return fmt.Errorf("ml: save model: %w", err)
 	}
+	if err := tok.Save(m.vocabPath()); err != nil {
+		m.setErr(fmt.Sprintf("save vocab: %v", err))
+		return fmt.Errorf("ml: save vocab: %w", err)
+	}
+	meta := mlMeta{
+		VocabSize:        cfg.VocabSize,
+		ArgDim:           cfg.ArgDim,
+		FromCoordDim:     cfg.FromCoordDim,
+		WindowDim:        cfg.WindowDim,
+		HistoryLen:       cfg.HistoryLen,
+		NumTools:         len(m.tools),
+		LastEvalLoss:     evalLoss,
+		LastEvalAccuracy: accuracy,
+		MajorityBaseline: majority,
+		TrainSamples:     len(samples),
+		LastTrainAt:      nowStamp(),
+		Tools:            m.tools,
+	}
+	if err := m.saveMeta(meta); err != nil {
+		slog.Debug("ml: failed to save meta", "err", err)
+	}
 
-	// save versioned checkpoint with real eval numbers so rollback logic works
-	if _, err := m.versioner.SaveCheckpoint(mdl, evalLoss, accuracy, result.SamplesProcessed); err != nil {
+	if _, err := m.versioner.SaveCheckpoint(mdl, evalLoss, accuracy, len(samples)); err != nil {
 		slog.Debug("ml: failed to save initial checkpoint", "err", err)
 	}
 
-	// build predictor
 	pred := predict.NewEngineWithConfig(mdl, tok, enc, cfg)
 	pred.SetTools(m.tools)
 
@@ -275,42 +301,160 @@ func (m *MLEngine) Train() error {
 	m.model = mdl
 	m.predictor = pred
 	m.tok = tok
+	m.cfg = cfg
+	m.encoder = enc
 	m.ready = true
+	m.vocabLoaded = true
+	m.lastErr = ""
+	m.lastEvalLoss = evalLoss
+	m.lastEvalAcc = accuracy
+	m.lastMajority = majority
+	m.lastTrainSamples = len(samples)
 	m.mu.Unlock()
 
 	m.StartOnlineTraining()
-
 	return nil
 }
 
-// LoadModel loads a previously trained model from disk.
+func (m *MLEngine) setErr(msg string) {
+	m.mu.Lock()
+	m.lastErr = msg
+	m.mu.Unlock()
+}
+
+func majorityBaseline(samples []dataloader.Sample) float64 {
+	if len(samples) == 0 {
+		return 0
+	}
+	counts := map[string]int{}
+	best := 0
+	for _, s := range samples {
+		counts[s.Action]++
+		if counts[s.Action] > best {
+			best = counts[s.Action]
+		}
+	}
+	return float64(best) / float64(len(samples))
+}
+
+// toolSubsetAccuracy scores tool argmax only on samples matching filter.
+func toolSubsetAccuracy(tr *trainer.Trainer, samples []dataloader.Sample, keep func(action string) bool) float64 {
+	var sub []dataloader.Sample
+	for _, s := range samples {
+		if keep(s.Action) {
+			sub = append(sub, s)
+		}
+	}
+	if len(sub) == 0 {
+		return 0
+	}
+	return tr.Accuracy(sub)
+}
+
+// balanceTools upsamples rare tool classes so click-heavy logs do not
+// dominate training into a constant "always click" predictor.
+func balanceTools(samples []dataloader.Sample) []dataloader.Sample {
+	byTool := map[string][]dataloader.Sample{}
+	for _, s := range samples {
+		if s.Action == "" {
+			continue
+		}
+		byTool[s.Action] = append(byTool[s.Action], s)
+	}
+	if len(byTool) <= 1 {
+		return samples
+	}
+	// Cap minority upsample size so training stays fast on large click-heavy logs.
+	const minCount = 48
+	out := make([]dataloader.Sample, 0, len(samples)+len(byTool)*minCount)
+	for _, v := range byTool {
+		out = append(out, v...)
+		if len(v) == 0 || len(v) >= minCount {
+			continue
+		}
+		for i := len(v); i < minCount; i++ {
+			out = append(out, v[i%len(v)])
+		}
+	}
+	return out
+}
+
+// LoadModel loads model weights + tokenizer vocab. Without vocab the
+// transformer is NOT ready (Encode would return nil tokens).
 func (m *MLEngine) LoadModel() error {
-	cfg := transformer.Config{
-		VocabSize:    2000,
-		MaxLen:       128,
-		EmbedDim:     64,
-		NumHeads:     2,
-		NumLayers:    2,
-		FFNDim:       128,
-		CoordDim:     spatial.FeatureDim,
-		OutputDim:    len(m.tools) + 4 + 10 + 6, // tool + from_xy(2) + to_xy(2) + arg(10) + window(6)
-		FromCoordDim: 2,
-		WindowDim:    6,
-		HistoryLen:   5,
+	meta, hasMeta := m.loadMeta()
+	vocabSize := 2048
+	if hasMeta && meta.VocabSize > 0 {
+		vocabSize = meta.VocabSize
+	}
+	cfg := modelConfigFor(m.tools, vocabSize)
+	if hasMeta && meta.ArgDim > 0 {
+		cfg.ArgDim = meta.ArgDim
+	}
+	if hasMeta && meta.WindowDim > 0 {
+		cfg.WindowDim = meta.WindowDim
+	}
+	if hasMeta && meta.FromCoordDim > 0 {
+		cfg.FromCoordDim = meta.FromCoordDim
+	}
+	if hasMeta && meta.NumTools > 0 && meta.NumTools != len(m.tools) {
+		m.setErr("tool list changed since last train; retrain required")
+		return fmt.Errorf("ml: tool list changed (%d vs %d); retrain required", meta.NumTools, len(m.tools))
+	}
+	cfg.OutputDim = len(m.tools) + cfg.FromCoordDim + 2 + cfg.ArgDim + cfg.WindowDim
+
+	if _, err := os.Stat(m.modelPath); err != nil {
+		m.setErr("model.gob missing")
+		return fmt.Errorf("ml: model not found: %w", err)
+	}
+
+	if _, err := os.Stat(m.vocabPath()); err != nil {
+		m.mu.Lock()
+		m.ready = false
+		m.vocabLoaded = false
+		m.model = nil
+		m.predictor = nil
+		m.cfg = cfg
+		m.lastErr = "vocab.bin missing — transformer disabled until retrain"
+		m.mu.Unlock()
+		slog.Warn("ml: model.gob present but vocab.bin missing; run Train() to rebuild")
+		return fmt.Errorf("ml: vocab.bin missing next to %s", m.modelPath)
+	}
+
+	tok := tokenizer.NewSimpleTokenizer()
+	if err := tok.Load(m.vocabPath()); err != nil {
+		m.setErr(fmt.Sprintf("vocab load: %v", err))
+		return fmt.Errorf("ml: load vocab: %w", err)
+	}
+	if tok.VocabSize() == 0 {
+		m.setErr("vocab.bin empty")
+		return fmt.Errorf("ml: vocab.bin empty")
+	}
+	if cfg.VocabSize < tok.VocabSize() {
+		cfg = modelConfigFor(m.tools, tok.VocabSize())
+		if hasMeta && meta.ArgDim > 0 {
+			cfg.ArgDim = meta.ArgDim
+		}
+		if hasMeta && meta.WindowDim > 0 {
+			cfg.WindowDim = meta.WindowDim
+		}
+		if hasMeta && meta.FromCoordDim > 0 {
+			cfg.FromCoordDim = meta.FromCoordDim
+		}
+		cfg.OutputDim = len(m.tools) + cfg.FromCoordDim + 2 + cfg.ArgDim + cfg.WindowDim
 	}
 
 	mdl, err := transformer.New(cfg)
 	if err != nil {
+		m.setErr(fmt.Sprintf("create model: %v", err))
 		return fmt.Errorf("ml: create model: %w", err)
 	}
 	if err := mdl.Load(m.modelPath); err != nil {
-		return err
+		m.setErr(fmt.Sprintf("load model weights: %v", err))
+		return fmt.Errorf("ml: load model: %w", err)
 	}
 
 	enc := spatial.NewEncoder(m.screenCfg)
-
-	tok := tokenizer.NewSimpleTokenizer()
-
 	pred := predict.NewEngineWithConfig(mdl, tok, enc, cfg)
 	pred.SetTools(m.tools)
 
@@ -318,76 +462,122 @@ func (m *MLEngine) LoadModel() error {
 	m.model = mdl
 	m.predictor = pred
 	m.tok = tok
+	m.cfg = cfg
+	m.encoder = enc
 	m.ready = true
+	m.vocabLoaded = true
+	m.lastErr = ""
+	if hasMeta {
+		m.lastEvalLoss = meta.LastEvalLoss
+		m.lastEvalAcc = meta.LastEvalAccuracy
+		m.lastMajority = meta.MajorityBaseline
+		m.lastTrainSamples = meta.TrainSamples
+	}
 	m.mu.Unlock()
 
 	m.StartOnlineTraining()
-
 	return nil
 }
 
-// IsReady returns true if the ML model is loaded and ready for predictions.
+// IsReady is true only when weights + fitted tokenizer are both present.
 func (m *MLEngine) IsReady() bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return m.ready
+	return m.ready && m.vocabLoaded && m.predictor != nil && m.tok != nil
 }
 
-// Predict returns transformer-based predictions for the given OCR text.
-// history is a list of recent action tool names for sequence context.
-// Returns nil if the model is not ready or produces no predictions.
+// Predict returns transformer predictions, or nil if unavailable/uninformative.
 func (m *MLEngine) Predict(ocrText string, limit int, history []string) []PredictedAction {
+	if !m.IsReady() {
+		return nil
+	}
 	m.mu.RLock()
-	defer m.mu.RUnlock()
-	if !m.ready || m.predictor == nil {
+	pred := m.predictor
+	numTools := len(m.tools)
+	m.mu.RUnlock()
+	if pred == nil {
 		return nil
 	}
 
-	preds, err := m.predictor.PredictWithContext(ocrText, history, limit)
+	if cx, cy, err := GetCursorPosition(); err == nil {
+		pred.SetContextPoint(int(cx), int(cy))
+	}
+
+	preds, err := pred.PredictWithContext(ocrText, history, limit)
 	if err != nil {
+		m.setErr(fmt.Sprintf("predict: %v", err))
 		slog.Debug("ml: predict error", "err", err)
+		return nil
+	}
+	if len(preds) > 0 {
+		slog.Debug("ml: predict raw", "n", len(preds), "top", preds[0].Tool, "score", preds[0].Score)
+	}
+	if !predictionsLookInformative(preds, numTools) {
+		slog.Debug("ml: predictions uninformative; falling back to statistical engine", "n", len(preds))
+		return nil
+	}
+	// Do not override a better statistical fallback when the model is worse
+	// than the majority-class baseline on the last honest holdout eval.
+	m.mu.RLock()
+	evalAcc, maj := m.lastEvalAcc, m.lastMajority
+	m.mu.RUnlock()
+	if evalAcc > 0 && maj > 0 && evalAcc < maj {
+		slog.Debug("ml: model below majority baseline; suppressing transformer predictions",
+			"acc", evalAcc, "majority", maj)
 		return nil
 	}
 
 	var results []PredictedAction
 	for _, p := range preds {
-		if p.Tool == "" || p.Score < 0.01 {
+		if p.Tool == "" || p.Score < 0.03 {
 			continue
 		}
 		pa := PredictedAction{
 			Command:    p.Tool,
 			Confidence: math.Round(p.Score*100) / 100,
 			SampleSize: 1,
+			Source:     MLSourceTransformer,
 		}
 		if p.CoordX != 0 || p.CoordY != 0 {
-			pa.Coord = &PredictedCoord{
-				X:          p.CoordX,
-				Y:          p.CoordY,
-				Confidence: p.Score,
-				Samples:    1,
-			}
+			pa.Coord = &PredictedCoord{X: p.CoordX, Y: p.CoordY, Confidence: p.Score, Samples: 1}
 		}
 		if p.FromCoordX != 0 || p.FromCoordY != 0 {
-			pa.FromCoord = &PredictedCoord{
-				X:          p.FromCoordX,
-				Y:          p.FromCoordY,
-				Confidence: p.Score,
-				Samples:    1,
-			}
+			pa.FromCoord = &PredictedCoord{X: p.FromCoordX, Y: p.FromCoordY, Confidence: p.Score, Samples: 1}
 		}
 		if p.Args != nil {
-			pa.Args = &PredictedArgs{
-				ScrollDir:   p.Args.ScrollDir,
-				KeyCategory: p.Args.KeyCategory,
-			}
+			pa.Args = &PredictedArgs{ScrollDir: p.Args.ScrollDir, KeyCategory: p.Args.KeyCategory}
 		}
 		results = append(results, pa)
 	}
-
 	if len(results) > limit {
 		results = results[:limit]
 	}
 	return results
+}
+
+// predictionsLookInformative rejects near-uniform outputs from a broken model.
+// Uses absolute top score + top1/top2 separation (MSE heads are not well
+// calibrated, so pure uniform*1.25 was too strict after honest training).
+func predictionsLookInformative(preds []predict.Prediction, numTools int) bool {
+	if len(preds) == 0 {
+		return false
+	}
+	top, second := 0.0, 0.0
+	for _, p := range preds {
+		if p.Score > top {
+			second = top
+			top = p.Score
+		} else if p.Score > second {
+			second = p.Score
+		}
+	}
+	if top < 0.06 {
+		return false
+	}
+	if second > 0 && top < second*1.08 {
+		return false
+	}
+	return true
 }
 
 // SequencePredictionResult holds the primary prediction plus future actions.
@@ -396,8 +586,6 @@ type SequencePredictionResult struct {
 	Next    []PredictedAction `json:"next,omitempty"`
 }
 
-// PredictSequence returns the primary prediction plus predicted future actions.
-// The primary is the same as Predict(). Next contains SequenceLen future actions.
 func (m *MLEngine) PredictSequence(ocrText string, history []string) *SequencePredictionResult {
 	if !m.IsReady() {
 		return nil
@@ -659,14 +847,18 @@ func (m *MLEngine) StopOnlineTraining() {
 	}
 }
 
+// trainFromBuffer does a short fine-tune on recent replay experiences
+// WITHOUT refitting the tokenizer (refit used to destroy token IDs).
 func (m *MLEngine) trainFromBuffer() {
 	m.mu.RLock()
 	model := m.model
 	tok := m.tok
 	enc := m.encoder
+	cfg := m.cfg
+	ready := m.ready && m.vocabLoaded
 	m.mu.RUnlock()
 
-	if model == nil || tok == nil || enc == nil {
+	if !ready || model == nil || tok == nil || enc == nil || tok.VocabSize() == 0 {
 		return
 	}
 	if m.replayBuf.Size() < 32 {
@@ -674,74 +866,74 @@ func (m *MLEngine) trainFromBuffer() {
 	}
 
 	batch := m.replayBuf.Sample(32)
-	var corpus []string
+	samples := make([]dataloader.Sample, 0, len(batch))
 	for _, exp := range batch {
-		if exp.Context != "" {
-			corpus = append(corpus, exp.Context)
+		argsJSON := "{}"
+		if exp.CoordX != 0 || exp.CoordY != 0 {
+			argsJSON = fmt.Sprintf(`{"x":%d,"y":%d}`, exp.CoordX, exp.CoordY)
 		}
+		samples = append(samples, dataloader.Sample{
+			Context:  exp.Context,
+			Action:   exp.Action,
+			ArgsJSON: argsJSON,
+			Success:  exp.Success,
+			CoordX:   exp.CoordX,
+			CoordY:   exp.CoordY,
+		})
 	}
-	if len(corpus) == 0 {
+	if len(samples) == 0 {
 		return
 	}
 
-	tok.Fit(corpus)
-
-	cfg := transformer.Config{
-		VocabSize:    2000,
-		MaxLen:       128,
-		EmbedDim:     64,
-		NumHeads:     2,
-		NumLayers:    2,
-		FFNDim:       128,
-		CoordDim:     spatial.FeatureDim,
-		OutputDim:    len(m.tools) + 4 + 10 + 6, // tool + from_xy(2) + to_xy(2) + arg(10) + window(6)
-		FromCoordDim: 2,
-		WindowDim:    6,
-		HistoryLen:   5,
+	if cfg.OutputDim == 0 {
+		cfg = modelConfigFor(m.tools, tok.VocabSize())
 	}
-
-	loader := dataloader.NewSQLiteLoader(m.dbPath)
-	defer loader.Close()
 
 	tr := trainer.NewTrainer(trainer.TrainerConfig{
 		Model:        model,
 		ModelConfig:  cfg,
-		Tokenizer:    tok,
+		Tokenizer:    tok, // do NOT Fit — keep embedding IDs stable
 		Encoder:      enc,
 		Tools:        m.tools,
 		LearningRate: 0.0005,
 	})
 
-	result, err := tr.TrainEpoch(loader)
+	result, err := tr.TrainSamples(samples)
 	if err != nil {
 		slog.Debug("ml: online training failed", "err", err)
 		return
 	}
-	if result.SamplesProcessed > 0 {
-		slog.Debug("ml: online training complete",
-			"loss", fmt.Sprintf("%.4f", result.FinalLoss),
-			"samples", result.SamplesProcessed,
-		)
+	if result.SamplesProcessed == 0 {
+		return
+	}
 
-		// save versioned checkpoint
-		vid, err := m.versioner.SaveCheckpoint(model, result.FinalLoss, 0.0, result.SamplesProcessed)
-		if err != nil {
-			slog.Debug("ml: failed to save checkpoint", "err", err)
-		}
+	// evaluate on the online batch itself (tiny); still better than hardcoded 0
+	evalLoss := tr.Evaluate(samples)
+	acc := tr.Accuracy(samples)
 
-		// check for regression and rollback if needed
-		if rollbackPath := m.versioner.CheckAndRollback(result.FinalLoss, 0.0); rollbackPath != "" {
-			slog.Info("ml: rolling back to best checkpoint", "path", rollbackPath)
-			if err := model.Load(rollbackPath); err != nil {
-				slog.Warn("ml: rollback failed", "err", err)
-			}
-			// re-save as current version
-			model.Save(m.modelPath)
-		} else if vid >= 0 {
-			// save as current model
-			model.Save(m.modelPath)
+	slog.Debug("ml: online training complete",
+		"loss", fmt.Sprintf("%.4f", result.FinalLoss),
+		"samples", result.SamplesProcessed,
+		"eval_loss", fmt.Sprintf("%.4f", evalLoss),
+		"acc", fmt.Sprintf("%.2f%%", acc*100),
+	)
+
+	if _, err := m.versioner.SaveCheckpoint(model, evalLoss, acc, result.SamplesProcessed); err != nil {
+		slog.Debug("ml: failed to save checkpoint", "err", err)
+	}
+	if rollbackPath := m.versioner.CheckAndRollback(evalLoss, acc); rollbackPath != "" {
+		slog.Info("ml: rolling back to best checkpoint", "path", rollbackPath)
+		if err := model.Load(rollbackPath); err != nil {
+			slog.Warn("ml: rollback failed", "err", err)
 		}
 	}
+	_ = model.Save(m.modelPath)
+	_ = tok.Save(m.vocabPath())
+
+	m.mu.Lock()
+	m.lastEvalLoss = evalLoss
+	m.lastEvalAcc = acc
+	m.mu.Unlock()
 }
 
 // FinetuneForApp loads the base model, fine-tunes it on app-specific samples
@@ -757,24 +949,17 @@ func (m *MLEngine) FinetuneForApp(appName string, epochs int) (int, error) {
 	model := m.model
 	tok := m.tok
 	enc := m.encoder
+	cfg := m.cfg
 	m.mu.RUnlock()
 
-	if model == nil || tok == nil || enc == nil {
+	if model == nil || tok == nil || enc == nil || !m.IsReady() {
 		return 0, fmt.Errorf("ml: base model not ready")
 	}
-
-	// load base model fresh
-	cfg := transformer.Config{
-		VocabSize:  2000,
-		MaxLen:     128,
-		EmbedDim:   64,
-		NumHeads:   2,
-		NumLayers:  2,
-		FFNDim:     128,
-		CoordDim:   spatial.FeatureDim,
-		OutputDim:  len(m.tools) + 2 + 10,
-		HistoryLen: 5,
+	if cfg.OutputDim == 0 {
+		cfg = modelConfigFor(m.tools, tok.VocabSize())
 	}
+
+	// load base model fresh with the SAME config as training
 	freshModel, err := transformer.New(cfg)
 	if err != nil {
 		return 0, fmt.Errorf("ml: create finetune model: %w", err)

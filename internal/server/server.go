@@ -2479,6 +2479,7 @@ func chainPredictHandler(ctx context.Context, req *mcp.CallToolRequest, args Cha
 	if args.OCRText == "" {
 		return nil, nil, fmt.Errorf("ocr_text is required")
 	}
+	status := actions.Adaptive.MLStatus()
 	var result *actions.SequencePredictionResult
 	if args.WindowTitle != "" {
 		result = actions.Adaptive.PredictSequenceActionsWithWindow(args.OCRText, args.WindowTitle)
@@ -2486,11 +2487,23 @@ func chainPredictHandler(ctx context.Context, req *mcp.CallToolRequest, args Cha
 		result = actions.Adaptive.PredictSequenceActions(args.OCRText)
 	}
 	if result == nil {
+		payload := map[string]any{
+			"primary": nil,
+			"next":    []any{},
+			"ml_status": status,
+		}
+		msg := "no predictions available — transformer not ready. Run agent_train first."
+		if status.LastError != "" {
+			msg += " last_error=" + status.LastError
+		}
+		if status.Notes != "" {
+			msg += " notes=" + status.Notes
+		}
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: "no predictions available — ML model not trained yet. Run agent_train first."}},
-		}, map[string]any{"primary": nil, "next": []any{}}, nil
+			Content: []mcp.Content{&mcp.TextContent{Text: msg}},
+		}, payload, nil
 	}
-	b, _ := json.MarshalIndent(result, "", "  ")
+	b, _ := json.MarshalIndent(map[string]any{"result": result, "ml_status": status}, "", "  ")
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: string(b)}},
 	}, result, nil
@@ -2512,16 +2525,17 @@ func agentSuggestHandler(ctx context.Context, req *mcp.CallToolRequest, args Age
 	if limit <= 0 {
 		limit = 5
 	}
+	status := actions.Adaptive.MLStatus()
 	predictions := actions.Adaptive.PredictActions(args.OCRText, limit)
 	if predictions == nil {
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: "no predictions available - try training the model first with agent_train"}},
-		}, map[string]any{"predictions": []any{}}, nil
+			Content: []mcp.Content{&mcp.TextContent{Text: "no predictions available - try training first with agent_train. ml_status=" + fmt.Sprintf("%+v", status)}},
+		}, map[string]any{"predictions": []any{}, "ml_status": status}, nil
 	}
 	b, _ := json.MarshalIndent(predictions, "", "  ")
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: string(b)}},
-	}, map[string]any{"predictions": predictions}, nil
+	}, map[string]any{"predictions": predictions, "ml_status": status}, nil
 }
 
 type MLQueryArgs struct {
@@ -2573,11 +2587,21 @@ func agentTrainHandler(ctx context.Context, req *mcp.CallToolRequest, _ AgentTra
 	if err := actions.Adaptive.TrainFromDatalog(); err != nil {
 		return nil, nil, fmt.Errorf("agent_train: %w", err)
 	}
+	// Also train the transformer + persist vocab/meta so LoadModel can work later.
+	mlErr := actions.Adaptive.TrainML()
 	analysis := actions.Adaptive.Analyze()
-	b, _ := json.MarshalIndent(analysis, "", "  ")
+	status := actions.Adaptive.MLStatus()
+	payload := map[string]any{
+		"analysis":  analysis,
+		"ml_status": status,
+	}
+	if mlErr != nil {
+		payload["ml_train_error"] = mlErr.Error()
+	}
+	b, _ := json.MarshalIndent(payload, "", "  ")
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: string(b)}},
-	}, analysis, nil
+	}, payload, nil
 }
 
 type TaskBeginArgs struct {
@@ -4004,7 +4028,7 @@ func New(version string) *mcp.Server {
 
 	addToolClean(server, &mcp.Tool{
 		Name:        "agent_train",
-		Description: "Train the adaptive engine from datalog training_pairs. Rebuilds the OCR→command word index and sequence cache. Call after the datalog has accumulated new pairs.",
+		Description: "Train the adaptive engine from datalog training_pairs AND retrain the Go transformer (writes model.gob + vocab.bin + ml_meta.json). Returns analysis plus ml_status (holdout accuracy vs majority baseline).",
 	}, agentTrainHandler)
 
 	addToolClean(server, &mcp.Tool{

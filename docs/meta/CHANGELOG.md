@@ -2,6 +2,41 @@
 
 ## [Unreleased]
 
+## [0.3.9] - 2026-09-18
+
+### Fixed
+
+- **Transformer training never saw real click coordinates** — production `training_pairs.command_json` stores args as a nested JSON string with mixed-case keys (`{"args":"{\"X\":700,\"Y\":400}","tool":"click"}`). `ml/trainer.decodeCoords` only unmarshaled top-level lowercase `x`/`y`, so on live datalogs **every** click/hover coord target was `(0,0)` (measured: 800/800 samples). Fix: `ml/dataloader.NormalizeCommandJSON` / `ApplyNormalization` unwrap string-or-object `args`, accept `X`/`Y`/`from_x`/`to_x` case-insensitively, and fill `Sample.CoordX/Y` + `FromCoordX/Y`. Trainer `decodeCoords` uses the same unwrap path; `makeTargetFromSample` prefers loader-normalized pixels. Unit tests cover the production nested-string shape.
+- **Transformer unusable after restart (empty tokenizer)** — `MLEngine.LoadModel` created a fresh unfitted tokenizer and never loaded vocab. `tokenizer.Encode` returns `nil` when unfitted, so `Forward` failed with `token len 0 != maxLen 128` while `IsReady()` could still be true; predictions silently fell through to the statistical engine. Fix: training persists **`vocab.bin`** next to `model.gob` (tokenizer Save/Load now wired in production), plus **`ml_meta.json`** (vocab size, ArgDim/WindowDim/FromCoordDim, tool list, holdout metrics). `LoadModel` refuses ready-state without vocab and surfaces a clear `last_error`.
+- **Vocab size vs embedding table mismatch** — fitted vocabs on real OCR exceeded the hardcoded `VocabSize=2000` (observed 2421), so high token IDs were dropped in embedding lookup. `modelConfigFor()` sizes the model from the fitted tokenizer (rounded up) and is shared by Train / LoadModel / online / finetune paths.
+- **Spatial features were always zero** — `prepareBatch` called `encoder.Encode(0, 0)` for every sample, and inference used an all-zero coord vector. Training now encodes the sample's decoded click/drag pixels; inference sets a context point from the live cursor via `predict.Engine.SetContextPoint`.
+- **Online training destroyed the tokenizer** — `trainFromBuffer` refit the vocab on a 32-sample replay batch then ran `TrainEpoch` over the full SQLite DB, scrambling token IDs against existing embeddings. Online updates now train on replay-derived samples **without** `Fit`, keep embedding IDs stable, and re-save `vocab.bin` + report real eval loss/accuracy (checkpoint accuracy is no longer hardcoded `0.0`).
+- **Honest tool-accuracy metric** — `trainer.Accuracy` previously took argmax over `toolStart` (tools + coord + arg dims), mixing continuous outputs into classification and inflating scores. It now scores argmax over **tool logits only**, skips unknown tools, and Train logs `click_acc` / `non_click_acc` alongside overall holdout accuracy and the **majority-class baseline**.
+- **`agent_train` only rebuilt statistical indexes** — it now also trains the Go transformer (writes `model.gob` + `vocab.bin` + `ml_meta.json`) and returns `ml_status` in the tool payload.
+- **`scripts/lint.ps1` failed when launched from `scripts/`** — `Get-Content VERSION` resolved relative to the script directory. Now uses `$PSScriptRoot\..\VERSION` and builds `..\cmd\mcp-server`.
+
+### Added
+
+- **`ml_status` on agent ML tools** — `agent_train`, `agent_suggest`, and `chain_predict` return transformer health: `ready`, `model_loaded`, `vocab_loaded`, `vocab_size`, paths, `last_eval_loss`, `last_eval_accuracy`, `majority_baseline`, `last_error`, and a `source` verdict (`transformer` | `statistical_preferred` | `unavailable`).
+- **`source` field on `PredictedAction`** — predictions are labeled `transformer` or `statistical` so agents know which engine produced a coordinate/command guess.
+- **Honest transformer gate** — `MLEngine.Predict` returns `nil` when outputs are near-uniform (no signal) **or** when last holdout tool accuracy is below the majority-class baseline, so `PredictActions` falls back to the statistical adaptive engine instead of shipping junk coords.
+- **`cmd/ml-eval` + `scripts/eval-ml.ps1`** — local eval harness: tool distribution, coord-decode sanity (`with_coords` %), majority baseline, optional `-Train`, `ml_status` dump, and smoke predict on real datalog OCR. Exit code `2` when model accuracy is below majority baseline.
+- **Class balancing for click-heavy logs** — `balanceTools` upsamples minority tools (cap 48) before augmentation so a 70%+ `click` datalog does not collapse the model to “always click”. Tool one-hot targets are amplified (`2.0`) so MSE is not drowned by zero coord/arg dims.
+- **Production-shaped ML tests** — `ml/dataloader/normalize_test.go` and `ml/trainer/decode_coords_test.go` lock the nested-args schema that unit tests previously missed (tests used `{"x":...}` while logs used `{"args":"{\"X\":...}"}`).
+
+### Changed
+
+- **README ML section is truthful** — the Go-native transformer is described as experimental with vocab/meta persistence, majority-baseline reporting, and an explicit preference for the statistical engine (`ml_query`/`ml_teach`) when the neural path underperforms. OCR/UIA/statistical priors remain the reliable locators.
+- **`agent_train` tool description** — documents dual training (adaptive indexes + transformer artifacts) and `ml_status` in the response.
+- **`docs/reference/tools.md`** regenerated after handler/description updates.
+- **Live retrain on a real datalog (800 pairs)** — after the data-path fix, `with_coords` went from **0% → 70.4%** for transformer targets; `model.gob` + `vocab.bin` + `ml_meta.json` load correctly across process restarts. Holdout tool accuracy on noisy OCR remains at or near the majority baseline — the neural path is gated and labeled rather than silently preferred. Statistical `ml_query`/`agent_suggest` now actually learn token→coord averages from unwrapped production args.
+
+### Build / verification
+
+- `scripts/build.ps1` — OK (`mcp-server.exe`, Zig cc + CGO, version 0.3.9)
+- `scripts/lint.ps1` — `go vet` clean + build OK
+- `go test` — `internal/actions` short suite + `ml/dataloader`, `ml/trainer`, `ml/predict`, `ml/tokenizer`, `ml/transformer` pass
+
 ## [0.3.8] - 2026-08-27
 
 ### Fixed
