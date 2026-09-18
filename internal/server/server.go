@@ -2583,6 +2583,21 @@ func mlTeachHandler(ctx context.Context, req *mcp.CallToolRequest, args MLTeachA
 	}, result, nil
 }
 
+type MLOutcomeStatusArgs struct{}
+
+func mlOutcomeStatusHandler(ctx context.Context, req *mcp.CallToolRequest, _ MLOutcomeStatusArgs) (*mcp.CallToolResult, any, error) {
+	st := actions.Adaptive.MLStatus()
+	payload := map[string]any{
+		"outcome":   st.Outcome,
+		"ml_status": st,
+		"note":      "Only hit/miss/recovered are supervised-trainable. unknown/pending never train. recovery_rate = recovered/(miss+recovered).",
+	}
+	b, _ := json.MarshalIndent(payload, "", "  ")
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: string(b)}},
+	}, payload, nil
+}
+
 func agentTrainHandler(ctx context.Context, req *mcp.CallToolRequest, _ AgentTrainArgs) (*mcp.CallToolResult, any, error) {
 	if err := actions.Adaptive.TrainFromDatalog(); err != nil {
 		return nil, nil, fmt.Errorf("agent_train: %w", err)
@@ -3250,7 +3265,7 @@ func New(version string) *mcp.Server {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
 	slog.SetDefault(logger)
 
-	slog.Info("starting go-mcp-computer-use", "version", version, "tools", 160, "tools_doc", "docs/tools.md")
+	slog.Info("starting go-mcp-computer-use", "version", version, "tools", 161, "tools_doc", "docs/tools.md")
 
 	if cfg.UIAWarmup {
 		go func() {
@@ -4065,6 +4080,11 @@ func New(version string) *mcp.Server {
 		Name:        "chain_predict",
 		Description: "Predict the next action plus future actions from OCR text using the transformer model. Returns the primary prediction (tool, coordinates, args) and optionally a sequence of N future actions. Use the sequence to auto-generate chain steps.",
 	}, chainPredictHandler)
+
+	addToolClean(server, &mcp.Tool{
+		Name:        "ml_outcome_status",
+		Description: "Prediction outcome ledger stats: hit/miss/unknown/recovered counts and rates. Only hit/miss/recovered are supervised-trainable — unknown is never treated as failure. Includes recovery_rate (miss→successful retry).",
+	}, mlOutcomeStatusHandler)
 
 	addToolClean(server, &mcp.Tool{
 		Name:        "set_config",

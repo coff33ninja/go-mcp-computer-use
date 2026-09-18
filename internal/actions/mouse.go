@@ -62,6 +62,9 @@ func Click(args ClickInput) (err error) {
 		LogToolCall("click", string(b), err)
 		Adaptive.RecordResult("click", float64(time.Since(start).Milliseconds()), err == nil)
 		Adaptive.LearnFromCommand("click", string(b), err == nil)
+		// Outcome ledger: resolve pending ML predictions against this click.
+		// unknown is never implied — only nearby preds are scored.
+		ResolveMLPredictionsForAction("click", args.X, args.Y, err == nil, "", "click")
 	}()
 
 	if err := ValidateClickCoord(args.X, args.Y); err != nil {

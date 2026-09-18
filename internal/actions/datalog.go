@@ -172,6 +172,36 @@ func createDataLogTables(db *sql.DB) error {
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_task_session ON task_log(session_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_task_created ON task_log(created_at)`,
+
+		// Outcome ledger for ML predictions. Prediction fields are immutable;
+		// only resolution columns change. unknown ≠ miss.
+		`CREATE TABLE IF NOT EXISTS ml_predictions (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			engine TEXT NOT NULL DEFAULT '',
+			query TEXT NOT NULL DEFAULT '',
+			query_hash TEXT NOT NULL DEFAULT '',
+			ocr_hash TEXT NOT NULL DEFAULT '',
+			window_hash TEXT NOT NULL DEFAULT '',
+			window_title TEXT NOT NULL DEFAULT '',
+			pred_tool TEXT NOT NULL DEFAULT '',
+			pred_x INTEGER NOT NULL DEFAULT 0,
+			pred_y INTEGER NOT NULL DEFAULT 0,
+			confidence REAL NOT NULL DEFAULT 0,
+			model_version TEXT NOT NULL DEFAULT '',
+			expected_target TEXT NOT NULL DEFAULT '',
+			status TEXT NOT NULL DEFAULT 'pending',
+			outcome_source TEXT NOT NULL DEFAULT '',
+			actual_tool TEXT NOT NULL DEFAULT '',
+			actual_x INTEGER NOT NULL DEFAULT 0,
+			actual_y INTEGER NOT NULL DEFAULT 0,
+			verification_data TEXT NOT NULL DEFAULT '{}',
+			latency_ms INTEGER NOT NULL DEFAULT 0,
+			created_at TEXT NOT NULL,
+			resolved_at TEXT NOT NULL DEFAULT ''
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_mlpred_status ON ml_predictions(status)`,
+		`CREATE INDEX IF NOT EXISTS idx_mlpred_created ON ml_predictions(created_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_mlpred_tool ON ml_predictions(pred_tool)`,
 	}
 	for _, s := range stmts {
 		if _, err := db.Exec(s); err != nil {

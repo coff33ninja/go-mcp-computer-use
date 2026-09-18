@@ -27,6 +27,8 @@ type MLStatus struct {
 	LastTrainAt      string  `json:"last_train_at,omitempty"`
 	Source           string  `json:"source"` // transformer | statistical | unavailable
 	Notes            string  `json:"notes,omitempty"`
+	// Outcome ledger (desktop as teacher). Only hit/miss/recovered train.
+	Outcome MLPredictionOutcomeStats `json:"outcome"`
 }
 
 type mlMeta struct {
@@ -164,7 +166,27 @@ func (m *MLEngine) Status() MLStatus {
 		st.Source = "unavailable"
 		st.Notes = "transformer not ready — statistical adaptive engine still available via ml_query / agent_suggest"
 	}
+	// Outcome ledger metrics (hit/miss/unknown/recovery) — never train on unknown.
+	st.Outcome = MLPredictionOutcomeStatsFromDB()
+	if st.Outcome.EligibleTrain > 0 {
+		prefix := st.Notes
+		if prefix != "" {
+			prefix += " | "
+		}
+		st.Notes = fmt.Sprintf("%sledger hit_rate=%.1f%% recovery=%.1f%% unknown=%.1f%% (n_labeled=%d)",
+			prefix, st.Outcome.HitRate*100, st.Outcome.RecoveryRate*100, st.Outcome.UnknownRate*100, st.Outcome.EligibleTrain)
+	}
 	return st
+}
+
+// modelVersion is a short stamp for ledger rows / status.
+func (m *MLEngine) modelVersion() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if meta, ok := m.loadMeta(); ok && meta.LastTrainAt != "" {
+		return meta.LastTrainAt
+	}
+	return "untrained"
 }
 
 // MLSourceTag labels a prediction origin.

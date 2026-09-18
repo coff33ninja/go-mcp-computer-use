@@ -431,8 +431,10 @@ func klEventsToSteps(events []recordedEvent) []map[string]any {
 				"args": map[string]any{"clicks": ev.scrollDelta},
 			})
 		case "focus":
+			// Emit a real chain tool — "_focus" is not in toolDispatch and
+			// broke keylogger replay ("unknown tool: _focus").
 			steps = append(steps, map[string]any{
-				"tool": "_focus",
+				"tool": "focus_window_by_title",
 				"args": map[string]any{"window": ev.keyName},
 			})
 		}

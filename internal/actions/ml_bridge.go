@@ -182,7 +182,13 @@ func (m *MLEngine) Train() error {
 		nTest = 1
 	}
 	testSamples := samples[:nTest]
-	trainSamples := balanceTools(samples[nTest:])
+	// Prefer successful pairs for supervised training. Failures stay in eval
+	// so holdout stays honest; unknown ledger rows are never a label source.
+	trainPool := filterSuccessfulSamples(samples[nTest:])
+	if len(trainPool) < 20 {
+		trainPool = samples[nTest:]
+	}
+	trainSamples := balanceTools(trainPool)
 
 	aug := dataloader.NewAugmentor()
 	augmented := aug.AugmentAll(trainSamples, 1)
@@ -335,6 +341,19 @@ func majorityBaseline(samples []dataloader.Sample) float64 {
 		}
 	}
 	return float64(best) / float64(len(samples))
+}
+
+// filterSuccessfulSamples keeps pairs the tool reported as success.
+// Combined with the outcome ledger, this keeps failed/unknown signal out
+// of supervised transformer training.
+func filterSuccessfulSamples(samples []dataloader.Sample) []dataloader.Sample {
+	out := make([]dataloader.Sample, 0, len(samples))
+	for _, s := range samples {
+		if s.Success {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // toolSubsetAccuracy scores tool argmax only on samples matching filter.

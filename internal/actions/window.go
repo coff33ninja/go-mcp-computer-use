@@ -125,6 +125,20 @@ func isForeground(handle uintptr) bool {
 	return fg == handle
 }
 
+// showWindowForFocus makes a window visible without un-maximizing it.
+// SW_RESTORE on a maximized window restores it to normal size — that is the
+// "reverse maximize" bug agents hit when focus_window is called on a
+// maximized browser/editor. Only restore when the window is minimized.
+func showWindowForFocus(handle uintptr) {
+	v, _, _ := isIconic.Call(handle)
+	if v != 0 {
+		showWindow.Call(handle, SW_RESTORE)
+		return
+	}
+	// Visible or maximized: show at current placement (keeps maximize).
+	showWindow.Call(handle, SW_SHOW)
+}
+
 func FocusWindow(handle uintptr) (err error) {
 	start := time.Now()
 	defer func() {
@@ -134,15 +148,15 @@ func FocusWindow(handle uintptr) (err error) {
 		Adaptive.LearnFromCommand("focus_window", string(b), err == nil)
 	}()
 
-	// If already foreground, still restore in case minimized
-	showWindow.Call(handle, SW_RESTORE)
+	// Un-minimize if needed; do NOT restore maximized windows.
+	showWindowForFocus(handle)
 	if isForeground(handle) {
 		return nil
 	}
 
 	// Attempt 1: SetForegroundWindow with AttachThreadInput
 	trySetForeground(handle)
-	showWindow.Call(handle, SW_RESTORE)
+	showWindowForFocus(handle)
 	if isForeground(handle) {
 		return nil
 	}
@@ -156,7 +170,7 @@ func FocusWindow(handle uintptr) (err error) {
 
 	// Attempt 3: SwitchToThisWindow (bypasses foreground lock)
 	switchToThisWindow.Call(handle, 1)
-	showWindow.Call(handle, SW_RESTORE)
+	showWindowForFocus(handle)
 	if isForeground(handle) {
 		return nil
 	}
@@ -164,7 +178,7 @@ func FocusWindow(handle uintptr) (err error) {
 	// Attempt 4: Retry SetForegroundWindow one more time after delay
 	Wait(100)
 	trySetForeground(handle)
-	showWindow.Call(handle, SW_RESTORE)
+	showWindowForFocus(handle)
 	if isForeground(handle) {
 		return nil
 	}

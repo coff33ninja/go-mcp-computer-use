@@ -222,6 +222,13 @@ func init() {
 		"kill_process":        chainKillProcess,
 		"list_processes":      chainListProcesses,
 		"focus_window":        chainFocusWindow,
+		"focus_window_by_title": chainFocusWindowByTitle,
+		// Keylogger/record aliases (legacy step names from keylogger_stop)
+		"_focus":              chainFocusWindowByTitle,
+		"keylogger_start":     chainKeyloggerStart,
+		"keylogger_stop":      chainKeyloggerStop,
+		"keylogger_status":    chainKeyloggerStatus,
+		"replicate":           chainReplicateTool,
 		"get_active_window":   chainGetActiveWindow,
 		"minimize_window":     chainMinimizeWindow,
 		"maximize_window":     chainMaximizeWindow,
@@ -447,6 +454,23 @@ func execSteps(steps []ChainStep, state *chainState) ([]StepResult, int) {
 			if hwnd != 0 {
 				state.lastFocusHandle = hwnd
 			}
+		}
+
+		// Focus-only chain step (keylogger/replicate emit FocusWindow without Tool).
+		// Previously this fell through to execTool with empty Tool → "unknown tool:".
+		if step.Tool == "" && (step.FocusWindow != "" || step.FocusHandle != 0) {
+			stepResult = StepResult{
+				Tool:    "focus_window",
+				Success: true,
+				Output: map[string]any{
+					"window": step.FocusWindow,
+					"handle": step.FocusHandle,
+				},
+			}
+			stepResult.Index = i
+			results = append(results, stepResult)
+			stepCount++
+			continue
 		}
 
 		// Auto-verify: if enabled and step is an input tool, re-check foreground
@@ -1528,6 +1552,87 @@ func chainFocusWindow(args map[string]any) (any, error) {
 		handle = float64(h)
 	}
 	return nil, FocusWindow(uintptr(handle))
+}
+
+func chainFocusWindowByTitle(args map[string]any) (any, error) {
+	title, _ := args["window"].(string)
+	if title == "" {
+		title, _ = args["title"].(string)
+	}
+	if title == "" {
+		return nil, fmt.Errorf("focus_window_by_title: window/title required")
+	}
+	if err := FocusWindowByTitle(title); err != nil {
+		return nil, err
+	}
+	hwnd := FindWindowByTitle(title)
+	return map[string]any{"window": title, "handle": hwnd}, nil
+}
+
+func chainKeyloggerStart(_ map[string]any) (any, error) {
+	if err := StartKeylogger(); err != nil {
+		return nil, err
+	}
+	return map[string]any{"active": true}, nil
+}
+
+func chainKeyloggerStop(_ map[string]any) (any, error) {
+	steps, meta, err := StopKeylogger()
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"steps": steps, "meta": meta}, nil
+}
+
+func chainKeyloggerStatus(_ map[string]any) (any, error) {
+	active, n, dur := KeyloggerStatus()
+	return map[string]any{"active": active, "events": n, "duration": dur}, nil
+}
+
+// chainReplicateTool replays a previously recorded session by id if present,
+// otherwise reports that no session is available. The interactive path is
+// record_and_replicate / keylogger_stop + chain(steps).
+func chainReplicateTool(args map[string]any) (any, error) {
+	// Prefer executing explicit steps if provided.
+	if raw, ok := args["steps"]; ok {
+		steps := normalizeChainSteps(raw)
+		if len(steps) == 0 {
+			return nil, fmt.Errorf("replicate: empty steps")
+		}
+		res, err := ExecuteChain(ChainRequest{Steps: steps, OnError: "stop"})
+		if err != nil {
+			return nil, err
+		}
+		return res, nil
+	}
+	return nil, fmt.Errorf("replicate: no session id/steps — use record_and_replicate or keylogger_stop then chain with returned steps")
+}
+
+func normalizeChainSteps(raw any) []ChainStep {
+	switch v := raw.(type) {
+	case []ChainStep:
+		return v
+	case []any:
+		var out []ChainStep
+		for _, item := range v {
+			m, ok := item.(map[string]any)
+			if !ok {
+				continue
+			}
+			tool, _ := m["tool"].(string)
+			// Legacy keylogger used "_focus" with args.window
+			if tool == "_focus" {
+				win, _ := m["args"].(map[string]any)["window"].(string)
+				out = append(out, ChainStep{FocusWindow: win})
+				continue
+			}
+			args, _ := m["args"].(map[string]any)
+			out = append(out, ChainStep{Tool: tool, Args: args})
+		}
+		return out
+	default:
+		return nil
+	}
 }
 
 func chainMinimizeWindow(args map[string]any) (any, error) {

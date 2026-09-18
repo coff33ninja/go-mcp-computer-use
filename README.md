@@ -50,7 +50,7 @@ MCP server for Windows desktop computer use. Exposes mouse, keyboard, screenshot
 - **`find_ui_element` tool** — cascading lookup: memory → ONNX → OCR. Self-learning: saves findings to memory + training store.
 - **Go-native ML transformer** — small Gorgonia model trained in-process from `training_pairs`. **Honest status:** production now persists `vocab.bin` + `ml_meta.json` with the model, decodes real click coordinates from nested `{"args":"{\"X\":...}"}` logs, and reports holdout accuracy vs a majority-class baseline via `ml_status` / `scripts/eval-ml.ps1`. If the transformer is below that baseline, `chain_predict` / `agent_suggest` prefer the **statistical** adaptive engine (`ml_query`/`ml_teach`) and label predictions with `source`. The neural path is experimental; OCR/UIA/statistical priors remain the reliable locators.
 - **UI-aware element detection** — a fused annotation pipeline (`onnx_detect`, `onnx_classify`, and every capture tool) pairs a UI-native **box proposer** — [Salesforce GPA-GUI-Detector](https://huggingface.co/Salesforce/GPA-GUI-Detector) (MIT), a single-class `icon` ONNX detector fine-tuned from OmniParser — with the 15-class MobileNet UI classifier to tag each element with its real control type (`button`, `link`, `text_input`, ...). The watcher & element-priors novelty gate key on that MobileNet label so the ML learns per-control-type locations rather than generic object classes. See [Models](#models).
-- **160 MCP tools** — see [`docs/reference/tools.md`](docs/reference/tools.md) for the full listing
+- **161 MCP tools** — see [`docs/reference/tools.md`](docs/reference/tools.md) for the full listing
 
 ## Tools
 

@@ -599,6 +599,7 @@ func (e *AdaptiveEngine) PredictActions(ocrText string, limit int) []PredictedAc
 	if e.mlEngine != nil && e.mlEngine.IsReady() {
 		history := e.GetRecentActions(5)
 		if mlPreds := e.mlEngine.Predict(ocrText, limit, history); len(mlPreds) > 0 {
+			LogMLPredictionsFromActions(MLSourceTransformer, "agent_suggest", ocrText, "", e.mlEngine.modelVersion(), mlPreds)
 			return mlPreds
 		}
 	}
@@ -666,6 +667,16 @@ func (e *AdaptiveEngine) PredictActions(ocrText string, limit int) []PredictedAc
 	})
 	if len(results) > limit {
 		results = results[:limit]
+	}
+	// Ledger for statistical fallback path.
+	var coordPreds []PredictedAction
+	for _, r := range results {
+		if r.Coord != nil {
+			coordPreds = append(coordPreds, r)
+		}
+	}
+	if len(coordPreds) > 0 {
+		LogMLPredictionsFromActions(MLSourceStatistical, "agent_suggest", ocrText, "", "stat", coordPreds)
 	}
 	return results
 }
@@ -1070,12 +1081,32 @@ func (e *AdaptiveEngine) MLQuery(query, ocrText string, limit int) *MLQueryRespo
 	}
 	sort.Strings(related)
 
-	return &MLQueryResponse{
+	resp := &MLQueryResponse{
 		Query:   query,
 		Matches: results,
 		Related: related,
 		Total:   totalSamples,
 	}
+	// Ledger: record top coordinate-bearing guesses as pending predictions.
+	if len(results) > 0 {
+		var preds []PredictedAction
+		for _, r := range results {
+			if r.Coord == nil {
+				continue
+			}
+			preds = append(preds, PredictedAction{
+				Command:    r.Tool,
+				Confidence: r.Confidence,
+				Coord:      r.Coord,
+				Source:     MLSourceStatistical,
+			})
+			if len(preds) >= 2 {
+				break
+			}
+		}
+		LogMLPredictionsFromActions(MLSourceStatistical, query, ocrText, "", "ml_query", preds)
+	}
+	return resp
 }
 
 // MLTeach feeds a confirmed correct answer back into the adaptive engine.

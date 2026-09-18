@@ -926,8 +926,12 @@ func eventsToSmartSteps(events []EnrichedEvent) []ChainStep {
 
 		case "focus":
 			if ev.KeyName != "" {
+				// Both forms: FocusWindow (auto-focus before next step) AND an
+				// explicit tool step so chains replaying raw JSON still work.
 				steps = append(steps, ChainStep{
 					FocusWindow: ev.KeyName,
+					Tool:        "focus_window_by_title",
+					Args:        map[string]any{"window": ev.KeyName},
 				})
 			}
 		}
