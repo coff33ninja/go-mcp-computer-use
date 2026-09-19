@@ -7,7 +7,7 @@ require (
 	github.com/go-pdf/fpdf v0.9.0
 	github.com/google/jsonschema-go v0.4.3
 	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
-	github.com/modelcontextprotocol/go-sdk v1.7.0
+	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/nguyenthenguyen/docx v0.0.0-20230621112118-9c8e795a11db
 	github.com/pdfcpu/pdfcpu v0.14.0
 	github.com/xuri/excelize/v2 v2.11.0
