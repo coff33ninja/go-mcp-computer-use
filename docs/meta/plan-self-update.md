@@ -302,7 +302,7 @@ update system.
     "display_name": "opencode CLI",
     "type": "cli",
     "pid": 5555,
-    "path": "C:\\Users\\DRAGOHN\\go\\bin\\opencode.exe",
+    "path": "C:\\Users\\YourUsername\\go\\bin\\opencode.exe",
     "restart_method": "replace_and_notify",
     "grandparent": {
       "name": "pwsh",
@@ -409,7 +409,7 @@ update system.
   "current_version": "0.2.43",
   "latest_version": "0.2.44",
   "status": "needs_permission",
-  "downloaded_to": "C:\\Users\\DRAGOHN\\AppData\\Roaming\\go-mcp-computer-use\\mcp-server-new.exe",
+  "downloaded_to": "C:\\Users\\YourUsername\\AppData\\Roaming\\go-mcp-computer-use\\mcp-server-new.exe",
   "client": {
     "name": "pwsh",
     "type": "direct"

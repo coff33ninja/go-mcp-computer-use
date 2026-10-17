@@ -8,7 +8,7 @@ A survey of the computer-use agent landscape as of mid-2026, with detailed deep-
 
 | Project | Lang | MCP | Desktop | ONNX/ML | Training | Memory | Tools | Stars | Open Source |
 |---------|------|-----|---------|---------|---------|--------|-------|-------|-------------|
-| **[go-mcp-computer-use](https://github.com/coff33ninja/go-mcp-computer-use)** | Go | ✅ | ✅ Win | ✅ YOLO11+MobileNet + Go-native transformer | ✅ auto-collect + self-improving | ✅ SQLite FTS | 161 | — | ✅ MIT |
+| **[go-mcp-computer-use](https://github.com/coff33ninja/go-mcp-computer-use)** | Go | ✅ | ✅ Win | ✅ GPA-GUI-Detector+MobileNet + Go-native transformer | ✅ auto-collect + self-improving | ✅ SQLite FTS | 161 | — | ✅ Apache-2.0 |
 | **[Cua](https://github.com/trycua/cua)** | Py/HTML | ✅ | ✅ Win/Mac/Linux | ❌ | ❌ | ❌ | SDK | 19.4k | ✅ |
 | **[Agent-S](https://github.com/simular-ai/Agent-S)** | Python | ❌ | ✅ Win/Mac/Linux | ❌ | ❌ | ✅ in-context RL | SDK | 12k | ✅ |
 | **[Bytebot](https://github.com/bytebot-ai/bytebot)** | TypeScript | ❌ | ❌ Linux container | ❌ | ❌ | ❌ | SDK | 11.1k | ✅ |
@@ -33,7 +33,7 @@ Windows-MCP is the closest direct competitor — both are MCP servers for Window
 |-----------|-------------------|-------------|
 | **Language** | Go (static binary, ~60 MB) | Python (requires Python + deps) |
 | **OCR** | Native WinRT COM (2-8x faster than PowerShell) + PowerShell fallback | PowerShell OCR via pyautogui |
-| **ML detection** | YOLO11n + MobileNetV3 ONNX inference + Go-native transformer (14K params, self-improving) | None |
+| **ML detection** | GPA-GUI-Detector (UI box proposer) + MobileNetV3 ONNX inference + Go-native transformer (14K params, self-improving) | None |
 | **Memory cache** | SQLite FTS5 with TTL | None |
 | **Training pipeline** | Auto-screenshots per action, categorized, YOLO export | None |
 | **UI Automation** | Native COM UIAutomation (IUIAutomation) | UIA via Python |
@@ -68,7 +68,7 @@ DesktopCtl is a Rust CLI tool for desktop control, not an MCP server. It uses GP
 | Feature | go-mcp-computer-use | DesktopCtl |
 |---------|-------------------|------------|
 | **Interface** | MCP protocol (161 tools) | CLI commands |
-| **Vision** | ONNX YOLO11 + MobileNetV3 + Go-native transformer | GPU-accelerated OCR (no object detection) |
+| **Vision** | ONNX GPA-GUI-Detector + MobileNetV3 + Go-native transformer | GPU-accelerated OCR (no object detection) |
 | **Privacy** | Screenshots shared with AI agent | Screenshots stay local by default |
 | **Transport** | stdio (TCP optional) | CLI pipes |
 | **Language** | Go | Rust |
@@ -125,7 +125,7 @@ Both Anthropic and OpenAI offer computer-use as cloud APIs — the AI model sees
 |---------|-------------------|----------------------|
 | **Where AI runs** | Client-side (your LLM via MCP) | Cloud (Anthropic/OpenAI servers) |
 | **Screenshots** | Stay local (sent to your LLM) | Sent to cloud API |
-| **ML detection** | Local ONNX (YOLO11) | Cloud vision model |
+| **ML detection** | Local ONNX (GPA-GUI-Detector) | Cloud vision model |
 | **Latency** | OCR: 500-2000ms, ONNX: 100-200ms | API round-trip: 2-10s |
 | **Training** | Auto-collect + export for fine-tuning | None exposed |
 | **Memory** | Persistent SQLite | None |
@@ -192,7 +192,7 @@ Recall captures ~720-1200 screenshots per hour of user activity. go-mcp-computer
 | Component | Windows Recall | go-mcp-computer-use |
 |-----------|---------------|---------------------|
 | **On-device AI** | Windows Copilot Runtime (NPU-accelerated) | ONNX Runtime (CPU via `onnxruntime_go`) |
-| **Model** | Multiple proprietary models (Screen Region Detector, OCR, Image Encoder, Audio Encoder, Natural Language Parser) | YOLO11n (80-class COCO object detection) |
+| **Model** | Multiple proprietary models (Screen Region Detector, OCR, Image Encoder, Audio Encoder, Natural Language Parser) | GPA-GUI-Detector (single-class UI element detector) + MobileNetV3 classifier |
 | **OCR** | Local Tesseract-based engine via Copilot Runtime | Windows.Media.Ocr (native WinRT COM) |
 | **Semantic search** | DiskANN vector indexes — 4 image embedding types + 4 text embedding types, 512-D float32 vectors | None (no semantic indexing) |
 | **Training** | Pre-trained Microsoft models, no user-data training | Self-learning statistical priors (element frequency + position per window), optional YOLO dataset export for external training |

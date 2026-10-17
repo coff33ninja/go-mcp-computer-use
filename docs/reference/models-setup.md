@@ -6,12 +6,12 @@ Run `onnx_download` tool to auto-pull all models to `%APPDATA%\go-mcp-computer-u
 
 | Model | Format | Source | Status |
 |---|---|---|---|
-| YOLO11n | ONNX (pre-exported) | https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n.onnx | ✅ auto-download |
+| GPA-GUI-Detector (single-class `icon`) | ONNX (converted export of Salesforce GPA-GUI-Detector, MIT) | https://github.com/coff33ninja/go-mcp-computer-use/releases/latest/download/gpa_gui_detector.onnx | ✅ auto-download |
 | MobileNetV3-small | ONNX | https://huggingface.co/diogoneno/gui-element-classifier/resolve/main/mobilenetv3_small.onnx | ✅ auto-download |
 
 No Python or PyTorch required — all models are pre-exported ONNX.
 
-> **Known incompatibility:** YOLO11n from Ultralytics v8.3.0 uses ONNX opset 22, which requires ONNX Runtime 1.21+. The bundled ORT 1.20.x only supports opsets up to 21. If YOLO detection fails, manually export YOLO11n with `opset=21` or upgrade ORT. MobileNetV3-small works with 1.20.x.
+> **Runtime:** ONNX Runtime v1.26.0 (`onnxruntime.dll`) is downloaded automatically alongside the models. The detector only proposes element boxes; the MobileNetV3 classifier supplies the control-type label.
 
 ## Transformer Model (Go-native, Action Prediction)
 
@@ -31,7 +31,7 @@ The action prediction transformer is trained entirely in Go via [Gorgonia](https
 
 ### How It Differs from ONNX
 
-| Dimension | ONNX (YOLO/MobileNet) | Transformer |
+| Dimension | ONNX (GPA-GUI-Detector/MobileNet) | Transformer |
 |-----------|----------------------|-------------|
 | **What it does** | Computer vision — detects UI elements from screenshots | NLP/action prediction — predicts next action from OCR text |
 | **Input** | Screenshot image (base64 PNG) | OCR text string |

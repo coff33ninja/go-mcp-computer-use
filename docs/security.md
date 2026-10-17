@@ -13,6 +13,8 @@ This executable can **fully control the Windows machine it runs on**. It exposes
 - **Read network config, ping hosts, enumerate adapters**
 - **Read disk usage, battery state, display modes**
 - **Automate UI elements** via UI Automation (find/invoke buttons, read text)
+- **Record global keyboard and mouse input** — `keylogger_start` / `keylogger_stop` capture input across all windows (anything typed, including passwords) and return the sequence to the connected AI client as replayable chain steps. Only start it when you intend to record.
+- **Capture the screen in the background** — per-action auto-saves and the optional watcher store screenshots locally (see Data Collection below)
 
 **Treat this binary with the same caution as a remote-admin tool.** Only connect it to MCP clients you trust. The AI agent receiving these tools has equivalent access to a logged-in user at the keyboard. Do not expose it over a network without authentication, and never run it on a machine where you wouldn't let a remote user operate the mouse and keyboard.
 
@@ -33,7 +35,7 @@ Windows **UIPI** (User Interface Privilege Isolation) silently blocks input from
 
 ## Data Collection & Privacy Controls
 
-The server has **no telemetry, no network calls, no data exfiltration**. All collected data stays in `%APPDATA%/go-mcp-computer-use/training/`. But users have full runtime control:
+The server has **no telemetry and no data exfiltration**. It makes network requests only when triggered: the one-time ONNX model download from this repo's GitHub releases on first use, and tools you or the agent explicitly call (such as `ping`, the browser/URL tools, and `report_issue` when it uses the `gh` CLI). All collected data stays in `%APPDATA%/go-mcp-computer-use/training/`. But users have full runtime control:
 
 | Goal | How |
 |------|-----|
@@ -54,6 +56,10 @@ The server has **no telemetry, no network calls, no data exfiltration**. All col
 The `set_config` tool can be called by the AI agent or directly by the user via their MCP client. All changes persist to disk and survive server restarts.
 
 **For maximum privacy:** set `training_enabled: false` in config before starting the server.
+
+### Local datalog (tool calls and screen text)
+
+Separately from the training screenshots, the server keeps a local SQLite datalog at `%APPDATA%\go-mcp-computer-use\datalog\datalog.db`. It records every tool call with its arguments (**including text sent through `type`**), chain runs, and OCR snapshots of the screen taken around actions. This is what the adaptive and ML features learn from. It is on by default and, as of v0.3.10, has no config switch to turn it off. It never leaves the machine. To clear it, stop the server and delete the `datalog` folder. Do not type secrets through an AI agent while this is enabled.
 
 ## Transformer Model Privacy
 

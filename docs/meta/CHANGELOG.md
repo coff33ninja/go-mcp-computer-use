@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+## [0.3.11] - 2026-10-17
+
+Documentation accuracy pass ahead of wider public sharing of the project. No tool or behavior changes.
+
+### Fixed
+
+- **Tool count** — README references to "155 tools" corrected to 161, matching the generated `docs/reference/tools.md`.
+- **Comparison doc** — `docs/comparison-vs-alternatives.md` listed this project's license as MIT (it is Apache-2.0) and described the detector as YOLO11; it now describes GPA-GUI-Detector + MobileNetV3.
+- **Models doc** — `docs/reference/models-setup.md` now matches the code: GPA-GUI-Detector from this repo's release assets, MobileNetV3-small, ONNX Runtime v1.26.0.
+- **Agent guide** — `docs/guides/agent-guides.md` version reference updated to v0.3.x.
+- **Startup log** — the `tools_doc` field now points at `docs/reference/tools.md` (was `docs/tools.md`).
+- **Example paths** — `docs/meta/plan-self-update.md` used a real Windows username in sample JSON; replaced with a placeholder.
+
+### Changed
+
+- **`docs/security.md`** — documents global input recording (`keylogger_start` / `keylogger_stop`) and background screen capture as dangerous capabilities; replaces the inaccurate "no network calls" claim with what actually happens (first-use model download, plus explicitly invoked network tools); adds a section on the local datalog (tool-call arguments including `type` text, chain runs, OCR snapshots), noting it is on by default and has no config switch as of this release.
+- **README footer** — commit count and timeline wording corrected to match the repository history.
+
+### Build / verification
+
+- `scripts/build.ps1` — OK with these changes (Zig cc + CGO), built before the version bump
+- Full-history `gitleaks` scan (all branches) — no findings
+
 ## [0.3.10] - 2026-09-18
 
 Post-0.3.9 computer-use reliability pass: focus/keylogger chain bugs found in live OpenCode testing, plus the ML outcome ledger (desktop-as-teacher). Includes a **full local computer-use data reset** for clean testing (datalog, training store, memory, transformer weights; ONNX models kept).
